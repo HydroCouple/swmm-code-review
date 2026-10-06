@@ -1,0 +1,57 @@
+BND-14: reject a subcatchment that drains onto a subcatchment with no area
+
+The [SUBCATCHMENTS] parser accepts an Area of 0. SWMMEngine::assembleRunon()
+drops run-on to such a subcatchment, and the upstream runoff is not counted
+as leaving the study area because its outlet is a subcatchment, so the water
+disappears without a message. Validation now reports a new ERROR 106 for a
+subcatchment with area that drains onto a subcatchment without area (the
+same check and message as the 5.3.0 patch).
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply BND-14_swmm600.patch
+
+diff --git a/src/engine/core/ErrorCodes.cpp b/src/engine/core/ErrorCodes.cpp
+index 41a0f4b..fc8d0f9 100644
+--- a/src/engine/core/ErrorCodes.cpp
++++ b/src/engine/core/ErrorCodes.cpp
+@@ -52,6 +52,7 @@ static const std::unordered_map<int, const char*>& error_table() {
+ 
+         // Object validation
+         {108, "ambiguous outlet ID name for Subcatchment %s."},
++        {106, "Subcatchment %s drains onto a subcatchment with no area."},
+         {109, "invalid parameter values for Aquifer %s."},
+         {110, "ground elevation is below water table for Subcatchment %s."},
+         {111, "invalid length for Conduit %s."},
+diff --git a/src/engine/core/ErrorCodes.hpp b/src/engine/core/ErrorCodes.hpp
+index 58441c6..6506772 100644
+--- a/src/engine/core/ErrorCodes.hpp
++++ b/src/engine/core/ErrorCodes.hpp
+@@ -60,6 +60,7 @@ enum ErrorCode : int {
+ 
+     // --- Object validation errors (108–145) ---
+     ERR_SUBCATCH_OUTLET         = 108,  ///< ambiguous outlet ID name for Subcatchment %s
++    ERR_SUBCATCH_NO_AREA        = 106,  ///< Subcatchment %s drains onto a subcatchment with no area
+     ERR_AQUIFER_PARAMS          = 109,  ///< invalid parameter values for Aquifer %s
+     ERR_GROUND_ELEV             = 110,  ///< ground elevation is below water table for Subcatchment %s
+     ERR_LENGTH                  = 111,  ///< invalid length for Conduit %s
+diff --git a/src/engine/core/SWMMEngine.cpp b/src/engine/core/SWMMEngine.cpp
+index 839529d..87a1cbb 100644
+--- a/src/engine/core/SWMMEngine.cpp
++++ b/src/engine/core/SWMMEngine.cpp
+@@ -7832,6 +7832,16 @@ void SWMMEngine::validate_project() noexcept {
+             ctx_.errors.push_back(format_error(
+                 ERR_SUBCATCH_OUTLET, ctx_.subcatch_names.name_of(s)));
+     }
++    // ERROR 106: a subcatchment that drains onto a subcatchment with no area
++    // (assembleRunon drops run-on to it, so the runoff would be lost).
++    for (int s = 0; s < ctx_.n_subcatches(); ++s) {
++        const auto us = static_cast<std::size_t>(s);
++        const int k = ctx_.subcatches.outlet_subcatch[us];
++        if (k >= 0 && k != s && ctx_.subcatches.area[us] > 0.0 &&
++            ctx_.subcatches.area[static_cast<std::size_t>(k)] <= 0.0)
++            ctx_.errors.push_back(format_error(
++                ERR_SUBCATCH_NO_AREA, ctx_.subcatch_names.name_of(s)));
++    }
+ 
+     // Legacy gage_validate checks only a TIMESERIES gage, and returns before
+     // any check for a co-gage (one sharing an earlier used gage's series).

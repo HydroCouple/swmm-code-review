@@ -1,0 +1,29 @@
+IO-57: count runoff routed onto another subcatchment once in the system runoff
+
+postOutputSnapshot() summed every subcatchment's runoff into sys_runoff (and
+so into the system total lateral inflow), including subcatchments whose outlet
+is another subcatchment, whose runoff already contains that runon. Apply the
+rule the runoff mass balance already uses (outlet is a node, or the
+subcatchment itself), as the patched legacy output.c does. Projects without
+subcatchment-to-subcatchment routing are unchanged.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-57_swmm600.patch
+
+diff --git a/src/engine/core/SWMMEngine.cpp b/src/engine/core/SWMMEngine.cpp
+index 839529d..934770c 100644
+--- a/src/engine/core/SWMMEngine.cpp
++++ b/src/engine/core/SWMMEngine.cpp
+@@ -6631,7 +6631,11 @@ void SWMMEngine::postOutputSnapshot(double /*dt_step*/) noexcept {
+                     }
+                     a_infil += static_cast<float>(
+                         static_cast<float>(snap.subcatch.infil[ui]) * area);
+-                    a_runoff += static_cast<float>(snap.subcatch.runoff[ui]);
++                    // Runoff sent onto another subcatchment is counted there
++                    // (the runoff mass balance's rule, legacy output.c).
++                    if (ctx_.subcatches.outlet_node[ui] >= 0 ||
++                        ctx_.subcatches.outlet_subcatch[ui] == i)
++                        a_runoff += static_cast<float>(snap.subcatch.runoff[ui]);
+                 }
+                 if (total_area > 0.0) {
+                     a_evap  /= total_area;

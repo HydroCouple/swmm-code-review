@@ -1,0 +1,28 @@
+NUM-04: divide SI snow melt coefficients by 1.8 instead of multiplying
+
+setMeltParams() converted the [SNOWPACKS] melt coefficients Cmin/Cmax from
+mm/hr per deg C to ft/sec per deg F with x * UCF(TEMPERATURE) / UCF(RAINFALL).
+A coefficient per deg C is 1.8 times the same coefficient per deg F, so the
+SI value must be divided by UCF(TEMPERATURE) = 1.8, not multiplied. SI packs
+melted 3.24 times faster than specified. US models are unchanged
+(UCF(TEMPERATURE) = 1).
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-04_swmm530.patch
+
+diff --git a/src/legacy/engine/snow.c b/src/legacy/engine/snow.c
+index d415675..e9d7d1d 100644
+--- a/src/legacy/engine/snow.c
++++ b/src/legacy/engine/snow.c
+@@ -328,8 +328,9 @@ void setMeltParams(int j, int k, double x[])
+     if ( k >= SNOW_PLOWABLE && k <= SNOW_PERV )
+     {
+         // --- min/max melt coeffs.
+-        Snowmelt[j].dhmin[k]     = x[0] * UCF(TEMPERATURE) / UCF(RAINFALL);
+-        Snowmelt[j].dhmax[k]     = x[1] * UCF(TEMPERATURE) / UCF(RAINFALL); 
++        //     (a coefficient per deg C is 1.8 times one per deg F)
++        Snowmelt[j].dhmin[k]     = x[0] / UCF(TEMPERATURE) / UCF(RAINFALL);
++        Snowmelt[j].dhmax[k]     = x[1] / UCF(TEMPERATURE) / UCF(RAINFALL); 
+ 
+         // --- base melt temp (deg F)
+         Snowmelt[j].tbase[k]     = x[2];

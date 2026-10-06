@@ -1,0 +1,29 @@
+NUM-23: scale transect bank stations exactly like the stations
+
+setParams() in transect.c scaled the overbank stations as
+(x/UCF(LENGTH))*Xfactor while addStation() scales every station as
+x*Xfactor/UCF(LENGTH). getFlow() finds the banks by exact equality (Station[k]
+== Xleftbank), so in SI units with a width factor the two roundings often
+differ by one ulp, no bank is found and the whole section is computed as one
+subsection with the right overbank's n. Compute the banks with the same
+expression as the stations. US units and SI without a width factor give
+bit-identical values to before.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-23_swmm530.patch
+
+diff --git a/src/legacy/engine/transect.c b/src/legacy/engine/transect.c
+index c8e58ca..9af3cca 100644
+--- a/src/legacy/engine/transect.c
++++ b/src/legacy/engine/transect.c
+@@ -377,8 +377,8 @@ int  setParams(int j, char* id, double x[])
+     if ( Lfactor == 0.0 ) Lfactor = 1.0;
+     Xfactor = x[8];                              // station location multiplier
+     if ( Xfactor == 0.0 ) Xfactor = 1.0;
+-    Xleftbank *= Xfactor;                        // adjusted left bank
+-    Xrightbank *= Xfactor;                       // adjusted right bank
++    Xleftbank = x[3] * Xfactor / UCF(LENGTH);    // adjusted left bank
++    Xrightbank = x[4] * Xfactor / UCF(LENGTH);   // adjusted right bank
+     Yfactor = x[9] / UCF(LENGTH);                // elevation offset
+     Nstations = 0;
+     return 0;

@@ -1,0 +1,77 @@
+IO-50: report a continuity error from NaN totals as NaN, not 0.000
+
+The runoff, runoff-loading, groundwater, flow-routing and quality-routing
+error functions in massbal.c set pctError to 0.0 and overwrite it in one of
+three branches (|in - out| < tol, in > 0, out > 0). All three tests are
+false for NaN, so a ledger with NaN totals was reported as a perfect 0.000 %
+balance, in the report and through swmm_getMassBalErr(). Add a fourth branch
+that sets the error to NaN when either total is NaN, and let a NaN pollutant
+error become the maximum quality error. Finite ledgers are unchanged.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-50_swmm530.patch
+
+diff --git a/src/legacy/engine/massbal.c b/src/legacy/engine/massbal.c
+index 80bb10e..48266c2 100644
+--- a/src/legacy/engine/massbal.c
++++ b/src/legacy/engine/massbal.c
+@@ -703,6 +703,10 @@ double massbal_getRunoffError()
+     {
+         RunoffTotals.pctError = 100.0 * (totalInflow / totalOutflow - 1.0);
+     }
++    else if ( isnan(totalInflow) || isnan(totalOutflow) )
++    {
++        RunoffTotals.pctError = NAN;
++    }
+     RunoffError = RunoffTotals.pctError;
+     return RunoffTotals.pctError;
+ }
+@@ -752,6 +756,10 @@ double massbal_getLoadingError()
+         {
+             LoadingTotals[j].pctError = 100.0 * (loadIn / loadOut - 1.0);
+         }
++        else if ( isnan(loadIn) || isnan(loadOut) )
++        {
++            LoadingTotals[j].pctError = NAN;
++        }
+         maxError = MAX(maxError, LoadingTotals[j].pctError);
+ 
+         // --- report total counts as log10
+@@ -811,6 +819,10 @@ double massbal_getGwaterError()
+     {
+         GwaterTotals.pctError = 100.0 * (totalInflow / totalOutflow - 1.0);
+     }
++    else if ( isnan(totalInflow) || isnan(totalOutflow) )
++    {
++        GwaterTotals.pctError = NAN;
++    }
+     GwaterError = GwaterTotals.pctError;
+     return GwaterTotals.pctError;
+ }
+@@ -859,6 +871,10 @@ double massbal_getFlowError()
+     {
+         FlowTotals.pctError = 100.0 * (totalInflow / totalOutflow - 1.0);
+     }
++    else if ( isnan(totalInflow) || isnan(totalOutflow) )
++    {
++        FlowTotals.pctError = NAN;
++    }
+     FlowError = FlowTotals.pctError;
+     return FlowTotals.pctError;
+ }
+@@ -909,9 +925,14 @@ double massbal_getQualError()
+         {
+             QualTotals[p].pctError = 100.0 * (totalInflow / totalOutflow - 1.0);
+         }
++        else if ( isnan(totalInflow) || isnan(totalOutflow) )
++        {
++            QualTotals[p].pctError = NAN;
++        }
+ 
+         // --- update max. error among all pollutants
+-        if ( fabs(QualTotals[p].pctError) > fabs(maxQualError) )
++        if ( fabs(QualTotals[p].pctError) > fabs(maxQualError) ||
++             isnan(QualTotals[p].pctError) )
+         {
+             maxQualError = QualTotals[p].pctError;
+         }

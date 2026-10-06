@@ -1,0 +1,32 @@
+NUM-24: count the right end wall of a transect like the left one
+
+buildTables()'s getFlow closed the last sub-section at the last real station
+(k == Nsta - 1). For a transect the vertical end wall added after it has no
+area, so its flow is zero and its wetted perimeter was dropped, while the left
+end wall is carried into the first sub-section. Close a transect's last
+sub-section at the wall slice instead (k == Nsta when add_end_walls), so both
+end walls count, as the reference manual's algorithm prescribes. Streets keep
+Nsta - 1, so their results do not change.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-24_swmm600.patch
+
+diff --git a/src/engine/hydraulics/Transect.cpp b/src/engine/hydraulics/Transect.cpp
+index f63672d..4511ec1 100644
+--- a/src/engine/hydraulics/Transect.cpp
++++ b/src/engine/hydraulics/Transect.cpp
+@@ -105,9 +105,13 @@ void buildTables(TransectData& td, bool add_end_walls) {
+         Nsta = N - 1;
+     }
+ 
++    // A transect's right end wall belongs to its last sub-section, as the left
++    // end wall belongs to the first; a street keeps its last slice separate.
++    const int lastSlice = add_end_walls ? Nsta : Nsta - 1;
++
+     auto getFlow = [&](int k, double a, double wp, bool findFlow) -> double {
+         if (!findFlow) {
+-            if (k == Nsta - 1) {
++            if (k == lastSlice) {
+                 findFlow = true;
+             } else if (X[static_cast<size_t>(k)] == xLeftBank) {
+                 if (nLeft != nChannel &&

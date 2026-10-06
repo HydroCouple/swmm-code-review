@@ -1,0 +1,101 @@
+API-17: return node and link type codes as numbers from the property getters
+
+The output file stores a node's or link's type code (property code 0) as an
+INT4 and its other properties as REAL4. SMO_getPropertyValue() and
+SMO_getPropertyValues() fread every slot into a float, so an outfall's type
+code 1 came back as 1.4e-45. Read the type-code slot as an INT4 and convert it
+to float; all other properties are read as before.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply API-17_swmm530.patch
+
+diff --git a/src/legacy/output/swmm_output.c b/src/legacy/output/swmm_output.c
+index 8a30764..e674c96 100644
+--- a/src/legacy/output/swmm_output.c
++++ b/src/legacy/output/swmm_output.c
+@@ -71,6 +71,13 @@
+  */
+ #define MEMCHECK(x) (((x) == NULL) ? 414 : 0)
+ 
++/*!
++ * \def TYPE_CODE_PROPERTY
++ * \brief Property code of a node's or link's type, which the output file
++ *        stores as an INT4 (INPUT_TYPE_CODE in the engine's output.c)
++ */
++#define TYPE_CODE_PROPERTY 0
++
+ /*!
+  * \struct IDentry
+  * \brief Structure for element names
+@@ -1170,6 +1177,24 @@ int EXPORT_OPENSWMMCORE_OUTPUT_API SMO_getSubcatchSeries(
+     return set_error(p_data->error_handle, errorcode);
+ }
+ 
++/*!
++ * \brief Reads the property value at the current file position; the
++ *        type code is an INT4, all other properties are REAL4
++ */
++static float readPropertyValue(FILE *file, int propertyCode)
++{
++    INT4 k = 0;
++    REAL4 x = 0.0f;
++
++    if (propertyCode == TYPE_CODE_PROPERTY)
++    {
++        fread(&k, RECORDSIZE, 1, file);
++        return (REAL4)k;
++    }
++    fread(&x, RECORDSIZE, 1, file);
++    return x;
++}
++
+ /*!
+  * \copydoc SMO_getPropertyValue
+  */
+@@ -1217,7 +1242,7 @@ int EXPORT_OPENSWMMCORE_OUTPUT_API SMO_getPropertyValue(
+                 offset += (1 + p_data->SubcatchProperties + p_data->Nsubcatch * p_data->SubcatchProperties) * RECORDSIZE;
+                 offset += (1 + p_data->NodeProperties + elementIndex * p_data->NodeProperties + propertyIndex) * RECORDSIZE;
+                 _fseek(p_data->file, offset, SEEK_SET);
+-                fread(value, RECORDSIZE, 1, p_data->file);
++                *value = readPropertyValue(p_data->file, p_data->NodePropertyIndexes[propertyIndex]);
+             }
+             break;
+ 
+@@ -1232,7 +1257,7 @@ int EXPORT_OPENSWMMCORE_OUTPUT_API SMO_getPropertyValue(
+                 offset += (1 + p_data->NodeProperties + p_data->Nnodes * p_data->NodeProperties) * RECORDSIZE;
+                 offset += (1 + p_data->LinkProperties + elementIndex * p_data->LinkProperties + propertyIndex) * RECORDSIZE;
+                 _fseek(p_data->file, offset, SEEK_SET);
+-                fread(value, RECORDSIZE, 1, p_data->file);
++                *value = readPropertyValue(p_data->file, p_data->LinkPropertyIndexes[propertyIndex]);
+             }
+             break;
+ 
+@@ -1255,7 +1280,7 @@ int EXPORT_OPENSWMMCORE_OUTPUT_API SMO_getPropertyValues(
+     int *length
+ )
+ {
+-    int errorcode = 0;
++    int i, errorcode = 0;
+     F_OFF offset;
+ 
+     data_t *p_data;
+@@ -1291,7 +1316,8 @@ int EXPORT_OPENSWMMCORE_OUTPUT_API SMO_getPropertyValues(
+                 offset = p_data->ObjPropPos + (1 + p_data->SubcatchProperties + p_data->Nsubcatch * p_data->SubcatchProperties) * RECORDSIZE;
+                 offset += (1 + p_data->NodeProperties + elementIndex * p_data->NodeProperties) * RECORDSIZE;
+                 _fseek(p_data->file, offset, SEEK_SET);
+-                fread(*outValueArray, RECORDSIZE, p_data->NodeProperties, p_data->file);
++                for (i = 0; i < p_data->NodeProperties; i++)
++                    (*outValueArray)[i] = readPropertyValue(p_data->file, p_data->NodePropertyIndexes[i]);
+             }
+             break;
+         case SMO_link:
+@@ -1306,7 +1332,8 @@ int EXPORT_OPENSWMMCORE_OUTPUT_API SMO_getPropertyValues(
+                 offset += (1 + p_data->NodeProperties + p_data->Nnodes * p_data->NodeProperties) * RECORDSIZE;
+                 offset += (1 + p_data->LinkProperties + elementIndex * p_data->LinkProperties) * RECORDSIZE;
+                 _fseek(p_data->file, offset, SEEK_SET);
+-                fread(*outValueArray, RECORDSIZE, p_data->LinkProperties, p_data->file);
++                for (i = 0; i < p_data->LinkProperties; i++)
++                    (*outValueArray)[i] = readPropertyValue(p_data->file, p_data->LinkPropertyIndexes[i]);
+             }
+             break;
+         default:

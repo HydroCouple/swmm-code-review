@@ -1,0 +1,36 @@
+API-11: apply a MIN_SLOPE set after open to the conduit slopes
+
+swmm_options_set(e, "MIN_SLOPE", ...) is documented as valid before
+swmm_engine_start() and stores the percent, but the minimum slope is
+applied when resolve_cross_references() computes the conduit slopes during
+swmm_engine_open(). A value set afterwards changed nothing.
+
+In the OPENED state, recompute every conduit's slope with
+recompute_conduit_slope() (added by API-10) after MIN_SLOPE is set.
+
+Requires: API-10
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b,
+after API-10_swmm600.patch:
+    git apply API-11_swmm600.patch
+
+diff --git a/src/engine/core/openswmm_model_impl.cpp b/src/engine/core/openswmm_model_impl.cpp
+index 8ab54ad..b892ca0 100644
+--- a/src/engine/core/openswmm_model_impl.cpp
++++ b/src/engine/core/openswmm_model_impl.cpp
+@@ -1470,7 +1470,14 @@ SWMM_ENGINE_API int swmm_options_set(SWMM_Engine engine,
+     else if (k == "LAT_FLOW_TOL")      opt.lat_flow_tol        = stod_strict(v) / 100.0;
+     else if (k == "SYS_FLOW_TOL")      opt.sys_flow_tol        = stod_strict(v) / 100.0;
+     else if (k == "MIN_SURFAREA")      opt.min_surf_area       = stod_strict(v);
+-    else if (k == "MIN_SLOPE")         opt.min_slope           = stod_strict(v);
++    else if (k == "MIN_SLOPE") {
++        opt.min_slope = stod_strict(v);
++        // the minimum applies to the conduit slopes resolved at open
++        auto& ctx = to_engine(engine)->context();
++        if (ctx.state == openswmm::EngineState::OPENED)
++            for (int j = 0; j < ctx.n_links(); ++j)
++                openswmm::input::recompute_conduit_slope(ctx, j);
++    }
+     else if (k == "THREADS")           opt.num_threads         = stoi_strict(v);
+ 
+     // Explicit finite-volume solver. Same value grammar as the [OPTIONS]

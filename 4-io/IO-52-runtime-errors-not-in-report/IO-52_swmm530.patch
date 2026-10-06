@@ -1,0 +1,52 @@
+IO-52: write time-step and results-file errors to the report
+
+execRouting(), runoff_execute() and output_open() stop the run by setting
+ErrorCode = ERR_TIMESTEP (107) or ERR_OUT_FILE (307) directly. These codes
+were written to the report by report_writeErrorCode() from swmm_report(),
+but swmm_report() has not called it since 5.2.0, so the report of such a
+run ends without any error message. Raise them with report_writeErrorMsg(),
+which writes the message to the report and sets ErrorCode, as every other
+run-time error does.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-52_swmm530.patch
+
+diff --git a/src/legacy/engine/output.c b/src/legacy/engine/output.c
+index f57370e..18c6a29 100644
+--- a/src/legacy/engine/output.c
++++ b/src/legacy/engine/output.c
+@@ -457,7 +457,7 @@ void output_openOutFile()
+     if ( (Fout.file = fopen(Fout.name, "w+b")) == NULL)
+     {
+         writecon(FMT14);
+-        ErrorCode = ERR_OUT_FILE;
++        report_writeErrorMsg(ERR_OUT_FILE, "");
+     }
+ }
+ 
+diff --git a/src/legacy/engine/runoff.c b/src/legacy/engine/runoff.c
+index bf00bad..d756ded 100644
+--- a/src/legacy/engine/runoff.c
++++ b/src/legacy/engine/runoff.c
+@@ -221,7 +221,7 @@ void runoff_execute()
+     runoffStep = runoff_getTimeStep(currentDate);
+     if ( runoffStep <= 0.0 )
+     {
+-        ErrorCode = ERR_TIMESTEP;
++        report_writeErrorMsg(ERR_TIMESTEP, "");
+         return;
+     }
+ 
+diff --git a/src/legacy/engine/swmm5.c b/src/legacy/engine/swmm5.c
+index 4096c9a..d6c5da1 100644
+--- a/src/legacy/engine/swmm5.c
++++ b/src/legacy/engine/swmm5.c
+@@ -966,7 +966,7 @@ static void execRouting()
+             routingStep = routing_getRoutingStep(RouteModel, RouteStep);
+         if (routingStep <= 0.0)
+         {
+-            ErrorCode = ERR_TIMESTEP;
++            report_writeErrorMsg(ERR_TIMESTEP, "");
+             return;
+         }
+         nextRoutingTime = NewRoutingTime + 1000.0 * routingStep;

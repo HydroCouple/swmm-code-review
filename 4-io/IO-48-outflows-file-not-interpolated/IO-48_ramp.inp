@@ -1,0 +1,60 @@
+[TITLE]
+IO-48: ramped flow and TSS through two KINWAVE conduits; 40-s routing steps
+do not land on the 1-minute report times; outfall results saved to an
+interface file
+
+[OPTIONS]
+FLOW_UNITS           CFS
+FLOW_ROUTING         KINWAVE
+START_DATE           01/01/2020
+START_TIME           00:00:00
+REPORT_START_DATE    01/01/2020
+REPORT_START_TIME    00:00:00
+END_DATE             01/01/2020
+END_TIME             00:30:00
+REPORT_STEP          00:01:00
+ROUTING_STEP         40
+WET_STEP             00:05:00
+DRY_STEP             01:00:00
+
+[POLLUTANTS]
+;;Name  Units  Crain  Cgw  Crdii  Kdecay
+TSS     MG/L   0      0    0      0
+
+[JUNCTIONS]
+;;Name  Elev  MaxDepth  InitDepth  SurDepth  Aponded
+J1      100   10        0          0         0
+J2      99    10        0          0         0
+
+[OUTFALLS]
+;;Name  Elev  Type
+O1      98    FREE
+
+[CONDUITS]
+;;Name  From  To  Length  Roughness  InOffset  OutOffset  InitFlow
+C1      J1    J2  400     0.013      0         0          0
+C2      J2    O1  400     0.013      0         0          0
+
+[XSECTIONS]
+;;Link  Shape     Geom1  Geom2  Geom3  Geom4  Barrels
+C1      CIRCULAR  2      0      0      0      1
+C2      CIRCULAR  2      0      0      0      1
+
+[INFLOWS]
+;;Node  Constituent  Series  Type    Mfactor  Sfactor  Baseline
+J1      FLOW         QRAMP   FLOW    1.0      1.0
+J1      TSS          CRAMP   CONCEN  1.0      1.0
+
+[TIMESERIES]
+;;Name  Time   Value
+QRAMP   00:00  0.0
+QRAMP   00:30  30.0
+CRAMP   00:00  0.0
+CRAMP   00:30  300.0
+
+[FILES]
+SAVE OUTFLOWS  IO-48_iface.txt
+
+[REPORT]
+NODES ALL
+LINKS ALL

@@ -1,0 +1,169 @@
+CON-21: weight the summary averages by the routing step length
+
+updateStatistics() added one sample per routing step to the node depth,
+storage volume and outfall flow sums, and DefaultReportPlugin divided them
+by the number of steps (or of flowing steps for an outfall), so under a
+variable routing step the short steps of peak flow were over-weighted.
+Accumulate each value times the step length and divide by the reporting
+time (routing_stats.report_time), or for an outfall by the new
+NodeData::stat_outfall_time, the time it discharged. The pump average was
+already volume / running time.
+
+Requires: BND-19
+Requires: BND-20
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b,
+after BND-19_swmm600.patch and BND-20_swmm600.patch:
+    git apply CON-21_swmm600.patch
+
+diff --git a/src/engine/core/SWMMEngine.cpp b/src/engine/core/SWMMEngine.cpp
+index e976663..eb60123 100644
+--- a/src/engine/core/SWMMEngine.cpp
++++ b/src/engine/core/SWMMEngine.cpp
+@@ -5221,7 +5221,7 @@ void SWMMEngine::updateStatistics(double dt_routing) noexcept {
+         auto uj = static_cast<std::size_t>(j);
+         // Depth statistics
+         double cur_depth = ctx_.nodes.depth[uj];
+-        ctx_.nodes.stat_sum_depth[uj] += cur_depth;
++        ctx_.nodes.stat_sum_depth[uj] += cur_depth * dt_routing;
+         // Storage-volume statistics: accumulate the node's actual stored volume at
+         // this depth (legacy StorageStats avgVol += newVolume). Recomputed from the
+         // maintained depth via the same relation the report uses, so the Storage
+@@ -5229,7 +5229,7 @@ void SWMMEngine::updateStatistics(double dt_routing) noexcept {
+         // volume-of-average-depth approximation.
+         if (ctx_.nodes.type[uj] == NodeType::STORAGE) {
+             const int us = ucf::getUnitSystem(static_cast<int>(ctx_.options.flow_units));
+-            ctx_.nodes.stat_sum_volume[uj] += node::getVolume(
++            ctx_.nodes.stat_sum_volume[uj] += dt_routing * node::getVolume(
+                 ctx_.nodes, j, cur_depth, &ctx_.tables, us, &ctx_.node_subtypes);
+         }
+         if (cur_depth > ctx_.nodes.stat_max_depth[uj]) {
+@@ -5286,10 +5286,11 @@ void SWMMEngine::updateStatistics(double dt_routing) noexcept {
+             double qi = ctx_.nodes.inflow[uj];
+             sys_outfall_flow += qi;
+             if (qi >= 0.001) { // legacy MIN_RUNOFF_FLOW, stats.c
+-                ctx_.nodes.stat_outfall_avg_flow[uj] += qi;
++                ctx_.nodes.stat_outfall_avg_flow[uj] += qi * dt_routing;
+                 if (qi > ctx_.nodes.stat_outfall_max_flow[uj])
+                     ctx_.nodes.stat_outfall_max_flow[uj] = qi;
+                 ctx_.nodes.stat_outfall_periods[uj]++;
++                ctx_.nodes.stat_outfall_time[uj] += dt_routing;
+             }
+             // Outfall pollutant loads: load += inflow * conc * dt
+             if (np > 0) {
+diff --git a/src/engine/data/NodeData.hpp b/src/engine/data/NodeData.hpp
+index e13cd5a..e76d175 100644
+--- a/src/engine/data/NodeData.hpp
++++ b/src/engine/data/NodeData.hpp
+@@ -679,7 +679,7 @@ struct NodeData {
+     std::vector<double>     stat_max_surcharge_height;
+ 
+     /**
+-     * @brief Outfall cumulative average flow (flow units × reporting periods).
++     * @brief Outfall cumulative flow × time (cfs × seconds) while it discharges.
+      * @see Legacy: OutfallStats[k].avgFlow
+      */
+     std::vector<double>     stat_outfall_avg_flow;
+@@ -721,6 +721,9 @@ struct NodeData {
+      */
+     std::vector<long>       stat_outfall_periods;
+ 
++    /// Time each outfall discharged (sec). @see Legacy: OutfallStats[k].flowTime
++    std::vector<double>     stat_outfall_time;
++
+     /**
+      * @brief Count of non-converging steps per node.
+      * @details Incremented when a routing step fails to converge and the node
+@@ -844,6 +847,7 @@ struct NodeData {
+         stat_outfall_avg_flow.assign(un, 0.0);
+         stat_outfall_max_flow.assign(un, 0.0);
+         stat_outfall_periods.assign(un, 0);
++        stat_outfall_time.assign(un, 0.0);
+         stat_non_converged_count.assign(un, 0);
+         stat_time_courant_critical.assign(un, 0.0);
+     }
+@@ -898,7 +902,7 @@ struct NodeData {
+         g(stat_lat_inflow_vol, 0.0); g(stat_total_inflow_vol, 0.0);
+         g(stat_total_outflow_vol, 0.0);
+         g(stat_outfall_avg_flow, 0.0); g(stat_outfall_max_flow, 0.0);
+-        g(stat_outfall_periods, 0L);
++        g(stat_outfall_periods, 0L); g(stat_outfall_time, 0.0);
+         g(stat_non_converged_count, 0); g(stat_time_courant_critical, 0.0);
+         // Note: qual_mass_in, conc, conc_old, hrt handled by resize_quality()
+     }
+@@ -985,6 +989,7 @@ struct NodeData {
+         e(stat_max_total_inflow); e(stat_storage_max_outflow);
+         e(stat_lat_inflow_vol); e(stat_total_inflow_vol);
+         e(stat_total_outflow_vol); e(stat_outfall_max_flow); e(stat_outfall_periods);
++        e(stat_outfall_time);
+         e(stat_non_converged_count); e(stat_time_courant_critical);
+ 
+         // Flat 2D quality arrays: [node * np + p] → erase the stride for idx
+diff --git a/src/engine/plugins/DefaultReportPlugin.cpp b/src/engine/plugins/DefaultReportPlugin.cpp
+index b09a75e..b8e153a 100644
+--- a/src/engine/plugins/DefaultReportPlugin.cpp
++++ b/src/engine/plugins/DefaultReportPlugin.cpp
+@@ -2440,14 +2440,14 @@ void DefaultReportPlugin::write_results(std::FILE* f,
+         std::fprintf(f,
+ "\n  ---------------------------------------------------------------------------------");
+ 
+-        long report_steps = ctx.routing_stats.report_steps;
+-        report_steps = std::max(report_steps, 1L);
++        double report_time = ctx.routing_stats.report_time;
++        if (report_time <= 0.0) report_time = 1.0;
+ 
+         for (int j = 0; j < ctx.n_nodes(); ++j) {
+             auto uj = static_cast<std::size_t>(j);
+             int nt = static_cast<int>(ctx.nodes.type[uj]);
+             double max_d_int = ctx.nodes.stat_max_depth[uj];
+-            double avg_d = ctx.nodes.stat_sum_depth[uj] / static_cast<double>(report_steps) * len_ucf;
++            double avg_d = ctx.nodes.stat_sum_depth[uj] / report_time * len_ucf;
+             double max_d = max_d_int * len_ucf;
+             double max_hgl = (ctx.nodes.invert_elev[uj] + max_d_int) * len_ucf;
+             double rpt_max = ctx.nodes.stat_max_rpt_depth[uj];  // already display units
+@@ -2666,8 +2666,8 @@ void DefaultReportPlugin::write_results(std::FILE* f,
+             std::fprintf(f,
+ "\n  ------------------------------------------------------------------------------------------------");
+ 
+-            long report_steps = ctx.routing_stats.report_steps;
+-            report_steps = std::max(report_steps, 1L);
++            double report_time = ctx.routing_stats.report_time;
++            if (report_time <= 0.0) report_time = 1.0;
+ 
+             for (int j = 0; j < ctx.n_nodes(); ++j) {
+                 auto uj = static_cast<std::size_t>(j);
+@@ -2692,7 +2692,7 @@ void DefaultReportPlugin::write_results(std::FILE* f,
+                 // is a read-only computation, so mutating the cursor is benign.
+                 auto* tbls = const_cast<TableData*>(&ctx.tables);
+                 const double avg_vol_ft3 =
+-                    ctx.nodes.stat_sum_volume[uj] / static_cast<double>(report_steps);
++                    ctx.nodes.stat_sum_volume[uj] / report_time;
+                 const double max_vol_ft3 = node::getVolume(
+                     ctx.nodes, j, max_depth, tbls, us, &ctx.node_subtypes);
+ 
+@@ -2773,19 +2773,19 @@ void DefaultReportPlugin::write_results(std::FILE* f,
+         double sys_freq_sum = 0.0;
+         int outfall_count = 0;
+         std::vector<double> pol_totals(static_cast<std::size_t>(np), 0.0);
+-        long total_steps = ctx.routing_stats.report_steps;
+-        total_steps = std::max(total_steps, 1L);
++        double report_time = ctx.routing_stats.report_time;
++        if (report_time <= 0.0) report_time = 1.0;
+ 
+         for (int j = 0; j < ctx.n_nodes(); ++j) {
+             auto uj = static_cast<std::size_t>(j);
+             if (ctx.nodes.type[uj] != NodeType::OUTFALL) continue;
+             outfall_count++;
+ 
+-            long periods = ctx.nodes.stat_outfall_periods[uj];
+-            double avg_flow = (periods > 0)
+-                ? ctx.nodes.stat_outfall_avg_flow[uj] * Qcf / static_cast<double>(periods) : 0.0;
++            double flow_time = ctx.nodes.stat_outfall_time[uj];
++            double avg_flow = (flow_time > 0.0)
++                ? ctx.nodes.stat_outfall_avg_flow[uj] * Qcf / flow_time : 0.0;
+             double max_flow = ctx.nodes.stat_outfall_max_flow[uj] * Qcf;
+-            double freq = 100.0 * static_cast<double>(periods) / static_cast<double>(total_steps);
++            double freq = 100.0 * flow_time / report_time;
+             const auto& pre = ctx.routing_stats.inflow_before_rpt;
+             double vol = (ctx.nodes.stat_total_inflow_vol[uj] -
+                           (uj < pre.size() ? pre[uj] : 0.0)) * Vcf;

@@ -1,0 +1,97 @@
+BND-10: evaluate control rules between events, as legacy does
+
+SWMMEngine::stepRouting() returned as soon as the current time was outside
+every [EVENTS] period, before the pump target settings and control rules were
+evaluated, so no rule acted between events (a rule due at 01:00 acted when
+the next event started). Legacy evaluateControlRules() runs before the event
+test on every step and only the flow routing is skipped. Move the event test
+and its early return below the control-rule block; its content is unchanged.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply BND-10_swmm600.patch
+
+diff --git a/src/engine/core/SWMMEngine.cpp b/src/engine/core/SWMMEngine.cpp
+index 839529d..39eacf7 100644
+--- a/src/engine/core/SWMMEngine.cpp
++++ b/src/engine/core/SWMMEngine.cpp
+@@ -4644,39 +4644,6 @@ void SWMMEngine::stepRouting(double dt_routing) noexcept {
+     const double routing_date = datetime::addSeconds(ctx_.options.start_date,
+                                                      routing_secs);
+ 
+-    // B0a. Check if between routing events — skip routing if so
+-    //      (legacy isBetweenEvents(), routing.c). The test takes legacy's
+-    //      currentDate, the one formed just above: ctx_.current_date is the
+-    //      seconds clock WITHOUT legacy's 1 ms, so a step starting exactly on
+-    //      an event's end date read as "still inside the event" and routed one
+-    //      step past every window legacy had already closed (events-example
+-    //      diverged at period 864 = Event[0].end for precisely this reason).
+-    //      The index advances by ONE event per call, which is where legacy
+-    //      puts it — inside the > end branch — and not by a sweep to the first
+-    //      unexpired event: legacy re-tests the next one on the next step.
+-    between_events_ = isBetweenEvents(routing_date);
+-    if (between_events_) {
+-        // legacy initSystemInflows() runs BEFORE the event test, and both it
+-        // and the node_/link_setOldQualState it calls roll the old state AND
+-        // ZERO the new one (routing.c:432, node.c, link.c). v6 splits those:
+-        // save_lat_qual_state() (step(), every step) does the roll, while the
+-        // zero is implicit in clearInflowSources/assembleLateralInflows and in
+-        // the quality router assigning conc — all of which this early return
+-        // skips. Without it a skipped window keeps reporting the last routed
+-        // step's lateral inflow and concentrations forever, where legacy,
+-        // having zeroed them and then routed nothing, reports none.
+-        std::fill(ctx_.nodes.lat_flow.begin(), ctx_.nodes.lat_flow.end(), 0.0);
+-        if (!ctx_.options.ignore_quality) {
+-            std::fill(ctx_.nodes.conc.begin(), ctx_.nodes.conc.end(), 0.0);
+-            std::fill(ctx_.links.conc.begin(), ctx_.links.conc.end(), 0.0);
+-        }
+-        if (next_event_ < static_cast<int>(ctx_.events.size()) &&
+-            routing_date > ctx_.events[static_cast<size_t>(next_event_)].end) {
+-            next_event_++;
+-        }
+-        return;
+-    }
+-
+     // B0. Half-step mass balance update (P8-G12)
+     // Legacy: massbal_updateRoutingTotals(routingStep/2) at start of routing
+     // (mass balance accumulators updated with half the step's contribution)
+@@ -4732,6 +4699,40 @@ void SWMMEngine::stepRouting(double dt_routing) noexcept {
+         }
+     }
+ 
++    // B0a. Check if between routing events — skip routing if so (BND-10: after the control rules,
++    //      which legacy evaluates first on every step, routing or not).
++    //      (legacy isBetweenEvents(), routing.c). The test takes legacy's
++    //      currentDate, the one formed just above: ctx_.current_date is the
++    //      seconds clock WITHOUT legacy's 1 ms, so a step starting exactly on
++    //      an event's end date read as "still inside the event" and routed one
++    //      step past every window legacy had already closed (events-example
++    //      diverged at period 864 = Event[0].end for precisely this reason).
++    //      The index advances by ONE event per call, which is where legacy
++    //      puts it — inside the > end branch — and not by a sweep to the first
++    //      unexpired event: legacy re-tests the next one on the next step.
++    between_events_ = isBetweenEvents(routing_date);
++    if (between_events_) {
++        // legacy initSystemInflows() runs BEFORE the event test, and both it
++        // and the node_/link_setOldQualState it calls roll the old state AND
++        // ZERO the new one (routing.c:432, node.c, link.c). v6 splits those:
++        // save_lat_qual_state() (step(), every step) does the roll, while the
++        // zero is implicit in clearInflowSources/assembleLateralInflows and in
++        // the quality router assigning conc — all of which this early return
++        // skips. Without it a skipped window keeps reporting the last routed
++        // step's lateral inflow and concentrations forever, where legacy,
++        // having zeroed them and then routed nothing, reports none.
++        std::fill(ctx_.nodes.lat_flow.begin(), ctx_.nodes.lat_flow.end(), 0.0);
++        if (!ctx_.options.ignore_quality) {
++            std::fill(ctx_.nodes.conc.begin(), ctx_.nodes.conc.end(), 0.0);
++            std::fill(ctx_.links.conc.begin(), ctx_.links.conc.end(), 0.0);
++        }
++        if (next_event_ < static_cast<int>(ctx_.events.size()) &&
++            routing_date > ctx_.events[static_cast<size_t>(next_event_)].end) {
++            next_event_++;
++        }
++        return;
++    }
++
+     // B2. Compute all inflow sources into decomposed arrays, then assemble.
+     //     Each source writes to its own per-node buffer; assembleLateralInflows()
+     //     sums them all into nodes.lat_flow[] for the routing solver.

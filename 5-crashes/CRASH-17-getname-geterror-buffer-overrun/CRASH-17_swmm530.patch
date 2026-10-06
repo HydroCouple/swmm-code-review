@@ -1,0 +1,41 @@
+CRASH-17: swmm_getError and swmm_getName write at most msgLen / size bytes
+
+Both functions document their length argument as the size of the caller's
+buffer, but passed it to sstrncpy(), which copies up to n characters and then
+the terminating null, i.e. n + 1 bytes: one byte past the buffer whenever the
+text is at least as long as it. Pass size - 1 (and copy nothing for a
+non-positive size). sstrncpy() itself is unchanged; its other callers pass
+the number of characters, with buffers of n + 1 bytes.
+
+Requires: API-03 (the swmm_getError hunk is next to the line API-03 changes)
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b,
+after API-03_swmm530.patch:
+    git apply CRASH-17_swmm530.patch
+
+diff --git a/src/legacy/engine/swmm5.c b/src/legacy/engine/swmm5.c
+index 6425307..dd5aede 100644
+--- a/src/legacy/engine/swmm5.c
++++ b/src/legacy/engine/swmm5.c
+@@ -1218,7 +1218,9 @@ int EXPORT_OPENSWMMCORE_SOLVER_API swmm_getError(char *errMsg, int msgLen)
+     if (ErrorCode != 0 && strlen(ErrorMsg) == 0)
+         error_getMsg(ErrorCode, ErrorMsg);
+ 
+-    sstrncpy(errMsg, ErrorMsg, msgLen);
++    // --- msgLen is the size of errMsg: copy at most msgLen-1 characters
++    if (msgLen > 0)
++        sstrncpy(errMsg, ErrorMsg, msgLen - 1);
+ 
+     // --- remove leading line feed from errMsg
+     if (msgLen > 0 && errMsg[0] == '\n')
+@@ -1310,8 +1312,8 @@ int EXPORT_OPENSWMMCORE_SOLVER_API swmm_getName(int objType, int index, char *na
+         return ERR_API_OBJECT_TYPE;
+     }
+ 
+-    if (idName)
+-        sstrncpy(name, idName, size);
++    if (idName && size > 0)
++        sstrncpy(name, idName, size - 1);
+ 
+     return 0;
+ }

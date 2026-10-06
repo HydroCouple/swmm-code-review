@@ -1,0 +1,86 @@
+API-12: compute swmm_MAXROUTESTEP as the Courant step up to ROUTING_STEP, without side effects
+
+getMaxRouteStep() called routing_getRoutingStep(RouteModel, MinRouteStep)
+with the Courant factor set to 1. The second argument is the upper limit of
+the search, and the result is clamped to at least MinRouteStep, so the value
+was always MinRouteStep (0.5 s by default). The call also went through
+dynwave_getRoutingStep(), which overwrites the solver's VariableStep (a call
+between swmm_start and the first swmm_step changed the first step from
+MinRouteStep to the full Courant step) and counts time-step critical
+elements. Add dynwave_getMaxRoutingStep(), which runs the same link and node
+step checks with a Courant factor of 1, capped at ROUTING_STEP and clamped
+and rounded as the solver does, but changes no state, and use it.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply API-12_swmm530.patch
+
+diff --git a/src/legacy/engine/dynwave.c b/src/legacy/engine/dynwave.c
+index 972da8c..4687ea5 100644
+--- a/src/legacy/engine/dynwave.c
++++ b/src/legacy/engine/dynwave.c
+@@ -211,6 +211,26 @@ double dynwave_getRoutingStep(double fixedStep)
+     return VariableStep;
+ }
+ 
++/*!
++* \brief Finds the largest stable time step for the current flow solution
++*        (Courant factor of 1) without changing the solver's state.
++* \param[in] maxStep Upper limit on the time step (sec)
++* \return Returns time step (sec)
++*/
++double dynwave_getMaxRoutingStep(double maxStep)
++{
++    int    minLink = -1, minNode = -1;
++    double saveCourantFactor = CourantFactor;
++    double tMin;
++
++    CourantFactor = 1.0;
++    tMin = getLinkStep(maxStep, &minLink);
++    tMin = getNodeStep(tMin, &minNode);
++    CourantFactor = saveCourantFactor;
++    if ( tMin < MinRouteStep ) tMin = MinRouteStep;
++    return floor(1000.0 * tMin) / 1000.0;
++}
++
+ /*!
+ * \brief Routes flows through drainage network over current time step.
+ * \param[in] tStep Time step (sec)
+diff --git a/src/legacy/engine/funcs.h b/src/legacy/engine/funcs.h
+index 20e8975..33a72b4 100644
+--- a/src/legacy/engine/funcs.h
++++ b/src/legacy/engine/funcs.h
+@@ -1041,6 +1041,13 @@ void dynwave_close(void);
+ */
+ double dynwave_getRoutingStep(double fixedStep);
+ 
++/*!
++* \brief Finds the largest stable (Courant factor 1) time step, up to maxStep.
++* \param[in] maxStep Upper limit on the time step (sec)
++* \return Returns time step (sec)
++*/
++double dynwave_getMaxRoutingStep(double maxStep);
++
+ /*!
+ * \brief Routes flows through drainage network over current time step.
+ * \param[in] tStep Time step (sec)
+diff --git a/src/legacy/engine/swmm5.c b/src/legacy/engine/swmm5.c
+index 4096c9a..eb6c8b0 100644
+--- a/src/legacy/engine/swmm5.c
++++ b/src/legacy/engine/swmm5.c
+@@ -3163,15 +3163,11 @@ static double getSavedLinkValue(int property, int index, int period)
+  */
+ static double getMaxRouteStep()
+ {
+-    double tmpCourantFactor = CourantFactor;
+     double result = RouteStep;
+ 
+     if (!IsStartedFlag || RouteModel != DW)
+         return result;
+-    CourantFactor = 1.0;
+-    result = routing_getRoutingStep(RouteModel, MinRouteStep);
+-    CourantFactor = tmpCourantFactor;
+-    return result;
++    return dynwave_getMaxRoutingStep(RouteStep);
+ }
+ 
+ /*!

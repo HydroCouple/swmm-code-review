@@ -1,0 +1,29 @@
+NUM-28: reset the right end of the bracket when table_tseriesLookup() rewinds
+
+When a lookup is earlier than the current bracket, table_tseriesLookup()
+rewinds to the first entry but leaves x2/y2 at the old bracket's right end.
+The forward search then copies that stale point into x1/y1, so a lookup in
+the first interval interpolates between the old right end and the second
+entry, and a lookup before the first entry leaves a bracket that spans
+from the first entry to the old right end. Collapse the bracket onto the
+first entry after rewinding. Forward lookups are unchanged.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-28_swmm530.patch
+
+diff --git a/src/legacy/engine/table.c b/src/legacy/engine/table.c
+index c7564d2..58ee286 100644
+--- a/src/legacy/engine/table.c
++++ b/src/legacy/engine/table.c
+@@ -779,6 +779,11 @@ double table_tseriesLookup(TTable *table, double x, char extend)
+     if ( table->x1 == table->x2 || x < table->x1 )
+     {
+         table_getFirstEntry(table, &(table->x1), &(table->y1));
++
++        // --- collapse the bracket onto the first entry so that the search
++        //     below starts there and not from the old bracket's end
++        table->x2 = table->x1;
++        table->y2 = table->y1;
+         if ( x < table->x1 )
+         {
+             if ( extend == TRUE ) return table->y1;

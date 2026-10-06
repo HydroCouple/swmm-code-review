@@ -1,0 +1,115 @@
+IO-01: reject "nan" and "inf" as numeric input
+
+openswmm::from_chars_double() (std::from_chars, or strtod_l on the fallback
+path) reads "nan", "inf" and "infinity" as numbers, so they reached the model
+from every section. It now reports a non-finite result as invalid_argument,
+which every parser in the input reader already handles as "not a number".
+
+Most section handlers read numbers with to_double(), which turns an
+unreadable token into 0.0 without a message (legacy reports ERROR 211). For
+the fields this issue's test uses, the handlers now check the token with
+parse_double_strict() and report ERROR 211 as legacy does: junction max /
+initial / surcharge depth and ponded area, conduit length and roughness, and
+time series values. ROUTING_STEP already rejects an unreadable step.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-01_swmm600.patch
+
+diff --git a/src/engine/core/charconv_compat.hpp b/src/engine/core/charconv_compat.hpp
+index 707deaa..71bf484 100644
+--- a/src/engine/core/charconv_compat.hpp
++++ b/src/engine/core/charconv_compat.hpp
+@@ -18,6 +18,7 @@
+ #define OPENSWMM_CHARCONV_COMPAT_HPP
+ 
+ #include <charconv>
++#include <cmath>
+ #include <cstdlib>
+ #include <cstring>
+ #include <system_error>
+@@ -71,7 +72,13 @@ inline std::from_chars_result from_chars_double(const char* first,
+                                                 const char* last,
+                                                 double& value) noexcept {
+ #if defined(__cpp_lib_to_chars) && __cpp_lib_to_chars >= 201611L
+-    return std::from_chars(first, last, value);
++    // from_chars also reads "nan", "inf" and "infinity": not valid input
++    double v = 0.0;
++    const std::from_chars_result r = std::from_chars(first, last, v);
++    if (r.ec != std::errc{}) return r;
++    if (!std::isfinite(v)) return {first, std::errc::invalid_argument};
++    value = v;
++    return r;
+ #else
+     if (first == last) {
+         return {first, std::errc::invalid_argument};
+@@ -103,7 +110,7 @@ inline std::from_chars_result from_chars_double(const char* first,
+         v = std::strtod(cstr, &end);
+     }
+ 
+-    if (end == cstr) {
++    if (end == cstr || !std::isfinite(v)) {
+         return {first, std::errc::invalid_argument};
+     }
+     value = v;
+diff --git a/src/engine/input/handlers/LinksHandler.cpp b/src/engine/input/handlers/LinksHandler.cpp
+index c205c9e..fca6649 100644
+--- a/src/engine/input/handlers/LinksHandler.cpp
++++ b/src/engine/input/handlers/LinksHandler.cpp
+@@ -112,6 +112,15 @@ void handle_conduits(SimulationContext& ctx, const std::vector<std::string>& lin
+         const auto ucr = static_cast<std::size_t>(cr);
+ 
+         set_link_nodes(ctx, idx, tok[1], tok[2]);
++        // Length and roughness that are not numbers (e.g. "nan") are
++        // ERROR 211, as in legacy conduit_readParams.
++        double v = 0.0;
++        const std::size_t bad = !parse_double_strict(tok[3], v) ? 3
++                              : !parse_double_strict(tok[4], v) ? 4 : 0;
++        if (bad != 0) {
++            ctx.errors.push_back(format_error(ERR_NUMBER, tok[bad]));
++            continue;
++        }
+         ctx.link_subtypes.conduits.length[ucr]    = to_double(tok[3]);
+         ctx.link_subtypes.conduits.roughness[ucr] = to_double(tok[4]);
+         ctx.links.offset1[idx]   = offsetToken(ctx, tok[5]);
+diff --git a/src/engine/input/handlers/NodesHandler.cpp b/src/engine/input/handlers/NodesHandler.cpp
+index 2e125a5..4a9241a 100644
+--- a/src/engine/input/handlers/NodesHandler.cpp
++++ b/src/engine/input/handlers/NodesHandler.cpp
+@@ -120,7 +120,8 @@ void handle_junctions(SimulationContext& ctx, const std::vector<std::string>& li
+         // -0.100000.
+         bool negative_param = false;
+         for (std::size_t i = 2; i < tok.size() && i <= 5; ++i) {
+-            if (to_double(tok[i]) < 0.0) {
++            double v = 0.0;
++            if (!parse_double_strict(tok[i], v) || v < 0.0) {
+                 ctx.errors.push_back(format_error(ERR_NUMBER, tok[i]));
+                 negative_param = true;
+                 break;
+diff --git a/src/engine/input/handlers/TablesHandler.cpp b/src/engine/input/handlers/TablesHandler.cpp
+index 63bbe19..27019d5 100644
+--- a/src/engine/input/handlers/TablesHandler.cpp
++++ b/src/engine/input/handlers/TablesHandler.cpp
+@@ -182,7 +182,10 @@ void handle_timeseries(SimulationContext& ctx, const std::vector<std::string>& l
+             // rows.
+             last_date = std::floor(x);
+             seen_date = true;
+-            y = to_double(tok[3]);
++            if (!parse_double_strict(tok[3], y)) {   // e.g. "nan": ERROR 211
++                ctx.errors.push_back(format_error(ERR_NUMBER, tok[3]));
++                continue;
++            }
+         } else if (!has_date && tok.size() >= 3) {
+             // Name  Time  Value  (continuation, uses last_date)
+             //
+@@ -232,7 +235,10 @@ void handle_timeseries(SimulationContext& ctx, const std::vector<std::string>& l
+                 last_date += 1.0;
+             }
+             x = last_date + time_frac;
+-            y = to_double(tok[2]);
++            if (!parse_double_strict(tok[2], y)) {   // e.g. "nan": ERROR 211
++                ctx.errors.push_back(format_error(ERR_NUMBER, tok[2]));
++                continue;
++            }
+             // Date-less rows before the series' first explicit date are
+             // elapsed times anchored at the simulation start — count them
+             // so the resolver adds start_date to exactly these rows (and

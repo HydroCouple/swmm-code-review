@@ -1,0 +1,76 @@
+API-14: make swmm_gage_set_rainfall() an override that the runoff step uses
+
+swmm_gage_set_rainfall() only wrote the gage's current rainfall, which the
+next runoff step recomputes from the gage's series, so the value was lost
+for every gage. Also store it as the gage's API override (api_rainfall),
+which updateAllGages() already applies ahead of the series and the co-gage
+copy, and check that override before the co-gage in reportRainfall() too,
+so that the reported rainfall of a gage that shares its series with an
+earlier gage is the value set for it. The header comment now describes
+how long the override lasts.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply API-14_swmm600.patch
+
+diff --git a/include/openswmm/engine/openswmm_gages.h b/include/openswmm/engine/openswmm_gages.h
+index b66bdb2..3f9d4bd 100644
+--- a/include/openswmm/engine/openswmm_gages.h
++++ b/include/openswmm/engine/openswmm_gages.h
+@@ -346,10 +346,12 @@ SWMM_ENGINE_API int swmm_gage_get_rain_units(SWMM_Engine engine, int idx, int* u
+ SWMM_ENGINE_API int swmm_gage_get_rainfall(SWMM_Engine engine, int idx, double* rainfall);
+ 
+ /**
+- * @brief Override rainfall at a gage for the current timestep.
++ * @brief Override rainfall at a gage.
+  *
+  * @details Overrides gage-driven rainfall for all subcatchments that use
+- *          this gage. Applied for one timestep only.
++ *          this gage, from the next runoff step until it is set again, as
++ *          legacy swmm_setValue(swmm_GAGE_RAINFALL). A negative value
++ *          returns the gage to its own rainfall data.
+  */
+ SWMM_ENGINE_API int swmm_gage_set_rainfall(SWMM_Engine engine, int idx, double rainfall);
+ 
+diff --git a/src/engine/core/openswmm_gages_impl.cpp b/src/engine/core/openswmm_gages_impl.cpp
+index daf90cf..9f83fde 100644
+--- a/src/engine/core/openswmm_gages_impl.cpp
++++ b/src/engine/core/openswmm_gages_impl.cpp
+@@ -355,6 +355,9 @@ SWMM_ENGINE_API int swmm_gage_set_rainfall(SWMM_Engine engine, int idx, double r
+     CHECK_RUNNING(ctx);
+     CHECK_INDEX(idx >= 0 && idx < ctx.n_gages());
+     ctx.gages.rainfall[static_cast<std::size_t>(idx)] = rainfall;
++    // the runoff step recomputes rainfall from the gage's data unless an
++    // API override is set (legacy Gage.apiRainfall)
++    ctx.gages.api_rainfall[static_cast<std::size_t>(idx)] = rainfall;
+     return SWMM_OK;
+ }
+ 
+diff --git a/src/engine/hydrology/Gage.cpp b/src/engine/hydrology/Gage.cpp
+index ce8b7a1..e663963 100644
+--- a/src/engine/hydrology/Gage.cpp
++++ b/src/engine/hydrology/Gage.cpp
+@@ -401,6 +401,12 @@ static double reportRainfall(const SimulationContext& ctx, int gage_idx,
+ 
+     auto ug = static_cast<std::size_t>(gage_idx);
+ 
++    // API override (legacy gage.c:544-548), checked before the co-gage as
++    // in updateAllGages
++    if (ctx.gages.api_rainfall[ug] >= 0.0) {
++        return ctx.gages.api_rainfall[ug];
++    }
++
+     // Co-gage: report the primary's report rainfall re-scaled by this gage's
+     // factor (legacy gage_setReportRainfall, gage.c:535-541). Co-gage index is
+     // always lower than this gage's, so the recursion terminates.
+@@ -414,11 +420,6 @@ static double reportRainfall(const SimulationContext& ctx, int gage_idx,
+         return reportRainfall(ctx, co, report_date, from_series) * ratio;
+     }
+ 
+-    // API override (legacy gage.c:544-548)
+-    if (ctx.gages.api_rainfall[ug] >= 0.0) {
+-        return ctx.gages.api_rainfall[ug];
+-    }
+-
+     // legacy gage_setReportRainfall (gage.c:550-564) on the machine's state
+     // as the last gage update left it (the start of the current runoff
+     // step): the report instant + 1 s inside the current interval reads

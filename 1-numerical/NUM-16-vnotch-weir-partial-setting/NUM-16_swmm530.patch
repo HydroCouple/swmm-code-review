@@ -1,0 +1,30 @@
+NUM-16: keep the notch flow of a partly open V-notch weir
+
+A V-notch weir with a setting below 1 is computed as a trapezoidal weir
+whose crest is raised by (1 - setting) * height. The triangular ends of that
+trapezoid are the notch itself, but their flow used Cd2, the end coefficient
+of TRAPEZOIDAL weirs, which defaults to 0 and is not documented for V-notch
+weirs. A setting of 0.999 therefore removed almost all of the weir's flow.
+Use the V-notch coefficient (Cd, or its Cd curve value) for the ends of a
+partly open V-notch weir; the rectangular centre strip is unchanged. Fully
+open V-notch weirs and all other weir types are unchanged.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-16_swmm530.patch
+
+diff --git a/src/legacy/engine/link.c b/src/legacy/engine/link.c
+index 31925e1..9e363f7 100644
+--- a/src/legacy/engine/link.c
++++ b/src/legacy/engine/link.c
+@@ -2435,7 +2435,10 @@ void weir_getFlow(int j, int k,  double head, double dir, int hasFlapGate,
+         y = (1.0 - Link[j].setting) * Link[j].xsect.yFull;
+         length = xsect_getWofY(&Link[j].xsect, y) * UCF(LENGTH);
+         *q1 = cDisch1 * length * pow(h, 1.5);
+-        *q2 = Weir[k].cDisch2 * Weir[k].slope * pow(h, 2.5);
++
++        // --- a partly open V-notch keeps its own coeff. for the notch
++        *q2 = (Weir[k].type == VNOTCH_WEIR ? cDisch1 : Weir[k].cDisch2) *
++              Weir[k].slope * pow(h, 2.5);
+     }
+ 
+     // --- convert CMS flows to CFS

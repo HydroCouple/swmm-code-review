@@ -1,0 +1,47 @@
+[TITLE]
+BND-02: a TIDAL outfall in a run that starts at 06:00 clock time
+
+[OPTIONS]
+FLOW_UNITS           CFS
+FLOW_ROUTING         DYNWAVE
+START_DATE           01/01/2020
+START_TIME           06:00:00
+REPORT_START_DATE    01/01/2020
+REPORT_START_TIME    06:00:00
+END_DATE             01/02/2020
+END_TIME             06:00:00
+REPORT_STEP          01:00:00
+WET_STEP             00:05:00
+DRY_STEP             01:00:00
+ROUTING_STEP         60
+
+[JUNCTIONS]
+;;Name  Elev  MaxDepth InitDepth SurDepth Aponded
+J1      0     20        0        0        0
+
+;; The flap gate keeps the tide out of the network, so the outfall's stage
+;; is exactly the tidal curve's value at the current hour of the day.
+[OUTFALLS]
+;;Name  Elev  Type  Stage Gated
+O1      0     TIDAL T1    YES
+
+[CONDUITS]
+;;Name From To Length Rough InOff OutOff InitFlow
+C1      J1   O1  100   0.013 0     0      0
+
+[XSECTIONS]
+C1      CIRCULAR 3 0 0 0 1
+
+;; Stage (ft) versus hour of the day: high tide 4 ft at 06:00, low tide 0 at
+;; 12:00, a second high tide of 2 ft at 18:00, low tide at midnight.
+[CURVES]
+;;Name Type  Hour Stage
+T1     Tidal 0    0.0
+T1           6    4.0
+T1           12   0.0
+T1           18   2.0
+T1           24   0.0
+
+[REPORT]
+NODES ALL
+LINKS ALL

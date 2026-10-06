@@ -1,0 +1,73 @@
+[TITLE]
+NUM-26: a half street with an on-sag grate inlet (street H) and a full street
+with an on-grade grate inlet (street F). The sag inlet on the half street must
+capture the flow of one grate.
+
+[OPTIONS]
+FLOW_UNITS CFS
+FLOW_ROUTING DYNWAVE
+LINK_OFFSETS DEPTH
+START_DATE 07/27/2020
+START_TIME 00:00:00
+END_DATE 07/27/2020
+END_TIME 03:00:00
+REPORT_STEP 00:15:00
+WET_STEP 00:05:00
+DRY_STEP 01:00:00
+ROUTING_STEP 0:00:05
+
+[JUNCTIONS]
+;;Name  Elev  MaxDepth  InitDepth  SurDepth  Aponded
+UF      100   0         0          0         0
+BF       98   0         0          0         0
+UH      100   0         0          0         0
+BH       98   0         0          0         0
+CF       90   4         0          0         0
+CH       90   4         0          0         0
+
+[OUTFALLS]
+OF   96   FREE NO
+OH   96   FREE NO
+XF   89   FREE NO
+XH   89   FREE NO
+
+[CONDUITS]
+;;Name  From  To   Length  N      InOff  OutOff  InitQ  MaxQ
+F1      UF    BF   200     0.016  0      0       0      0
+F2      BF    OF   200     0.016  0      0       0      0
+H1      UH    BH   200     0.016  0      0       0      0
+H2      BH    OH   200     0.016  0      0       0      0
+PF      CF    XF   400     0.010  0      0       0      0
+PH      CH    XH   400     0.010  0      0       0      0
+
+[XSECTIONS]
+F1  STREET    FullSt  0  0  0  1
+F2  STREET    FullSt  0  0  0  1
+H1  STREET    HalfSt  0  0  0  1
+H2  STREET    HalfSt  0  0  0  1
+PF  CIRCULAR  2       0  0  0  1
+PH  CIRCULAR  2       0  0  0  1
+
+[STREETS]
+;;Name  Tcrown  Hcurb  Sx  nRoad  a  W  Sides
+FullSt  20      0.5    2   0.016  0  0  2
+HalfSt  20      0.5    2   0.016  0  0  1
+
+[INLETS]
+;;Name  Type   Length  Width  GrateType  OpenArea  Vsplash
+G       GRATE  2       2      GENERIC    0.5       4
+
+[INLET_USAGE]
+;;Link  Inlet  CaptureNode  #Inlets  %Clog  Qmax  aLocal  wLocal  Placement
+F1      G      CF           1        0      0     0       0       ON_GRADE
+H1      G      CH           1        0      0     0       0       ON_SAG
+
+[INFLOWS]
+;;Node  Param  TSeries  Type  Mfactor  Sfactor  Baseline
+UF      FLOW   ""       FLOW  1.0      1.0      4.0
+UH      FLOW   ""       FLOW  1.0      1.0      6.0
+
+[REPORT]
+INPUT NO
+NODES ALL
+LINKS ALL

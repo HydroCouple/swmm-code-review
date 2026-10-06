@@ -1,0 +1,59 @@
+[TITLE]
+NUM-58: 1000-ac impervious subcatchment with no depression storage gets a drizzle
+of 0.0005 in/hr for 10 h at 10 mg/L (wet deposition). Runoff stays below
+MIN_RUNOFF (0.001 in/hr) but is routed to J1; its pollutant (10 mg/L, the
+rain concentration, as nothing else adds or removes pollutant) must go with it.
+
+[OPTIONS]
+FLOW_UNITS           CFS
+INFILTRATION         HORTON
+FLOW_ROUTING         KINWAVE
+START_DATE           01/01/2020
+START_TIME           00:00:00
+REPORT_START_DATE    01/01/2020
+REPORT_START_TIME    00:00:00
+END_DATE             01/02/2020
+END_TIME             00:00:00
+DRY_STEP             00:05:00
+WET_STEP             00:05:00
+ROUTING_STEP         60
+REPORT_STEP          01:00:00
+
+[EVAPORATION]
+CONSTANT  0.0
+
+[RAINGAGES]
+G1  INTENSITY  1:00  1.0  TIMESERIES  RAIN
+
+[TIMESERIES]
+RAIN  01/01/2020  00:00  0.0005
+RAIN  01/01/2020  10:00  0.0
+
+[SUBCATCHMENTS]
+S1  G1  J1  1000  100  5000  0.5  0
+
+[SUBAREAS]
+S1  0.01  0.1  0.0  0.0  100  OUTLET
+
+[INFILTRATION]
+S1  3.0  0.5  4  7  0
+
+[JUNCTIONS]
+J1   1   5   0   0   0
+
+[OUTFALLS]
+O1   0   FREE
+
+[CONDUITS]
+C1  J1  O1  400  0.013  0  0  0
+
+[XSECTIONS]
+C1  CIRCULAR  1.5  0  0  0  1
+
+[POLLUTANTS]
+P1  MG/L  10  0  0  0  NO  *  0  0  0
+
+[REPORT]
+SUBCATCHMENTS ALL
+NODES ALL
+LINKS ALL

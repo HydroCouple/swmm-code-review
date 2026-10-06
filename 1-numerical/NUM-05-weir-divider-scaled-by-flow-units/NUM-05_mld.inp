@@ -1,0 +1,49 @@
+[TITLE]
+NUM-05: WEIR divider, Qmin 0, Ht 1 ft (0.3048 m), Cd 3.33 (0.5604 SI), inflow 3 cfs, MLD units
+
+[OPTIONS]
+FLOW_UNITS           MLD
+FLOW_ROUTING         KINWAVE
+START_DATE           01/01/2020
+START_TIME           00:00:00
+REPORT_START_DATE    01/01/2020
+REPORT_START_TIME    00:00:00
+END_DATE             01/01/2020
+END_TIME             03:00:00
+REPORT_STEP          00:15:00
+WET_STEP             00:05:00
+DRY_STEP             01:00:00
+ROUTING_STEP         30
+
+[JUNCTIONS]
+;;Name  Elev  MaxDepth InitDepth SurDepth Aponded
+J2      99    10        0        0        0
+J3      99    10        0        0        0
+
+[DIVIDERS]
+;;Name Elev DivLink Type Qmin Ht Cd
+D1     100  CD      WEIR 0 0.3048 0.5604
+
+[OUTFALLS]
+O1     90  FREE NO
+O2     90  FREE NO
+
+[CONDUITS]
+;;Name From To Length Rough InOff OutOff InitFlow
+CM      D1   J2  400   0.013 0     0      0
+CD      D1   J3  400   0.013 0     0      0
+C2      J2   O1  400   0.013 0     0      0
+C3      J3   O2  400   0.013 0     0      0
+
+[XSECTIONS]
+CM  CIRCULAR 3 0 0 0 1
+CD  CIRCULAR 3 0 0 0 1
+C2  CIRCULAR 3 0 0 0 1
+C3  CIRCULAR 3 0 0 0 1
+
+[INFLOWS]
+;;Node Param TSeries Type Mfactor Sfactor Baseline
+D1     FLOW  ""      FLOW 1.0     1.0     7.3398
+
+[REPORT]
+LINKS ALL

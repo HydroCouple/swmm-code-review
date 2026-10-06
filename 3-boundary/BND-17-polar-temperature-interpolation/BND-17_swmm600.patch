@@ -1,0 +1,40 @@
+BND-17: keep the time of the daily maximum temperature after sunrise
+
+climate::updateTempTimes() put both sunrise and the time of the maximum at
+noon when the sun does not rise, so the temperature stepped from Tmin to Tmax
+at once; for days shorter than 3 h it put the maximum before sunrise, as
+legacy does, and Tmax was never reached. Treat polar night as legacy does (a
+zero half-day length, with the longitude correction) and keep the hour of the
+maximum at least 1 h after sunrise, as the legacy patch does. Days of 4 h or
+longer are unchanged.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply BND-17_swmm600.patch
+
+diff --git a/src/engine/hydrology/Climate.cpp b/src/engine/hydrology/Climate.cpp
+index 4c9c135..edaf009 100644
+--- a/src/engine/hydrology/Climate.cpp
++++ b/src/engine/hydrology/Climate.cpp
+@@ -194,9 +194,9 @@ void updateTempTimes(ClimateState& state, int doy) {
+ 
+     double hrsr, hrss;
+     if (arg >= 1.0) {
+-        // Polar night — sun never rises; use noon for both
+-        hrsr = 12.0;
+-        hrss = 12.0;
++        // Polar night — sun never rises: zero half-day length (legacy)
++        hrsr = 12.0 + state.dtlong;
++        hrss = 12.0 + state.dtlong - 3.0;
+     } else if (arg <= -1.0) {
+         // Midnight sun — sun never sets
+         hrsr = 0.0;
+@@ -206,6 +206,9 @@ void updateTempTimes(ClimateState& state, int doy) {
+         hrsr = 12.0 - hrang + state.dtlong;
+         hrss = 12.0 + hrang + state.dtlong - 3.0; // max temp ~3 h before actual sunset
+     }
++    // Days shorter than 4 h (polar winter): the max temp hour would come less
++    // than 1 h after, or even before, sunrise; keep it 1 h after sunrise.
++    if (hrss < hrsr + 1.0) hrss = hrsr + 1.0;
+ 
+     state.hrsr  = hrsr;
+     state.hrss  = hrss;

@@ -1,0 +1,26 @@
+BND-11: restore the hot-started groundwater flow as both old and new flow
+
+gwater_getState() saves gw->newFlow, but gwater_setState() restored it into
+gw->oldFlow only and left newFlow at the 0 set by gwater_initState(). The
+first runoff step of the continuation shifts newFlow into oldFlow, so the
+restored value was discarded: routing interpolated the groundwater inflow
+from 0, and about half of the first runoff step's groundwater volume never
+reached the node, although the aquifer state drained by the full amount.
+Restore the saved flow into newFlow as well, so that the first step starts
+from it, as in the uninterrupted run.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply BND-11_swmm530.patch
+
+diff --git a/src/legacy/engine/gwater.c b/src/legacy/engine/gwater.c
+index d511143..945ee77 100644
+--- a/src/legacy/engine/gwater.c
++++ b/src/legacy/engine/gwater.c
+@@ -457,6 +457,7 @@ void gwater_setState(int subcatchIndex, double x[])
+     gw->theta = x[0];
+     gw->lowerDepth = x[1] - gw->bottomElev;
+     gw->oldFlow = x[2];
++    gw->newFlow = x[2];
+     if ( x[3] != MISSING ) gw->maxInfilVol = x[3];
+ }
+ 

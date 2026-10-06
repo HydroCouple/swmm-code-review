@@ -1,0 +1,57 @@
+[TITLE]
+BND-11: first half (0:00-6:00) of BND-11_full.inp; saves the state at 6:00
+to the hot start file BND-11.hsf.
+
+[OPTIONS]
+FLOW_UNITS           CFS
+INFILTRATION         HORTON
+FLOW_ROUTING         KINWAVE
+START_DATE           01/01/2020
+START_TIME           00:00:00
+REPORT_START_DATE    01/01/2020
+REPORT_START_TIME    00:00:00
+END_DATE             01/01/2020
+END_TIME             06:00:00
+WET_STEP             00:05:00
+DRY_STEP             01:00:00
+ROUTING_STEP         60
+REPORT_STEP          00:15:00
+
+[RAINGAGES]
+G1   INTENSITY 1:00 1.0 TIMESERIES RAIN
+
+[SUBCATCHMENTS]
+;;Name Gage Outlet Area %Imperv Width %Slope CurbLen
+S1   G1   J1   100   0   500   1   0
+
+[SUBAREAS]
+S1   0.012   0.15   0.1   0.2   25   OUTLET
+
+[INFILTRATION]
+S1   3   0.5   4   7   0
+
+[AQUIFERS]
+;;Name por  WP    FC    Ksat Kslope Tslope ETu  ETs  Seep Ebot Egw Umc
+AQ1  0.5   0.15   0.30   5.0   10   15   0.35   14   0.0   0   8   0.3
+
+[GROUNDWATER]
+;;Subcatch Aquifer Node Esurf A1 B1 A2 B2 A3 Dsw  (trailing * : see IO-15)
+S1   AQ1   J1   10   0.01   1.0   0   0   0   0   *
+
+[JUNCTIONS]
+J1   0   5   0   0   0
+
+[OUTFALLS]
+OUT01   -1   FREE   NO
+
+[CONDUITS]
+C1   J1   OUT01   400   0.013   0   0   0   0
+
+[XSECTIONS]
+C1   CIRCULAR   2   0   0   0   1
+
+[TIMESERIES]
+RAIN   01/01/2020 00:00   0.0
+
+[FILES]
+SAVE HOTSTART "BND-11.hsf"

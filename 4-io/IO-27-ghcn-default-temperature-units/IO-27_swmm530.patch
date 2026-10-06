@@ -1,0 +1,32 @@
+IO-27: read GHCN climate files in tenths of a degree C when no Units are given
+
+climate_readParams() defaulted the units of a GHCN-Daily climate file to
+degrees F in US models and degrees C in SI models. The input reference gives
+C10 (tenths of a degree C) as the default of the optional Units token on the
+[TEMPERATURE] FILE line, and SWMM 5.1 always read GHCN files that way. An
+older-format file used without the token was read 10 times too warm in
+degrees C or as degrees F. Default to DEG_C10, as documented and as 6.0.0
+does. The same setting selects the evaporation and wind units of the file
+(tenths of mm, tenths of m/s or km/day), so they follow. Files with an
+explicit C or F token are unchanged.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-27_swmm530.patch
+
+diff --git a/src/legacy/engine/climate.c b/src/legacy/engine/climate.c
+index c343b93..0364460 100644
+--- a/src/legacy/engine/climate.c
++++ b/src/legacy/engine/climate.c
+@@ -570,10 +570,8 @@ int climate_readParams(char *tok[], int ntoks)
+             }
+         }
+ 
+-        // --- file temperature units
+-        FileTempUnits = DEG_F;
+-        if (UnitSystem == SI)
+-            FileTempUnits = DEG_C;
++        // --- file temperature units (default is tenths of a degree C)
++        FileTempUnits = DEG_C10;
+         if (ntoks > 3)
+         {
+             i = findmatch(tok[3], TempUnitsWords);

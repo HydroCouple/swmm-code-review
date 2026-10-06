@@ -1,0 +1,45 @@
+CRASH-12: index the Link array with the link, not its upstream node, in findSFLinkQual()
+
+findSFLinkQual() sets j = Link[i].node1 (a node index) for the upstream
+node's quality, and the API mass-flux block added for 5.3.0 then used j as a
+link index: Link[j].apiExtQualMassFlux[p] and Link[j].totalLoad[p]. Under
+STEADY routing with any pollutant this reads past the Link array whenever an
+upstream node index is >= the number of links, and otherwise applies another
+link's flux. Use Link[i], the conduit being processed, as findLinkQual() does.
+
+Requires: NUM-01
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply CRASH-12_swmm530.patch
+
+diff --git a/src/legacy/engine/qualrout.c b/src/legacy/engine/qualrout.c
+index 3e47df1..a1a8ad8 100644
+--- a/src/legacy/engine/qualrout.c
++++ b/src/legacy/engine/qualrout.c
+@@ -450,7 +450,7 @@ void findSFLinkQual(int i, double qSeep, double fEvap, double tStep)
+         qIn = fabs(Conduit[k].q1) * barrels;
+         v1 = Link[i].oldVolume;
+ 
+-        cOut = Link[j].apiExtQualMassFlux[p];
++        cOut = Link[i].apiExtQualMassFlux[p];
+ 
+         // --- a link with no water (v1 + qIn*tStep = 0) takes no flux
+         //     (the division below would give 0/0 = NaN)
+@@ -461,7 +461,7 @@ void findSFLinkQual(int i, double qSeep, double fEvap, double tStep)
+             c2 -= cOut;
+             
+             cOut = cOut * (v1 + qIn * tStep) ;
+-            Link[j].totalLoad[p] -= cOut;
++            Link[i].totalLoad[p] -= cOut;
+ 
+             cOut = cOut/ tStep;
+             massbal_addOutflowQual(p, cOut, FALSE);
+@@ -472,7 +472,7 @@ void findSFLinkQual(int i, double qSeep, double fEvap, double tStep)
+             c2 += cOut;
+ 
+             cOut = cOut * (v1 + qIn * tStep);
+-            Link[j].totalLoad[p] += cOut;
++            Link[i].totalLoad[p] += cOut;
+ 
+             cOut = cOut/ tStep;
+             massbal_addInflowQual(EXTERNAL_INFLOW, p, cOut);

@@ -1,0 +1,45 @@
+IO-34: keep rule-action settings within their valid range
+
+The [CONTROLS] parser accepted any numeric SETTING, so "PUMP P1 SETTING = -1"
+ran the pump backwards and "OUTLET OL1 SETTING = 3" (rejected by legacy
+addAction() with ERROR 211) tripled the outlet's rating curve. The values a
+CURVE or TIMESERIES action produces were used as they came as well; only the
+PID branch clamped its result. Reject a numeric setting below 0, or above 1
+for an orifice, weir or outlet (ERROR 211), and clamp a modulated value in
+ControlEngine::updateActionValue() to >= 0, and to <= 1 for a link that is
+not a pump, as computePIDSetting() does.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-34_swmm600.patch
+
+diff --git a/src/engine/controls/Controls.cpp b/src/engine/controls/Controls.cpp
+index 88369ca..74db9f4 100644
+--- a/src/engine/controls/Controls.cpp
++++ b/src/engine/controls/Controls.cpp
+@@ -419,6 +419,13 @@ void ControlEngine::updateActionValue(Action& a, SimulationContext& ctx,
+             }
+             break;
+     }
++
++    // Keep a curve or time series setting within its feasible range, as
++    // computePIDSetting() does.
++    if (a.value < 0.0) a.value = 0.0;
++    if (a.link_idx >= 0 && a.link_idx < ctx.n_links() &&
++        ctx.links.type[static_cast<size_t>(a.link_idx)] != LinkType::PUMP && a.value > 1.0)
++        a.value = 1.0;
+ }
+ 
+ // ============================================================================
+@@ -1448,6 +1455,12 @@ int ControlEngine::parseRuleText(const std::string& text, SimulationContext& ctx
+                     if (!tryParseDouble(toks[static_cast<size_t>(k)], v))
+                         return fail("action value '" + toks[static_cast<size_t>(k)] +
+                                     "' is not a number", ERR_NUMBER, toks[static_cast<size_t>(k)]);
++                    // Legacy addAction: a pump setting cannot be negative and
++                    // a regulator setting lies in 0..1.
++                    if (v < 0.0 || (obj_type != "PUMP" && v > 1.0))
++                        return fail("action value '" + toks[static_cast<size_t>(k)] +
++                                    "' is outside the valid range", ERR_NUMBER,
++                                    toks[static_cast<size_t>(k)]);
+                     action.value = v;
+                 }
+             }

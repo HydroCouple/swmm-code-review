@@ -1,0 +1,31 @@
+NUM-53: give control rules the rule step, not the routing step, when RULE_STEP > 0
+
+With RULE_STEP > 0 the rules are evaluated once per rule step, but
+evaluateControlRules() in routing.c passed the current routing step as the
+evaluation's time step. That step is the width of the "=" window for
+SIMULATION TIME / CLOCKTIME / TIMEOPEN / TIMECLOSED premises, which became
+narrower than the spacing of the evaluations (a premise such as
+"CLOCKTIME = 01:03:00" never held), and the dt of a PID action, whose
+integral and derivative terms were scaled by the routing step although the
+controller acts once per rule step. Pass the rule step instead.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-53_swmm530.patch
+
+diff --git a/src/legacy/engine/routing.c b/src/legacy/engine/routing.c
+index 9a47f4b..2866ca5 100644
+--- a/src/legacy/engine/routing.c
++++ b/src/legacy/engine/routing.c
+@@ -378,10 +378,11 @@ void routing_execute(int routingModel, double routingStep)
+     for (j=0; j<Nobjects[LINK]; j++) link_setTargetSetting(j);
+ 
+     // --- evaluate control rules if next evaluation time reached
++    //     (an evaluation covers one rule step when RuleStep > 0)
+     if (RuleStep == 0 || fabs(NewRoutingTime - NewRuleTime) < 1.0)
+     {  
+         controls_evaluate(currentDate, currentDate - StartDateTime,
+-            routingStep / SECperDAY);
++            (RuleStep > 0 ? RuleStep : routingStep) / SECperDAY);
+     }
+ 
+     // --- change each link's actual setting if it differs from its target

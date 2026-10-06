@@ -1,0 +1,32 @@
+NUM-07: give FORCE_MAIN the Manning full-flow section factor A*R^(2/3)
+
+xsect_setParams() set a force main's full section factor to A*R^0.63, the
+Hazen-Williams radius exponent, with sMax = 1.06949*sFull. Every consumer
+multiplies sFull by the Manning factor beta = 1.486*sqrt(S)/n: qFull, qMax,
+the normal depth from link_getYnorm(), the partly-full section factors (the
+circular table scaled by sFull) and the lengthening velocity. Under dynamic
+wave n is the equivalent n chosen to make the Manning full flow (R^(2/3))
+equal the Hazen-Williams flow; under kinematic wave and steady flow it is the
+user's Manning n. Mixing the two inflated all of these by R^(0.63-2/3), 5%
+for a 1 ft main and 8% for 0.5 ft. Use A*R^(2/3) and sMax = 1.08*sFull, as
+for CIRCULAR. Full-pipe pressurized friction (Hazen-Williams/Darcy-Weisbach
+in dwflow) does not use sFull and is unchanged.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-07_swmm530.patch
+
+diff --git a/src/legacy/engine/xsect.c b/src/legacy/engine/xsect.c
+index cf40f97..463186f 100644
+--- a/src/legacy/engine/xsect.c
++++ b/src/legacy/engine/xsect.c
+@@ -258,8 +258,8 @@ int xsect_setParams(TXsect *xsect, int type, double p[], double ucf)
+         xsect->wMax  = xsect->yFull;
+         xsect->aFull = PI / 4.0 * xsect->yFull * xsect->yFull;
+         xsect->rFull = 0.2500 * xsect->yFull;
+-        xsect->sFull = xsect->aFull * pow(xsect->rFull, 0.63);
+-        xsect->sMax  = 1.06949 * xsect->sFull;
++        xsect->sFull = xsect->aFull * pow(xsect->rFull, 2./3.);
++        xsect->sMax  = 1.08 * xsect->sFull;
+         xsect->ywMax = 0.5 * xsect->yFull;
+ 
+         // --- save C-factor or roughness in rBot position

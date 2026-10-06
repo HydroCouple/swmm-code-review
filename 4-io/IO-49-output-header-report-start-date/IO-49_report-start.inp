@@ -1,0 +1,35 @@
+[TITLE]
+IO-49: binary output header date with a late REPORT_START
+(the test rewrites REPORT_START_TIME and REPORT_STEP for every case)
+
+[OPTIONS]
+FLOW_UNITS           CFS
+FLOW_ROUTING         KINWAVE
+START_DATE           01/01/2020
+START_TIME           00:00:00
+REPORT_START_DATE    01/01/2020
+REPORT_START_TIME    01:00:00
+END_DATE             01/01/2020
+END_TIME             03:00:00
+REPORT_STEP          00:15:00
+ROUTING_STEP         60
+
+[JUNCTIONS]
+;;Name  Elev  MaxDepth  InitDepth  SurDepth  Aponded
+J1      10    3         0          0         0
+
+[OUTFALLS]
+O1      9     FREE
+
+[CONDUITS]
+C1  J1  O1  100  0.013  0  0  0  0
+
+[XSECTIONS]
+C1  CIRCULAR  1.0  0  0  0  1
+
+[INFLOWS]
+J1  FLOW  ""  FLOW  1.0  1.0  1.0
+
+[REPORT]
+NODES     ALL
+LINKS     ALL

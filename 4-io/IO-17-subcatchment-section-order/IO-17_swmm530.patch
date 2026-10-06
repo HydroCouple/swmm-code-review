@@ -1,0 +1,117 @@
+IO-17: make subcatchment data independent of the order of the input sections
+
+subcatch_readSubareaParams() split the subcatchment into its three sub-areas
+with Subcatch[].fracImperv, which only the [SUBCATCHMENTS] row sets; with
+[SUBAREAS] above [SUBCATCHMENTS] the split used 0 % impervious and the whole
+subcatchment ran as pervious. subcatch_readParams() reset the N-PERV, DSTORE
+and INFIL pattern indexes, discarding [ADJUSTMENTS] rows read before it.
+Keep PctZero when [SUBAREAS] is read and compute the sub-area fractions (and
+the "no routing between sub-areas" rule for 0 % or 100 % impervious) in
+subcatch_validate(), and initialise the pattern indexes with the other
+subcatchment defaults in project.c instead of in subcatch_readParams().
+Results for decks in the usual order are unchanged (same expressions);
+a subcatchment without a [SUBAREAS] row keeps its all-zero sub-areas.
+
+Requires: BND-14
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-17_swmm530.patch
+
+diff --git a/src/legacy/engine/objects.h b/src/legacy/engine/objects.h
+index 6b54d76..7677578 100644
+--- a/src/legacy/engine/objects.h
++++ b/src/legacy/engine/objects.h
+@@ -397,6 +397,7 @@ typedef struct
+    double        width;           // overland flow width (ft)
+    double        area;            // area (ft2)
+    double        fracImperv;      // fraction impervious
++   double        pctZero;         // % of imperv. area w/o depression storage
+    double        slope;           // slope (ft/ft)
+    double        curbLength;      // total curb length (ft)
+    double*       initBuildup;     // initial pollutant buildup (mass or count/ft2)
+diff --git a/src/legacy/engine/project.c b/src/legacy/engine/project.c
+index d24c17f..0dd2344 100644
+--- a/src/legacy/engine/project.c
++++ b/src/legacy/engine/project.c
+@@ -1170,6 +1170,10 @@ void createObjects()
+         Subcatch[j].lidArea     = 0.0;
+         Subcatch[j].rainScaleFactor = 1.0;
+         Subcatch[j].snowScaleFactor = 1.0;
++        Subcatch[j].pctZero       = -1.0;
++        Subcatch[j].nPervPattern  = -1;
++        Subcatch[j].dStorePattern = -1;
++        Subcatch[j].infilPattern  = -1;
+         for (k = 0; k < Nobjects[POLLUT]; k++)
+         {
+             Subcatch[j].initBuildup[k] = 0.0;
+diff --git a/src/legacy/engine/subcatch.c b/src/legacy/engine/subcatch.c
+index 762a59c..fa1988b 100644
+--- a/src/legacy/engine/subcatch.c
++++ b/src/legacy/engine/subcatch.c
+@@ -201,9 +201,6 @@ int  subcatch_readParams(int subcatchIndex, char* tok[], int ntoks)
+     Subcatch[subcatchIndex].curbLength  = x[7];
+     Subcatch[subcatchIndex].rainScaleFactor = x[9];
+     Subcatch[subcatchIndex].snowScaleFactor = x[10];
+-    Subcatch[subcatchIndex].nPervPattern  = -1;
+-    Subcatch[subcatchIndex].dStorePattern = -1;
+-    Subcatch[subcatchIndex].infilPattern  = -1;
+ 
+     // --- create the snow pack object if it hasn't already been created
+     if ( x[8] >= 0 )
+@@ -265,9 +262,9 @@ int subcatch_readSubareaParams(char* tok[], int ntoks)
+     Subcatch[j].subArea[IMPERV1].dStore = x[2] / UCF(RAINDEPTH);
+     Subcatch[j].subArea[PERV].dStore    = x[3] / UCF(RAINDEPTH);
+ 
+-    Subcatch[j].subArea[IMPERV0].fArea  = Subcatch[j].fracImperv * x[4] / 100.0;
+-    Subcatch[j].subArea[IMPERV1].fArea  = Subcatch[j].fracImperv * (1.0 - x[4] / 100.0);
+-    Subcatch[j].subArea[PERV].fArea     = (1.0 - Subcatch[j].fracImperv);
++    // --- sub-area fractions are set in subcatch_validate, since the
++    //     subcatchment's % impervious may not have been read yet
++    Subcatch[j].pctZero = x[4];
+ 
+     // --- assume that all runoff from each subarea goes to subcatch outlet
+     for (i = IMPERV0; i <= PERV; i++)
+@@ -280,9 +277,7 @@ int subcatch_readSubareaParams(char* tok[], int ntoks)
+     //     (fOutlet is the fraction of runoff not routed)
+     
+     k = (int)x[5];
+-    if ( Subcatch[j].fracImperv == 0.0
+-    ||   Subcatch[j].fracImperv == 1.0 ) k = TO_OUTLET;
+-    if ( k == TO_IMPERV && Subcatch[j].fracImperv )
++    if ( k == TO_IMPERV )
+     {
+         Subcatch[j].subArea[PERV].routeTo = k;
+         Subcatch[j].subArea[PERV].fOutlet = 1.0 - x[6];
+@@ -387,6 +382,7 @@ void subcatch_validate(int subcatchIndex)
+     int     i;
+     int     k = Subcatch[subcatchIndex].outSubcatch;
+     double  area;
++    double  f, pctZero;
+     double  nonLidArea = Subcatch[subcatchIndex].area;
+ 
+     // --- check for ambiguous outlet name
+@@ -404,6 +400,24 @@ void subcatch_validate(int subcatchIndex)
+     // --- validate placement of LIDs in the subcatchment
+     nonLidArea -= Subcatch[subcatchIndex].lidArea;
+ 
++    // --- split the area into sub-areas now that both the % impervious
++    //     and the [SUBAREAS] data are known (either may be read first)
++    f = Subcatch[subcatchIndex].fracImperv;
++    pctZero = Subcatch[subcatchIndex].pctZero;
++    if ( pctZero >= 0.0 )
++    {
++        Subcatch[subcatchIndex].subArea[IMPERV0].fArea = f * pctZero / 100.0;
++        Subcatch[subcatchIndex].subArea[IMPERV1].fArea = f * (1.0 - pctZero / 100.0);
++        Subcatch[subcatchIndex].subArea[PERV].fArea    = (1.0 - f);
++
++        // --- no runoff routing between sub-areas if one type is missing
++        if ( f == 0.0 || f == 1.0 ) for (i = IMPERV0; i <= PERV; i++)
++        {
++            Subcatch[subcatchIndex].subArea[i].routeTo = TO_OUTLET;
++            Subcatch[subcatchIndex].subArea[i].fOutlet = 1.0;
++        }
++    }
++
+     // --- compute alpha (i.e. WCON in old SWMM) for overland flow
+     //     NOTE: the area which contributes to alpha for both imperv
+     //     subareas w/ and w/o depression storage is the total imperv area.

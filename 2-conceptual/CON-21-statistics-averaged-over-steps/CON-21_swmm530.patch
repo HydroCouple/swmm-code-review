@@ -1,0 +1,173 @@
+CON-21: weight the summary averages by the routing step length
+
+stats_updateNodeStats() added one sample per routing step to the node
+depth, storage volume and outfall flow sums, statsrpt.c divided them by the
+number of steps (ReportStepCount, or the number of flowing steps for an
+outfall), and the pump average divided a sum of step flows by the number
+of running steps. Under a variable routing step the steps are shortest
+while flows are highest, so these "averages" over-weighted peak conditions.
+Accumulate each value times the step length and divide by the time: the
+reporting period (RoutingTimeSpan) for node depth and storage volume, and
+the new OutfallStats.flowTime for the outfall's flow frequency and average
+flow. The pump's average flow is its pumped volume over its running time.
+The statistics getters of swmm5_stats.c divide the same way.
+
+Requires: API-04
+Requires: BND-19
+Requires: BND-20
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b,
+after API-04_swmm530.patch, BND-19_swmm530.patch and BND-20_swmm530.patch:
+    git apply CON-21_swmm530.patch
+
+diff --git a/src/legacy/engine/objects.h b/src/legacy/engine/objects.h
+index 64a1952..cff0328 100644
+--- a/src/legacy/engine/objects.h
++++ b/src/legacy/engine/objects.h
+@@ -1044,6 +1044,7 @@ typedef struct
+    double       maxFlow;
+    double*      totalLoad;   
+    int          totalPeriods;
++   double       flowTime;      // time the outfall discharged (sec)
+ }  TOutfallStats;
+ 
+ //---------------- 
+diff --git a/src/legacy/engine/stats.c b/src/legacy/engine/stats.c
+index d5fec73..bda4981 100644
+--- a/src/legacy/engine/stats.c
++++ b/src/legacy/engine/stats.c
+@@ -244,6 +244,7 @@ int stats_open()
+             OutfallStats[j].avgFlow = 0.0;
+             OutfallStats[j].maxFlow = 0.0;
+             OutfallStats[j].totalPeriods = 0;
++            OutfallStats[j].flowTime = 0.0;
+             if ( Nobjects[POLLUT] > 0 )
+             {
+                 OutfallStats[j].totalLoad =
+@@ -546,7 +547,7 @@ void stats_updateNodeStats(int j, double tStep, DateTime aDate)
+     int    canPond = (AllowPonding && Node[j].pondedArea > 0.0);
+ 
+     // --- update depth statistics
+-    NodeStats[j].avgDepth += newDepth;
++    NodeStats[j].avgDepth += newDepth * tStep;
+     if ( newDepth > NodeStats[j].maxDepth )
+     {
+         NodeStats[j].maxDepth = newDepth;
+@@ -581,7 +582,7 @@ void stats_updateNodeStats(int j, double tStep, DateTime aDate)
+     if ( Node[j].type == STORAGE )
+     {
+         k = Node[j].subIndex;
+-        StorageStats[k].avgVol += newVolume;
++        StorageStats[k].avgVol += newVolume * tStep;
+         StorageStats[k].evapLosses += 
+             Storage[Node[j].subIndex].evapLoss; 
+         StorageStats[k].exfilLosses +=
+@@ -602,9 +603,10 @@ void stats_updateNodeStats(int j, double tStep, DateTime aDate)
+         k = Node[j].subIndex;
+         if ( Node[j].inflow >= MIN_RUNOFF_FLOW )
+         {
+-            OutfallStats[k].avgFlow += Node[j].inflow;
++            OutfallStats[k].avgFlow += Node[j].inflow * tStep;
+             OutfallStats[k].maxFlow = MAX(OutfallStats[k].maxFlow, Node[j].inflow);
+             OutfallStats[k].totalPeriods++;
++            OutfallStats[k].flowTime += tStep;
+         }
+         for (p=0; p<Nobjects[POLLUT]; p++)
+         {
+diff --git a/src/legacy/engine/statsrpt.c b/src/legacy/engine/statsrpt.c
+index 53517b1..a1ec274 100644
+--- a/src/legacy/engine/statsrpt.c
++++ b/src/legacy/engine/statsrpt.c
+@@ -344,7 +344,7 @@ void writeNodeDepths()
+         fprintf(Frpt.file, " %-9s ", NodeTypeWords[Node[j].type]);
+         getElapsedTime(NodeStats[j].maxDepthDate, &days, &hrs, &mins);
+         fprintf(Frpt.file, "%7.2f  %7.2f  %7.2f  %4d  %02d:%02d  %10.2f",
+-            NodeStats[j].avgDepth / MAX(ReportStepCount, 1) * UCF(LENGTH),
++            NodeStats[j].avgDepth / (RoutingTimeSpan > 0.0 ? RoutingTimeSpan : 1.0) * UCF(LENGTH),
+             NodeStats[j].maxDepth * UCF(LENGTH),
+             (NodeStats[j].maxDepth + Node[j].invertElev) * UCF(LENGTH),
+             days, hrs, mins, NodeStats[j].maxRptDepth);
+@@ -546,7 +546,7 @@ void writeStorageVolumes()
+             if ( Node[j].type != STORAGE ) continue;
+             k = Node[j].subIndex;
+             fprintf(Frpt.file, "\n  %-20s", Node[j].ID);
+-            avgVol = StorageStats[k].avgVol / (double)MAX(ReportStepCount, 1);
++            avgVol = StorageStats[k].avgVol / (RoutingTimeSpan > 0.0 ? RoutingTimeSpan : 1.0);
+             maxVol = StorageStats[k].maxVol;
+             pctMaxVol = 0.0;
+             pctAvgVol = 0.0;
+@@ -638,11 +638,11 @@ void writeOutfallLoads()
+         {
+             if ( Node[j].type != OUTFALL ) continue;
+             k = Node[j].subIndex;
+-            flowCount = OutfallStats[k].totalPeriods;
++            flowCount = OutfallStats[k].flowTime;
+ 
+             // --- print node ID, flow freq., avg. flow, max. flow & flow vol.
+             fprintf(Frpt.file, "\n  %-20s", Node[j].ID);
+-            x = 100.*flowCount/(double)MAX(ReportStepCount, 1);
++            x = 100.*flowCount/(RoutingTimeSpan > 0.0 ? RoutingTimeSpan : 1.0);
+             fprintf(Frpt.file, "%7.2f", x);
+             freqSum += x;
+             if ( flowCount > 0 )
+@@ -901,9 +901,9 @@ void writePumpFlows()
+         k = Link[j].subIndex;
+         fprintf(Frpt.file, "\n  %-20s", Link[j].ID);
+         pctUtilized = PumpStats[k].utilized / totalSeconds * 100.0;
+-        avgFlow = PumpStats[k].avgFlow;
+-        if ( PumpStats[k].totalPeriods > 0 )
+-            avgFlow /=  PumpStats[k].totalPeriods;
++        avgFlow = PumpStats[k].volume;
++        if ( PumpStats[k].utilized > 0.0 )
++            avgFlow /=  PumpStats[k].utilized;
+         fprintf(Frpt.file, " %8.2f  %10d %9.2f %9.2f %9.2f %9.3f %9.2f",
+             pctUtilized, PumpStats[k].startUps, PumpStats[k].minFlow*UCF(FLOW),
+             avgFlow*UCF(FLOW), PumpStats[k].maxFlow*UCF(FLOW), 
+diff --git a/src/legacy/engine/swmm5_stats.c b/src/legacy/engine/swmm5_stats.c
+index 48ed280..78c2a2e 100644
+--- a/src/legacy/engine/swmm5_stats.c
++++ b/src/legacy/engine/swmm5_stats.c
+@@ -80,8 +80,8 @@ int EXPORT_OPENSWMMCORE_SOLVER_API swmm_getNodeStats(
+         return ERR_API_OBJECT_INDEX;
+ 
+     stats->avgDepth            = 0.0;
+-    if (ReportStepCount > 0)
+-        stats->avgDepth        = NodeStats[index].avgDepth / ReportStepCount *
++    if (RoutingTimeSpan > 0.0)
++        stats->avgDepth        = NodeStats[index].avgDepth / RoutingTimeSpan *
+                                  UCF(LENGTH);
+     stats->maxDepth            = NodeStats[index].maxDepth * UCF(LENGTH);
+     stats->maxDepthDate        = NodeStats[index].maxDepthDate;
+@@ -120,8 +120,8 @@ int EXPORT_OPENSWMMCORE_SOLVER_API swmm_getStorageStats(
+ 
+     stats->initVol     = StorageStats[j].initVol * UCF(VOLUME);
+     stats->avgVol      = 0.0;
+-    if (ReportStepCount > 0)
+-        stats->avgVol  = StorageStats[j].avgVol / ReportStepCount * UCF(VOLUME);
++    if (RoutingTimeSpan > 0.0)
++        stats->avgVol  = StorageStats[j].avgVol / RoutingTimeSpan * UCF(VOLUME);
+     stats->maxVol      = StorageStats[j].maxVol * UCF(VOLUME);
+     stats->maxFlow     = StorageStats[j].maxFlow * UCF(FLOW);
+     stats->evapLosses  = StorageStats[j].evapLosses * UCF(VOLUME);
+@@ -149,8 +149,8 @@ int EXPORT_OPENSWMMCORE_SOLVER_API swmm_getOutfallStats(
+         return ERR_API_OBJECT_TYPE;
+ 
+     stats->avgFlow      = 0.0;
+-    if (OutfallStats[j].totalPeriods > 0)
+-        stats->avgFlow  = OutfallStats[j].avgFlow / OutfallStats[j].totalPeriods *
++    if (OutfallStats[j].flowTime > 0.0)
++        stats->avgFlow  = OutfallStats[j].avgFlow / OutfallStats[j].flowTime *
+                           UCF(FLOW);
+     stats->maxFlow      = OutfallStats[j].maxFlow * UCF(FLOW);
+     stats->totalPeriods = OutfallStats[j].totalPeriods;
+@@ -222,8 +222,8 @@ int EXPORT_OPENSWMMCORE_SOLVER_API swmm_getPumpStats(
+         stats->utilized = PumpStats[j].utilized / RoutingTimeSpan;
+     stats->minFlow      = PumpStats[j].minFlow * UCF(FLOW);
+     stats->avgFlow      = 0.0;
+-    if (PumpStats[j].totalPeriods > 0)
+-        stats->avgFlow  = PumpStats[j].avgFlow / PumpStats[j].totalPeriods *
++    if (PumpStats[j].utilized > 0.0)
++        stats->avgFlow  = PumpStats[j].volume / PumpStats[j].utilized *
+                           UCF(FLOW);
+     stats->maxFlow      = PumpStats[j].maxFlow * UCF(FLOW);
+     stats->volume       = PumpStats[j].volume * UCF(VOLUME);

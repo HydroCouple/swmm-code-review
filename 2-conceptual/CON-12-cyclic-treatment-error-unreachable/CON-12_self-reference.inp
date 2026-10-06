@@ -1,0 +1,51 @@
+[TITLE]
+CON-12: junction J1 takes a 1 cfs DWF carrying TN = 10 mg/L.
+TN's removal at J1 is written in terms of TN's own removal (R = 0.5*R_TN),
+the shortest possible cyclic dependency. Expected: ERROR 161.
+
+[OPTIONS]
+FLOW_UNITS           CFS
+FLOW_ROUTING         KINWAVE
+START_DATE           01/01/2020
+START_TIME           00:00:00
+REPORT_START_DATE    01/01/2020
+REPORT_START_TIME    00:00:00
+END_DATE             01/01/2020
+END_TIME             04:00:00
+REPORT_STEP          00:15:00
+WET_STEP             00:05:00
+DRY_STEP             01:00:00
+ROUTING_STEP         30
+
+[POLLUTANTS]
+;;Name  Units  Crain  Cgw  Crdii  Kdecay
+TN      MG/L   0      0    0      0
+
+[JUNCTIONS]
+;;Name  Elev  MaxDepth  InitDepth  SurDepth  Aponded
+J1      110   5         0          0         0
+
+[OUTFALLS]
+;;Name  Elev  Type
+O1      100   FREE
+
+[CONDUITS]
+;;Name  From  To  Length  Roughness  InOffset  OutOffset  InitFlow
+C1      J1    O1  400     0.013      0         0          0
+
+[XSECTIONS]
+;;Link  Shape     Geom1  Geom2  Geom3  Geom4  Barrels
+C1      CIRCULAR  2      0      0      0      1
+
+[DWF]
+;;Node  Constituent  Baseline
+J1      FLOW         1
+J1      TN           10
+
+[TREATMENT]
+;;Node  Pollutant  Function
+J1      TN         R = 0.5*R_TN
+
+[REPORT]
+NODES ALL
+LINKS ALL

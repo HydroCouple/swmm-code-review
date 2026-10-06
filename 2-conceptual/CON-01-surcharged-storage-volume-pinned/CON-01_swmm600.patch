@@ -1,0 +1,67 @@
+CON-01: give a closed storage unit no free surface above its full depth
+
+As in 5.3.0, DWSolver::initNodeStates() gave a closed storage unit (surcharge
+depth > 0) its curve area above full depth while its volume stays capped at
+the full volume, so the depth update stored A*SurDepth of water that the
+volume never books (SLOT always; EXTRAN when no link responds to head). Set
+the node's own area to 0 there, as the 5.3.0 patch does.
+
+SWMMEngine::initialize() also computed a node's initial volume before its
+full volume, so the cap did not apply and a storage unit that starts above
+full depth booked the curve volume at that depth (15,000 instead of 10,000
+ft3 in the test), which no later step keeps. Compute the full volume first,
+as legacy node_initState() does.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply CON-01_swmm600.patch
+
+diff --git a/src/engine/core/SWMMEngine.cpp b/src/engine/core/SWMMEngine.cpp
+index 839529d..bf5bc95 100644
+--- a/src/engine/core/SWMMEngine.cpp
++++ b/src/engine/core/SWMMEngine.cpp
+@@ -831,6 +831,15 @@ int SWMMEngine::initialize() noexcept {
+             ctx_.nodes.depth[ui] = ctx_.nodes.old_depth[ui] = d;
+             ctx_.nodes.head[ui] = ctx_.nodes.invert_elev[ui] + d;
+         }
++        // Compute full volume for surcharge detection (first, as legacy
++        // node_initState does, so an initial depth above full depth books
++        // the full volume, not the curve volume at that depth)
++        double fd = ctx_.nodes.full_depth[ui];
++        if (fd > 0.0) {
++            ctx_.nodes.full_volume[ui] = node::getVolume(ctx_.nodes, i, fd, &ctx_.tables,
++                ucf::getUnitSystem(static_cast<int>(ctx_.options.flow_units)),
++                &ctx_.node_subtypes);
++        }
+         if (d > 0.0) {
+             double vol = node::getVolume(ctx_.nodes, i, d, &ctx_.tables,
+                 ucf::getUnitSystem(static_cast<int>(ctx_.options.flow_units)),
+@@ -838,13 +847,6 @@ int SWMMEngine::initialize() noexcept {
+             ctx_.nodes.volume[ui] = vol;
+             ctx_.nodes.old_volume[ui] = vol;
+         }
+-        // Compute full volume for surcharge detection
+-        double fd = ctx_.nodes.full_depth[ui];
+-        if (fd > 0.0) {
+-            ctx_.nodes.full_volume[ui] = node::getVolume(ctx_.nodes, i, fd, &ctx_.tables,
+-                ucf::getUnitSystem(static_cast<int>(ctx_.options.flow_units)),
+-                &ctx_.node_subtypes);
+-        }
+     }
+ 
+     // Legacy-convention full volume (NodeData::rpt_full_volume, legacy
+diff --git a/src/engine/hydraulics/DynamicWave.cpp b/src/engine/hydraulics/DynamicWave.cpp
+index c83bf96..a447727 100644
+--- a/src/engine/hydraulics/DynamicWave.cpp
++++ b/src/engine/hydraulics/DynamicWave.cpp
+@@ -1547,6 +1547,11 @@ void DWSolver::initNodeStates(SimulationContext& ctx) {
+             xnode_.new_surf_area[ui] = node_can_pond
+                 ? node::getPondedArea(nodes, i, nodes.depth[ui], &ctx.tables, unit_sys, &ctx.node_subtypes)
+                 : node::getSurfArea(nodes, i, nodes.depth[ui], &ctx.tables, unit_sys, &ctx.node_subtypes);
++            // A closed storage unit has no free surface above its full depth
++            // (its volume is capped at full volume there).
++            if (t.sur_depth > 0.0 && nodes.depth[ui] > t.full_depth &&
++                !(node_can_pond && t.ponded_area > 0.0))
++                xnode_.new_surf_area[ui] = 0.0;
+         }
+ 
+         // Reset node flows (matching legacy initNodeStates)

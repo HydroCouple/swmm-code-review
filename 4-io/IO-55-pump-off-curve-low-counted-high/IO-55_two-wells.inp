@@ -1,0 +1,51 @@
+[TITLE]
+IO-55: two Type2 pumps at a constant 1 cfs, one wet well below its curve, one above
+
+[OPTIONS]
+FLOW_UNITS           CFS
+FLOW_ROUTING         DYNWAVE
+START_DATE           01/01/2020
+START_TIME           00:00:00
+END_DATE             01/01/2020
+END_TIME             03:30:00
+REPORT_STEP          00:15:00
+ROUTING_STEP         5
+
+[STORAGE]
+;;Name  Elev  MaxDepth  InitDepth  Shape       Coeff  Expon  Const
+W1      100   10        0          FUNCTIONAL  0      0      1000
+W2      100   10        0          FUNCTIONAL  0      0      1000
+
+[OUTFALLS]
+O1      90    FREE
+O2      90    FREE
+
+[PUMPS]
+;;Name  From  To  Curve  Status  Startup  Shutoff
+P1      W1    O1  C1     ON      0        0
+P2      W2    O2  C2     ON      0        0
+
+[CURVES]
+;; depth curves (ft, cfs): 1 cfs at every depth on the curve
+;; C1 covers 2 to 6 ft: W1 (0 to 3.6 ft) is below it about half the time
+C1      PUMP2  2.0  1.0
+C1             6.0  1.0
+;; C2 covers 0.5 to 1.5 ft: W2 is above it most of the time
+C2      PUMP2  0.5  1.0
+C2             1.5  1.0
+
+[INFLOWS]
+;;Node  Constituent  TimeSeries  Type  Mfactor  Sfactor
+W1      FLOW         Qin         FLOW  1.0      1.0
+W2      FLOW         Qin         FLOW  1.0      1.0
+
+[TIMESERIES]
+;; 1.5 cfs for 2 hours (wells fill at 1.8 ft/h), then 0.5 cfs (wells drain)
+Qin     0:00   1.5
+Qin     2:00   1.5
+Qin     2:01   0.5
+Qin     3:30   0.5
+
+[REPORT]
+INPUT     NO
+CONTROLS  NO

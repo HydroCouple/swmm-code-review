@@ -1,0 +1,36 @@
+NUM-17: count every barrel in the outflow from a storage unit (KW, SF)
+
+Under KINWAVE and STEADY routing, storage_getOutflow() gives the flow from
+a storage unit into a conduit as the conduit's normal flow at the storage
+depth, or its full flow once the storage is deeper than the conduit. Both
+Link.qFull and Conduit.beta are per barrel, but the caller treats the
+result as the conduit's total inflow (kinwave_execute() and
+steadyflow_execute() divide it by the barrel count), so a multi-barrel
+outlet passed the flow of one barrel. Multiply both results by the number
+of barrels. Single-barrel conduits are unchanged.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-17_swmm530.patch
+
+diff --git a/src/legacy/engine/node.c b/src/legacy/engine/node.c
+index 070db5a..12c41f9 100644
+--- a/src/legacy/engine/node.c
++++ b/src/legacy/engine/node.c
+@@ -1024,13 +1024,14 @@ double storage_getOutflow(int j, int i)
+     y = Node[j].newDepth - Link[i].offset1;
+ 
+     // --- return 0 if conduit empty or full flow if full
++    //     (qFull and beta are per barrel)
++    k = Link[i].subIndex;
+     if ( y <= 0.0 ) return 0.0;
+-    if ( y >= Link[i].xsect.yFull ) return Link[i].qFull;
++    if ( y >= Link[i].xsect.yFull ) return Link[i].qFull * Conduit[k].barrels;
+ 
+     // --- if partially full, return normal flow
+-    k = Link[i].subIndex;
+     a = xsect_getAofY(&Link[i].xsect, y);
+-    return Conduit[k].beta * xsect_getSofA(&Link[i].xsect, a);
++    return Conduit[k].beta * xsect_getSofA(&Link[i].xsect, a) * Conduit[k].barrels;
+ }
+ 
+ //=============================================================================

@@ -1,0 +1,47 @@
+[TITLE]
+BND-15: monthly evaporation adjustment larger than the base rate
+
+[OPTIONS]
+FLOW_UNITS       CFS
+INFILTRATION     HORTON
+FLOW_ROUTING     KINWAVE
+START_DATE       01/01/2020
+START_TIME       00:00:00
+END_DATE         01/03/2020
+END_TIME         00:00:00
+REPORT_STEP      01:00:00
+WET_STEP         00:05:00
+DRY_STEP         00:05:00
+ROUTING_STEP     60
+
+[EVAPORATION]
+MONTHLY 0.05 0.05 0.05 0.05 0.05 0.05 0.05 0.05 0.05 0.05 0.05 0.05
+
+[ADJUSTMENTS]
+;climate-change scenario: evaporation reduced by 0.10 in/day
+EVAPORATION -0.10 -0.10 -0.10 -0.10 -0.10 -0.10 -0.10 -0.10 -0.10 -0.10 -0.10 -0.10
+
+[RAINGAGES]
+G1 INTENSITY 1:00 1.0 TIMESERIES TS1
+
+[TIMESERIES]
+;0.5 in of rain in the first hour
+TS1 0 0.5
+TS1 1 0.0
+
+[SUBCATCHMENTS]
+;Name Gage Outlet Area %Imperv Width Slope CurbLen
+S1    G1   O1     10   100     500   1     0
+
+[SUBAREAS]
+;Nimp Nperv Simp Sperv %Zero RouteTo
+S1 0.01 0.1 0.2 0.2 0 OUTLET
+
+[INFILTRATION]
+S1 0 0 4 7 0
+
+[OUTFALLS]
+O1 0 FREE
+
+[REPORT]
+SUBCATCHMENTS ALL

@@ -1,0 +1,101 @@
+BND-08: let a pondable node pond only above its surcharge depth
+
+As in 5.3.0, a node with a ponded area ponded from its full depth up and its
+surcharge depth was ignored, contrary to the input manual (Apond applies
+"once water depth exceeds Ymax + Ysur"). Use full depth + surcharge depth as
+the ponding threshold in DWSolver::setNodeDepth(), commitNodeDepthState(),
+initNodeStates() and node::getPondedArea(), as the 5.3.0 patch does. A
+2D-coupled junction keeps its rim threshold: its ponded area is its 2D cell.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply BND-08_swmm600.patch
+
+diff --git a/src/engine/hydraulics/DynamicWave.cpp b/src/engine/hydraulics/DynamicWave.cpp
+index c83bf96..b310966 100644
+--- a/src/engine/hydraulics/DynamicWave.cpp
++++ b/src/engine/hydraulics/DynamicWave.cpp
+@@ -1538,9 +1538,11 @@ void DWSolver::initNodeStates(SimulationContext& ctx) {
+             // (legacy node.c:535-551); every other branch yields 0.0. This
+             // avoids two function calls per node per Picard iteration for
+             // the ~98% of nodes that are not storage units.
++            const bool coupled =
++                (ui < ctx.coupled_node.size() && ctx.coupled_node[ui]);
+             xnode_.new_surf_area[ui] =
+-                (node_can_pond && nodes.depth[ui] > t.full_depth &&
+-                 t.ponded_area > 0.0)
++                (node_can_pond && t.ponded_area > 0.0 &&
++                 nodes.depth[ui] > t.full_depth + (coupled ? 0.0 : t.sur_depth))
+                     ? t.ponded_area
+                     : 0.0;
+         } else {
+@@ -3809,7 +3811,11 @@ void DWSolver::setNodeDepth(SimulationContext& ctx, int node_idx, double dt,
+     // 1D HGL tracks the overlying 2D surface — regardless of ALLOW_PONDING.
+     const bool is_coupled = (ui < ctx.coupled_node.size() && ctx.coupled_node[ui]);
+     bool can_pond = (ctx.options.allow_ponding || is_coupled) && (t.ponded_area > 0.0);
+-    bool is_ponded = (can_pond && y_last > full_depth);
++    // A node ponds only above its surcharge depth (input manual: Apond
++    // applies once the depth exceeds Ymax + Ysur); a 2D-coupled junction's
++    // ponded area is its 2D cell, which it keeps from the rim up.
++    const double pond_depth = full_depth + (is_coupled ? 0.0 : t.sur_depth);
++    bool is_ponded = (can_pond && y_last > pond_depth);
+ 
+     nodes.overflow[ui] = 0.0;
+     double surf_area = xnode_.new_surf_area[ui];
+@@ -4034,8 +4040,8 @@ void DWSolver::setNodeDepth(SimulationContext& ctx, int node_idx, double dt,
+         }
+ 
+         // Don't allow a ponded node to drop much below full depth
+-        if (is_ponded && y_new < full_depth) {
+-            y_new = full_depth - FUDGE;
++        if (is_ponded && y_new < pond_depth) {
++            y_new = pond_depth - FUDGE;
+         }
+     }
+     else {
+@@ -4064,8 +4070,8 @@ void DWSolver::setNodeDepth(SimulationContext& ctx, int node_idx, double dt,
+             }
+ 
+             // Don't allow a ponded node to drop much below full depth
+-            if (is_ponded && y_new < full_depth) {
+-                y_new = full_depth - FUDGE;
++            if (is_ponded && y_new < pond_depth) {
++                y_new = pond_depth - FUDGE;
+             }
+         }
+         // --- Surcharged path: depth change based on dQ/dH (matching legacy) ---
+@@ -4094,8 +4100,8 @@ void DWSolver::setNodeDepth(SimulationContext& ctx, int node_idx, double dt,
+             if (y_new < yCrown) y_new = yCrown - FUDGE;
+ 
+             // Don't allow a newly ponded node to rise much above full depth
+-            if (can_pond && y_new > full_depth) {
+-                y_new = full_depth + FUDGE;
++            if (can_pond && y_new > pond_depth) {
++                y_new = pond_depth + FUDGE;
+             }
+         }
+     }
+@@ -4205,7 +4211,8 @@ void DWSolver::commitNodeDepthState(SimulationContext& ctx, int node_idx,
+     double y_max = t.full_depth;
+     if (is_inlet_node && nodes.rim_depth[ui] > 0.0)
+         y_max = std::max(y_max, nodes.rim_depth[ui]);
+-    if (!can_pond) y_max += t.sur_depth;
++    // (a node ponds only above Ysur; a 2D-coupled junction from its rim)
++    if (!can_pond || !is_coupled) y_max += t.sur_depth;
+ 
+     // --- Flooding logic (matching legacy getFloodedDepth) ---
+     // Reset first so a re-commit (accepted Anderson mix after the raw Picard
+diff --git a/src/engine/hydraulics/Node.cpp b/src/engine/hydraulics/Node.cpp
+index 345f079..fbd401d 100644
+--- a/src/engine/hydraulics/Node.cpp
++++ b/src/engine/hydraulics/Node.cpp
+@@ -364,7 +364,9 @@ double getPondedArea(const NodeData& nodes, int idx, double depth,
+                      TableData* tables, int unit_sys, const NodeSubtypes* subs) {
+     auto ui = static_cast<std::size_t>(idx);
+ 
+-    if (depth <= nodes.full_depth[ui] || nodes.ponded_area[ui] == 0.0) {
++    // Ponding starts above the node's surcharge depth (legacy node.c)
++    if (depth <= nodes.full_depth[ui] + nodes.sur_depth[ui] ||
++        nodes.ponded_area[ui] == 0.0) {
+         return getSurfArea(nodes, idx, depth, tables, unit_sys, subs);
+     }
+ 

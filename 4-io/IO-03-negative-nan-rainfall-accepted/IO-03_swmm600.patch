@@ -1,0 +1,49 @@
+IO-03: give negative and NaN rainfall records no rain
+
+A rain time series or a user-prepared rain file accepted any value as a
+rainfall record, so a negative missing-data flag such as -1 became negative
+rainfall and a "nan" made every result undefined. recordRate() now returns
+no rain for a negative or NaN record, so nextNonzeroRecord() skips it like
+an explicit zero, and a cumulative gage takes its increment from the last
+valid record. The user-prepared rain file reader drops such values, as
+legacy readStdLine() does with the 5.3.0 fix.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-03_swmm600.patch
+
+diff --git a/src/engine/hydrology/Gage.cpp b/src/engine/hydrology/Gage.cpp
+index ce8b7a1..10a8434 100644
+--- a/src/engine/hydrology/Gage.cpp
++++ b/src/engine/hydrology/Gage.cpp
+@@ -219,11 +219,16 @@ double recordRate(const SimulationContext& ctx, int j, const Table& tbl, int k)
+     const int rain_type = ctx.gages.rain_type[uj];
+     const double interval = ctx.gages.interval_sec[uj];
+     double r = tbl.y[uk];
++    // a negative or NaN record is not rainfall: it carries no rain
++    // (nextNonzeroRecord then skips it like an explicit zero)
++    if (!(r >= 0.0)) return 0.0;
+     if (rain_type == 1 && interval > 0.0) {
+         // one divide then one multiply (gage.c:692), not r/(interval/3600)
+         r = r / interval * 3600.0;
+     } else if (rain_type == 2 && interval > 0.0) {
+-        const double prev = (k > 0) ? tbl.y[uk - 1] : 0.0;
++        int p = k - 1;                     // previous valid record
++        while (p >= 0 && !(tbl.y[static_cast<std::size_t>(p)] >= 0.0)) --p;
++        const double prev = (p >= 0) ? tbl.y[static_cast<std::size_t>(p)] : 0.0;
+         r = (r < prev) ? (r / interval * 3600.0)
+                        : ((r - prev) / interval * 3600.0);
+     }
+diff --git a/src/engine/input/PostParseResolver.cpp b/src/engine/input/PostParseResolver.cpp
+index 807f527..7b6309d 100644
+--- a/src/engine/input/PostParseResolver.cpp
++++ b/src/engine/input/PostParseResolver.cpp
+@@ -991,6 +991,9 @@ static void load_external_rain_files_impl(SimulationContext& ctx,
+             // FILE start date is skipped before anything else sees it.
+             const double day = datetime::encodeDate(yr, mo, dy);
+             if (day < file_start) continue;
++            // legacy readStdLine: a negative or NaN value is not a rainfall
++            // depth (e.g. a missing-data flag) and is not saved
++            if (!(val >= 0.0f)) continue;
+             const double dt = day + datetime::encodeTime(hr, mn, 0);
+ 
+             // Whole-file statistics for the report summary.

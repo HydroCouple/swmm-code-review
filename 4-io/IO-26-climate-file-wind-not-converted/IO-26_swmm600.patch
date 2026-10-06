@@ -1,0 +1,32 @@
+IO-26: convert wind speed from a user-prepared climate file to mph
+
+ClimateFileReader::parseUserLine() stored the wind speed column as read, and
+SWMMEngine::stepRunoff() uses it as mph. The manual says a user-prepared
+climate file gives wind speed in km/hour for metric units, as the WINDSPEED
+MONTHLY values are. In SI models the file's wind speed was used 1.608 times
+too large in rain-on-snow melt and reported 1.608 times too large by
+swmm_climate_get_wind_speed(). Divide by 1.608 (the WINDSPEED conversion
+factor) for SI units when the value is read, as the legacy patch does. US
+models are unchanged.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-26_swmm600.patch
+
+diff --git a/src/engine/hydrology/ClimateFile.cpp b/src/engine/hydrology/ClimateFile.cpp
+index cd3de11..0caa388 100644
+--- a/src/engine/hydrology/ClimateFile.cpp
++++ b/src/engine/hydrology/ClimateFile.cpp
+@@ -297,9 +297,11 @@ void ClimateFileReader::parseUserLine(const char* line) {
+     if (s2[0] != '\0' && s2[0] != '*') {
+         file_data_[EVAP][d] = std::atof(s2);
+     }
+-    // WIND
++    // WIND (user units: km/hr for SI → mph, legacy UCF(WINDSPEED) = 1.608)
+     if (s3[0] != '\0' && s3[0] != '*') {
+-        file_data_[WIND][d] = std::atof(s3);
++        double v = std::atof(s3);
++        if (unit_system_ == 1) v /= 1.608;
++        file_data_[WIND][d] = v;
+     }
+ }
+ 

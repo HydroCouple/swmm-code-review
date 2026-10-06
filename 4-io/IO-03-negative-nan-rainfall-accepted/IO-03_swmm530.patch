@@ -1,0 +1,47 @@
+IO-03: give negative and NaN rainfall records no rain
+
+A rain time series or a user-prepared rain file accepted any value as a
+rainfall record, so a negative missing-data flag such as -1 became negative
+rainfall and a "nan" made every result undefined. convertRainfall() now
+returns no rain for a negative or NaN record, so getNextRainfall() skips it
+like an explicit zero and a cumulative gage keeps its last valid reading.
+readStdLine() counts such a value in a user-prepared file as a missing
+period (shown in the Rainfall File Summary) instead of saving it.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-03_swmm530.patch
+
+diff --git a/src/legacy/engine/gage.c b/src/legacy/engine/gage.c
+index 69f7ce0..66ae9c7 100644
+--- a/src/legacy/engine/gage.c
++++ b/src/legacy/engine/gage.c
+@@ -687,6 +687,10 @@ double convertRainfall(int j, double r)
+ //
+ {
+     double r1;
++
++    // --- a negative or NaN record is not rainfall: it carries no rain
++    //     (getNextRainfall then skips it like an explicit zero)
++    if ( !(r >= 0.0) ) return 0.0;
+     switch ( Gage[j].rainType )
+     {
+       case RAINFALL_INTENSITY:
+diff --git a/src/legacy/engine/rain.c b/src/legacy/engine/rain.c
+index dc7b3b2..286c35a 100644
+--- a/src/legacy/engine/rain.c
++++ b/src/legacy/engine/rain.c
+@@ -1025,6 +1025,14 @@ int readStdLine(char *line, DateTime day1, DateTime day2)
+     }
+     PreviousDate = date2;
+ 
++    // --- a negative or NaN value is not a rainfall depth (e.g. a missing
++    //     data flag): count the period as missing instead of saving it
++    if ( !(x >= 0.0f) )
++    {
++        saveRainfall(date1, hour, minute, x, TRUE);
++        return 1;
++    }
++
+     switch (RainType)
+     {
+       case RAINFALL_INTENSITY:

@@ -1,0 +1,46 @@
+CRASH-13: refuse node and link pollutant mass fluxes set before swmm_start
+
+The pre-start branch of setLinkValue() wrote the link flux through a TLink
+pointer that is only assigned in the running branch (a NULL dereference), and
+indexed it by subIndex instead of pollutantIndex. The pre-start branch of
+setNodeValue() wrote the node flux without checking pollutantIndex (a heap
+overflow for an out-of-range index). Neither value could ever be used:
+swmm_start zeroes both arrays in qualrout_init(). Return ERR_API_NOT_STARTED
+for both properties until the run has started, as API-01 does for the other
+forcing values and as 6.0.0's swmm_node_set_quality_mass_flux() does. A flux
+set after swmm_start, including before the first swmm_step, works as before.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply CRASH-13_swmm530.patch
+
+diff --git a/src/legacy/engine/swmm5.c b/src/legacy/engine/swmm5.c
+index 4096c9a..84c8a5c 100644
+--- a/src/legacy/engine/swmm5.c
++++ b/src/legacy/engine/swmm5.c
+@@ -2341,8 +2341,8 @@ int setNodeValue(int property, int index, int subIndex, int pollutantIndex, doub
+             Node[index].rptFlag = (value > 0.0);
+             return 0;
+         case swmm_NODE_POLLUTANT_LATMASS_FLUX:
+-            Node[index].apiExtQualMassFlux[pollutantIndex] = value;
+-            return 0;
++            // --- swmm_start resets this (qualrout_init)
++            return ERR_API_NOT_STARTED;
+         default:
+             return ERR_API_PROPERTY_TYPE;
+         }
+@@ -2439,13 +2439,8 @@ int setLinkValue(int property, int index, int subIndex, int pollutantIndex, doub
+             Link[index].hasFlapGate = (value > 0.0);
+             return 0;
+         case swmm_LINK_POLLUTANT_LATMASS_FLUX:
+-        {
+-            if (subIndex < 0 || subIndex >= Nobjects[POLLUT])
+-                return ERR_API_OBJECT_INDEX;
+-
+-            link->apiExtQualMassFlux[subIndex] = value;
+-            return 0;
+-        }
++            // --- swmm_start resets this (qualrout_init)
++            return ERR_API_NOT_STARTED;
+         default:
+             return ERR_API_PROPERTY_TYPE;
+         }

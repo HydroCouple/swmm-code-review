@@ -1,0 +1,62 @@
+[TITLE]
+CON-03: run-on from S1 onto S2, half of which is a rain garden
+
+[OPTIONS]
+FLOW_UNITS       CFS
+INFILTRATION     HORTON
+FLOW_ROUTING     KINWAVE
+START_DATE       01/01/2020
+START_TIME       00:00:00
+REPORT_START_DATE 01/01/2020
+REPORT_START_TIME 00:00:00
+END_DATE         01/01/2020
+END_TIME         12:00:00
+REPORT_STEP      00:15:00
+WET_STEP         00:01:00
+DRY_STEP         00:01:00
+ROUTING_STEP     60
+
+[EVAPORATION]
+CONSTANT 0.0
+
+[RAINGAGES]
+G1 INTENSITY 1:00 1.0 TIMESERIES TS1
+
+[TIMESERIES]
+;1 in/hr for 2 hours = 2.0 in
+TS1 0 1.0
+TS1 1 1.0
+TS1 2 0.0
+
+[SUBCATCHMENTS]
+;name rg outlet area %imp width slope curb
+;S1: 10 ac impervious roof, drains onto S2
+;S2: 10 ac pervious, no infiltration (Horton rates 0)
+S1 G1 S2 10 100 500 1 0
+S2 G1 O1 10 0   500 1 0
+
+[SUBAREAS]
+S1 0.01 0.1 0 0 0 OUTLET
+S2 0.01 0.1 0 0 0 OUTLET
+
+[INFILTRATION]
+S1 0 0 4 7 0
+S2 0 0 4 7 0
+
+[LID_CONTROLS]
+;rain garden with no seepage into the native soil
+RG1 RG
+RG1 SURFACE 0 0 0.1 1 5
+RG1 SOIL 1 0.5 0.2 0.1 0.5 10 3.5
+RG1 STORAGE 0 0.75 0 0
+
+[LID_USAGE]
+;subcatch lid number area(ft2) width initsat fromimp toperv
+;217,800 ft2 = 5 ac = half of S2
+S2 RG1 1 217800 500 0 0 0
+
+[OUTFALLS]
+O1 0 FREE
+
+[REPORT]
+SUBCATCHMENTS ALL

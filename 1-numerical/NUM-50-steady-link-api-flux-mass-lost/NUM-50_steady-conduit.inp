@@ -1,0 +1,44 @@
+[TITLE]
+NUM-50: STEADY routing, one conduit J1 -> C1 -> O1 carrying 1 cfs of clean
+dry-weather flow. The test adds an API pollutant mass flux to C1.
+J1 is node 0 and C1 is link 0, so CRASH-12's index mix-up has no effect here.
+
+[OPTIONS]
+FLOW_UNITS           CFS
+INFILTRATION         HORTON
+FLOW_ROUTING         STEADY
+START_DATE           01/01/2020
+START_TIME           00:00:00
+REPORT_START_DATE    01/01/2020
+REPORT_START_TIME    00:00:00
+END_DATE             01/01/2020
+END_TIME             02:00:00
+DRY_STEP             00:05:00
+WET_STEP             00:05:00
+ROUTING_STEP         60
+REPORT_STEP          00:15:00
+
+[JUNCTIONS]
+;;Name Elev MaxDepth InitDepth SurDepth Aponded
+J1     10   5   0   0   0
+
+[OUTFALLS]
+O1   5   FREE
+
+[CONDUITS]
+C1  J1  O1  400  0.013  0  0  0
+
+[XSECTIONS]
+C1  CIRCULAR  1.5  0  0  0  1
+
+[POLLUTANTS]
+;;Name Units Crain Cgw Crdii Kdecay SnowOnly CoPollut CoFrac Cdwf Cinit
+P1  MG/L  0  0  0  0  NO  *  0  0  0
+
+[DWF]
+J1  FLOW  1.0
+J1  P1    0
+
+[REPORT]
+NODES ALL
+LINKS ALL

@@ -1,0 +1,57 @@
+[TITLE]
+NUM-37: rooftop disconnection with Rough = 0 (Slope = 1 %)
+
+[OPTIONS]
+FLOW_UNITS       CFS
+INFILTRATION     HORTON
+FLOW_ROUTING     KINWAVE
+START_DATE       01/01/2020
+START_TIME       00:00:00
+END_DATE         01/01/2020
+END_TIME         06:00:00
+REPORT_STEP      00:15:00
+WET_STEP         00:01:00
+DRY_STEP         00:01:00
+ROUTING_STEP     60
+
+[EVAPORATION]
+CONSTANT 0.0
+
+[RAINGAGES]
+;;Name  Format     Interval  SCF  Source
+G1      INTENSITY  1:00      1.0  TIMESERIES  TS1
+
+[TIMESERIES]
+;; 1 in/hr for 2 hours: 2.0 in of rain
+TS1  0  1.0
+TS1  1  1.0
+TS1  2  0.0
+
+[SUBCATCHMENTS]
+;;Name  Gage  Outlet  Area  %Imperv  Width  %Slope  CurbLen
+S1      G1    O1      1     100      100    1       0
+
+[SUBAREAS]
+;;Subcatch  N-Imperv  N-Perv  S-Imperv  S-Perv  PctZero  RouteTo
+S1          0.01      0.1     0         0       0        OUTLET
+
+[INFILTRATION]
+S1  0  0  4  7  0
+
+[LID_CONTROLS]
+;; A 1-acre roof with 0.1 in of surface storage whose gutters carry at most
+;; 0.5 in/hr. Rough or Slope = 0 means: water above the 0.1 in storage depth
+;; overflows the roof within one time step.
+RD1  RD
+RD1  SURFACE  0.1  0  0      1  0
+RD1  DRAIN    0.5  0  0  0  0  0
+
+[LID_USAGE]
+;;Subcat  LID  Number  Area   Width  InitSat  FromImp  ToPerv
+S1        RD1  1       43560  100    0        0        0
+
+[OUTFALLS]
+O1  0  FREE
+
+[REPORT]
+SUBCATCHMENTS ALL

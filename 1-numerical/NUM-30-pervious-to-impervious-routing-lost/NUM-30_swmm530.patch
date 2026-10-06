@@ -1,0 +1,48 @@
+NUM-30: route pervious runoff onto IMPERV0 when there is no IMPERV1 area
+
+With RouteTo IMPERVIOUS, subcatch_readSubareaParams() keeps only fOutlet of
+the pervious runoff for the outlet; the rest is meant to arrive next step as
+inflow to the impervious area with depression storage (IMPERV1).
+subcatch_getRunon() skipped that transfer when IMPERV1 has no area
+(PctZero = 100), so the routed share left the pervious sub-area and was
+never added anywhere. Send it to IMPERV0, the only impervious sub-area in
+that case.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-30_swmm530.patch
+
+diff --git a/src/legacy/engine/subcatch.c b/src/legacy/engine/subcatch.c
+index 7c1d97c..8fd5e64 100644
+--- a/src/legacy/engine/subcatch.c
++++ b/src/legacy/engine/subcatch.c
+@@ -537,6 +537,7 @@ void subcatch_getRunon(int subcatchIndex)
+ {
+     int    k;                          // outlet subcatchment index
+     int    p;                          // pollutant index
++    int    i;                          // impervious subarea receiving perv. runoff
+     double q;                          // runon to outlet subcatchment (ft/sec)
+     double q1, q2;                     // runoff from imperv. areas (ft/sec)
+     double pervArea;                   // subcatchment pervious area (ft2)
+@@ -578,15 +579,18 @@ void subcatch_getRunon(int subcatchIndex)
+     }
+ 
+     // --- Case 2: perv --> imperv
++    //     (onto IMPERV1, or onto IMPERV0 when no impervious area has
++    //     depression storage, i.e. PctZero = 100)
+     if ( Subcatch[subcatchIndex].fracImperv > 0.0 &&
+-         Subcatch[subcatchIndex].subArea[PERV].routeTo == TO_IMPERV &&
+-         Subcatch[subcatchIndex].subArea[IMPERV1].fArea > 0.0 )
++         Subcatch[subcatchIndex].subArea[PERV].routeTo == TO_IMPERV )
+     {
++        i = IMPERV1;
++        if ( Subcatch[subcatchIndex].subArea[IMPERV1].fArea <= 0.0 ) i = IMPERV0;
+         q = Subcatch[subcatchIndex].subArea[PERV].runoff;
+-        Subcatch[subcatchIndex].subArea[IMPERV1].inflow +=
++        Subcatch[subcatchIndex].subArea[i].inflow +=
+             q * (1.0 - Subcatch[subcatchIndex].subArea[PERV].fOutlet) *
+             Subcatch[subcatchIndex].subArea[PERV].fArea /
+-            Subcatch[subcatchIndex].subArea[IMPERV1].fArea;
++            Subcatch[subcatchIndex].subArea[i].fArea;
+     }
+ 
+     // --- Add any return flow from LID units to pervious subarea

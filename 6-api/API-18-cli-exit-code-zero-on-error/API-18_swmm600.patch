@@ -1,0 +1,21 @@
+API-18: openswmm exits with the error code when a simulation step fails
+
+The 6.0.0 command line program returned the error code when open, initialize
+or start failed, but when swmm_engine_step failed it printed "Error at step
+...", wrote the report and returned 0. Return the step's error code instead
+(it is SWMM_OK after a run that completes).
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply API-18_swmm600.patch
+
+diff --git a/src/cli/main.cpp b/src/cli/main.cpp
+index 3db08b5..9f9451c 100644
+--- a/src/cli/main.cpp
++++ b/src/cli/main.cpp
+@@ -138,5 +138,5 @@ int main(int argc, char* argv[]) {
+     double run_time = std::difftime(std::time(nullptr), start);
+     std::printf("... OpenSWMM Engine completed in %.2f seconds.\n\n", run_time);
+ 
+-    return 0;
++    return err;  // non-zero when a step failed
+ }

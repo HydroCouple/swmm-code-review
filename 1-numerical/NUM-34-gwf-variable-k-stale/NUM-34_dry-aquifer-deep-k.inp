@@ -1,0 +1,64 @@
+[TITLE]
+NUM-34: [GWF] DEEP flow = K on an aquifer below field capacity.
+S1: wet aquifer (theta 0.45 > field capacity 0.30), no custom expression.
+S2: dry aquifer (theta 0.20 < field capacity 0.30), DEEP = K.
+S2's K(theta) = Ks exp(-(phi - theta) HCO) = 1.0 exp(-0.3 x 10) = 0.0498 in/hr,
+so its deep percolation over 24 h is 1.195 in = 0.996 ac-ft on 10 ac.
+
+[OPTIONS]
+FLOW_UNITS           CFS
+INFILTRATION         HORTON
+FLOW_ROUTING         KINWAVE
+START_DATE           06/01/2020
+START_TIME           00:00:00
+REPORT_START_DATE    06/01/2020
+REPORT_START_TIME    00:00:00
+END_DATE             06/02/2020
+END_TIME             00:00:00
+WET_STEP             00:05:00
+DRY_STEP             01:00:00
+REPORT_STEP          01:00:00
+ROUTING_STEP         0:00:30
+IGNORE_ROUTING       YES
+
+[EVAPORATION]
+CONSTANT         0.0
+
+[RAINGAGES]
+G1   INTENSITY 1:00 1.0 TIMESERIES R1
+
+[SUBCATCHMENTS]
+;;Name Gage Outlet Area %Imperv Width %Slope CurbLen
+S1   G1   O1   10.0   0   500   1.0   0
+S2   G1   O1   10.0   0   500   1.0   0
+
+[SUBAREAS]
+S1   0.01   0.1   0.05   0.05   0   OUTLET
+S2   0.01   0.1   0.05   0.05   0   OUTLET
+
+[INFILTRATION]
+S1   3.0   0.5   4   7   0
+S2   3.0   0.5   4   7   0
+
+[AQUIFERS]
+;;Name por  WP    FC    Ksat  Kslope Tslope ETu  ETs  Seep Ebot Egw Umc
+AWET   0.5  0.15  0.30  5.0   10     15     0.35 14   0    0    6   0.45
+ADRY   0.5  0.15  0.30  1.0   10     15     0.35 14   0    0    6   0.20
+
+[GROUNDWATER]
+;;Subcatch Aquifer Node Esurf A1 B1 A2 B2 A3 Dsw
+S1   AWET   O1   10   0   0   0   0   0   0   *
+S2   ADRY   O1   10   0   0   0   0   0   0   *
+
+[GWF]
+S2   DEEP   K
+
+[OUTFALLS]
+O1   0   FREE
+
+[TIMESERIES]
+;no rain
+R1   06/01/2020 00:00   0.0
+
+[REPORT]
+SUBCATCHMENTS ALL

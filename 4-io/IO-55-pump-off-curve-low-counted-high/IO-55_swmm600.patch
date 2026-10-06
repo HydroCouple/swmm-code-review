@@ -1,0 +1,119 @@
+IO-55: track and report the time a pump runs off its curve
+
+The Pumping Summary printed 0.0 in both "% Time Off Pump Curve" columns
+for every pump. Mark the pump's flow class in computePumpFlowK() as legacy
+pump_getInflow() does (DN_DRY when the curve variable - wet-well volume,
+depth or head - is below the curve's first point, UP_DRY when it is above
+the last), add the running time in each state to two new LinkData
+counters, and print them as a percentage of the pump's running time.
+
+Requires: IO-54
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-54_swmm600.patch IO-55_swmm600.patch
+
+diff --git a/src/engine/core/SWMMEngine.cpp b/src/engine/core/SWMMEngine.cpp
+index 4bd96d2..3acb5d5 100644
+--- a/src/engine/core/SWMMEngine.cpp
++++ b/src/engine/core/SWMMEngine.cpp
+@@ -5447,6 +5447,12 @@ void SWMMEngine::updateStatistics(double dt_routing) noexcept {
+                 // (q > MIN_RUNOFF_FLOW, stats.c)
+                 double& qmin = ctx_.links.stat_pump_min_flow[uj];
+                 if (q > 0.001 && (qmin == 0.0 || q < qmin)) qmin = q;
++                // off-curve time as marked by computePumpFlowK(), over the
++                // same steps (legacy stats_updateLinkStats)
++                if (q > 0.001 && ctx_.links.flow_class[uj] == FlowClass::DN_DRY)
++                    ctx_.links.stat_pump_off_curve_low[uj] += dt_routing;
++                if (q > 0.001 && ctx_.links.flow_class[uj] == FlowClass::UP_DRY)
++                    ctx_.links.stat_pump_off_curve_high[uj] += dt_routing;
+ 
+                 // Pump energy (kWh), matching legacy link_getPower:
+                 //   power_kW = |dh| * |q| / 8.814 * KWperHP ; energy += power_kW * dt/3600
+diff --git a/src/engine/data/LinkData.hpp b/src/engine/data/LinkData.hpp
+index 9d37b05..3e84b7c 100644
+--- a/src/engine/data/LinkData.hpp
++++ b/src/engine/data/LinkData.hpp
+@@ -543,6 +543,10 @@ struct LinkData {
+     /** @brief Smallest flow while the pump ran (cfs; 0 if it never ran). */
+     std::vector<double>     stat_pump_min_flow;
+ 
++    /** @brief Time the pump ran below / above the range of its curve (seconds). */
++    std::vector<double>     stat_pump_off_curve_low;
++    std::vector<double>     stat_pump_off_curve_high;
++
+     /**
+      * @brief Total pump energy consumed (kWh).
+      * @see Legacy PumpStats[].energy, computed as link_getPower(j) * dt / 3600
+@@ -696,6 +700,8 @@ struct LinkData {
+         stat_pump_on_time.assign(un, 0.0);
+         stat_pump_volume.assign(un, 0.0);
+         stat_pump_min_flow.assign(un, 0.0);
++        stat_pump_off_curve_low.assign(un, 0.0);
++        stat_pump_off_curve_high.assign(un, 0.0);
+         stat_pump_energy.assign(un, 0.0);
+         stat_pump_was_on.assign(un, false);
+         stat_flow_turns.assign(un, 0L);
+@@ -749,6 +755,7 @@ struct LinkData {
+         g(stat_pump_cycles, 0); g(stat_pump_on_time, 0.0);
+         g(stat_pump_volume, 0.0); g(stat_pump_energy, 0.0);
+         g(stat_pump_min_flow, 0.0);
++        g(stat_pump_off_curve_low, 0.0); g(stat_pump_off_curve_high, 0.0);
+         g(stat_pump_was_on, false);
+         g(stat_flow_turns, 0L); g(stat_flow_turn_sign, 0);
+         g(stat_time_courant_critical, 0.0);
+@@ -844,6 +851,7 @@ struct LinkData {
+         e(stat_time_full_both); e(stat_time_capacity_limited);
+         e(stat_pump_cycles); e(stat_pump_on_time); e(stat_pump_volume); e(stat_pump_energy);
+         e(stat_pump_min_flow);
++        e(stat_pump_off_curve_low); e(stat_pump_off_curve_high);
+         e(stat_pump_was_on); e(stat_flow_turns); e(stat_flow_turn_sign);
+         e(stat_time_courant_critical);
+         e(stat_lstep_min); e(stat_lstep_max); e(stat_lstep_dt_time); e(stat_lstep_time);
+diff --git a/src/engine/hydraulics/HydStructures.cpp b/src/engine/hydraulics/HydStructures.cpp
+index 77d61bf..f3a04f2 100644
+--- a/src/engine/hydraulics/HydStructures.cpp
++++ b/src/engine/hydraulics/HydStructures.cpp
+@@ -333,6 +333,7 @@ void StructureSolver::computePumpFlowK(SimulationContext& ctx, double dt,
+         // NOTE: pump startup/shutoff hysteresis is evaluated ONCE per timestep
+         // in updatePumpTargetSettings(), NOT here inside the DW iteration loop.
+         links.setting[uj] = links.target_setting[uj];
++        links.flow_class[uj] = FlowClass::DRY;   // on its curve (legacy NO)
+ 
+         // If pump is off, no flow
+         if (links.setting[uj] == 0.0) {
+@@ -401,6 +402,20 @@ void StructureSolver::computePumpFlowK(SimulationContext& ctx, double dt,
+                 break;
+         }
+ 
++        // Off-curve operation for the Pumping Summary (legacy pump_getInflow):
++        // DN_DRY below the curve's first x, UP_DRY above its last
++        if (ct >= 1 && ct <= 5 && ci >= 0 && uci < ctx.tables.tables.size() &&
++            !ctx.tables.tables[uci].x.empty()) {
++            double xc = depth * ucf_len;
++            if (ct == 1) xc = nodes.volume[un1] * ucf_vol;
++            if (ct == 3 || ct == 5) {
++                double s = (ct == 5) ? links.setting[uj] : 1.0;
++                xc = std::max(head / (s * s), 0.0) * ucf_len;
++            }
++            if (xc < ctx.tables.tables[uci].x.front()) links.flow_class[uj] = FlowClass::DN_DRY;
++            if (xc > ctx.tables.tables[uci].x.back())  links.flow_class[uj] = FlowClass::UP_DRY;
++        }
++
+         q = std::max(q, 0.0);
+         // Convert from display flow units to CFS (matching legacy / UCF(FLOW)).
+         // The curve pumps (1-5) yield flow in display units; the ideal pump (6)
+diff --git a/src/engine/plugins/DefaultReportPlugin.cpp b/src/engine/plugins/DefaultReportPlugin.cpp
+index 26b48b9..872e497 100644
+--- a/src/engine/plugins/DefaultReportPlugin.cpp
++++ b/src/engine/plugins/DefaultReportPlugin.cpp
+@@ -3068,7 +3068,9 @@ void DefaultReportPlugin::write_results(std::FILE* f,
+                 std::fprintf(f, "\n  %-20s %8.2f  %10d %9.2f %9.2f %9.2f %9.3f %9.2f",
+                     ctx.link_names.name_of(j).c_str(),
+                     pctUtilized, startUps, minFlow, avgFlow, max_flow, vol, energyKwh);
+-                std::fprintf(f, " %6.1f %6.1f", 0.0, 0.0);
++                double offLow  = (on_time > 0.0) ? ctx.links.stat_pump_off_curve_low[uj] / on_time * 100.0 : 0.0;
++                double offHigh = (on_time > 0.0) ? ctx.links.stat_pump_off_curve_high[uj] / on_time * 100.0 : 0.0;
++                std::fprintf(f, " %6.1f %6.1f", offLow, offHigh);
+             }
+             WRITE(f, "");
+             WRITE(f, "");

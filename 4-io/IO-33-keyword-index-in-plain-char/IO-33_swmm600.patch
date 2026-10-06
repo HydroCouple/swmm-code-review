@@ -1,0 +1,77 @@
+IO-33: report misspelt [FILES] and [REPORT] keywords (ERROR 205)
+
+handle_files() skipped a [FILES] line whose mode was not SAVE or USE and
+ignored an unknown file type, and handle_report() ignored an unknown
+[REPORT] keyword, all without a message. Legacy SWMM reports each as
+ERROR 205 (on platforms where char is signed). They are now ERROR 205
+naming the word. A word is unknown when it does not begin with one of the
+legacy keywords, since legacy findmatch() matches prefixes; NO and SCRATCH
+remain valid [FILES] modes that name no file, so nothing legacy accepts is
+refused.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-33_swmm600.patch
+
+diff --git a/src/engine/input/handlers/ControlsHandler.cpp b/src/engine/input/handlers/ControlsHandler.cpp
+index 9c02553..46dd372 100644
+--- a/src/engine/input/handlers/ControlsHandler.cpp
++++ b/src/engine/input/handlers/ControlsHandler.cpp
+@@ -63,6 +63,7 @@
+ #include "../Tokenizer.hpp"
+ #include "../../core/SimulationContext.hpp"
+ #include "../../data/InfraData.hpp"
++#include "../../core/ErrorCodes.hpp"
+ 
+ #include <string>
+ 
+@@ -173,6 +174,15 @@ void handle_report(SimulationContext& ctx, const std::vector<std::string>& lines
+         else if (keyword == "DISABLED") {
+             ctx.options.rpt_disabled = Tokenizer::parse_boolean(tok[1]);
+         }
++        else {
++            // legacy report_readOptions(): a keyword that does not begin with
++            // one of its report words is ERROR 205 (findmatch() matches a prefix)
++            static const char* const words[] = {"DISABLED", "INPUT", "SUBCATCH",
++                "NODE", "LINK", "CONTINUITY", "FLOWSTATS", "CONTROLS", "AVERAGES"};
++            bool known = false;
++            for (const char* w : words) known = known || keyword.rfind(w, 0) == 0;
++            if (!known) ctx.errors.push_back(format_error(ERR_KEYWORD, tok[0]));
++        }
+     }
+ }
+ 
+diff --git a/src/engine/input/handlers/FilesHandler.cpp b/src/engine/input/handlers/FilesHandler.cpp
+index a7c45d7..c722f35 100644
+--- a/src/engine/input/handlers/FilesHandler.cpp
++++ b/src/engine/input/handlers/FilesHandler.cpp
+@@ -71,7 +71,14 @@ void handle_files(SimulationContext& ctx, const std::vector<std::string>& lines)
+         FileMode mode = FileMode::NONE;
+         if      (mode_word == "SAVE") mode = FileMode::SAVE;
+         else if (mode_word == "USE")  mode = FileMode::USE;
+-        else continue;  // unrecognised mode — skip silently (legacy behaviour)
++        else {
++            // NO and SCRATCH name no file; any other word is ERROR 205, as in
++            // legacy iface_readFileParams() (findmatch() matches a prefix)
++            if (mode_word.rfind("NO", 0) != 0 && mode_word.rfind("SCRATCH", 0) != 0 &&
++                mode_word.rfind("USE", 0) != 0 && mode_word.rfind("SAVE", 0) != 0)
++                ctx.errors.push_back(format_error(ERR_KEYWORD, tok[0]));
++            continue;
++        }
+ 
+         if (kind_word == "RAINFALL") {
+             files.rainfall_mode = mode;
+@@ -108,9 +115,12 @@ void handle_files(SimulationContext& ctx, const std::vector<std::string>& lines)
+             } else {  // USE
+                 files.hotstart_use_path = path;
+             }
++        } else if (kind_word.rfind("RAINFALL", 0) != 0 && kind_word.rfind("RUNOFF", 0) != 0 &&
++                   kind_word.rfind("HOTSTART", 0) != 0 && kind_word.rfind("RDII", 0) != 0 &&
++                   kind_word.rfind("INFLOWS", 0) != 0 && kind_word.rfind("OUTFLOWS", 0) != 0) {
++            // legacy iface_readFileParams(): an unknown file type is ERROR 205
++            ctx.errors.push_back(format_error(ERR_KEYWORD, tok[1]));
+         }
+-        // Unknown kinds are silently ignored — preserves the legacy
+-        // behaviour of skipping rows that aren't part of the spec.
+     }
+ }
+ 

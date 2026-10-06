@@ -1,0 +1,54 @@
+API-05: put the ponded concentration and link load API values in user units
+
+swmm_SUBCATCH_POLLUTANT_PONDED_CONCENTRATION divided the ponded mass by the
+ponded volume times UCF(LANDAREA) (ft2 to acres or hectares) instead of
+converting mass/ft3 to mass/L with LperFT3, so the getter was 1.23e6 times
+too large (US units) and the setter stored 1.23e6 times too little mass. The
+getter also returned 0/0 = NaN for a dry surface; it now returns 0.
+swmm_LINK_POLLUTANT_LOAD returned the internal (concentration x ft3) total;
+it now applies LperFT3 and the pollutant's mass conversion factor, as the
+Link Pollutant Load Summary and swmm_SUBCATCH_POLLUTANT_TOTAL_LOAD do (lbs
+or kg).
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply API-05_swmm530.patch
+
+diff --git a/src/legacy/engine/swmm5.c b/src/legacy/engine/swmm5.c
+index 4096c9a..5c3cba1 100644
+--- a/src/legacy/engine/swmm5.c
++++ b/src/legacy/engine/swmm5.c
+@@ -2121,9 +2121,8 @@ int setSubcatchValue(int property, int index, int subIndex, int pollutantIndex,
+             if (value < 0.0)
+                 return ERR_API_PROPERTY_VALUE;
+             pondedVol = subcatch_getDepth(index) *
+-                        MAX(0.0, Subcatch[index].area - Subcatch[index].lidArea) *
+-                        UCF(LANDAREA);
+-            Subcatch[index].pondedQual[pollutantIndex] = value * pondedVol;
++                        MAX(0.0, Subcatch[index].area - Subcatch[index].lidArea);
++            Subcatch[index].pondedQual[pollutantIndex] = value * LperFT3 * pondedVol;
+             return 0;
+         }
+         case swmm_SUBCATCH_EXTERNAL_POLLUTANT_BUILDUP:
+@@ -2688,7 +2687,11 @@ static double getSubcatchValue(int property, int index, int subIndex, int pollut
+     case swmm_SUBCATCH_POLLUTANT_PONDED_CONCENTRATION:
+         if (pollutantIndex < 0 || pollutantIndex >= Nobjects[POLLUT])
+             return ERR_API_OBJECT_INDEX;
+-        return subcatch->pondedQual[pollutantIndex] / (subcatch_getDepth(index) * MAX(0.0, subcatch->area - subcatch->lidArea) * UCF(LANDAREA));
++        // --- pondedQual is mass; ponded volume (ft3) is zero when dry
++        prop_results = subcatch_getDepth(index) * MAX(0.0, subcatch->area - subcatch->lidArea);
++        if (prop_results <= 0.0)
++            return 0.0;
++        return subcatch->pondedQual[pollutantIndex] / (prop_results * LperFT3);
+ 
+     case swmm_SUBCATCH_POLLUTANT_TOTAL_LOAD:
+         if (pollutantIndex < 0 || pollutantIndex >= Nobjects[POLLUT])
+@@ -2853,7 +2856,8 @@ static double getLinkValue(int property, int index, int subIndex, int pollutantI
+     case swmm_LINK_POLLUTANT_LOAD:
+         if (pollutantIndex < 0 || pollutantIndex >= Nobjects[POLLUT])
+             return ERR_API_OBJECT_INDEX;
+-        return link->totalLoad[pollutantIndex];
++        // --- same conversion as the Link Pollutant Load Summary (lbs or kg)
++        return link->totalLoad[pollutantIndex] * LperFT3 * Pollut[pollutantIndex].mcf;
+     case swmm_LINK_POLLUTANT_LATMASS_FLUX:
+         if (pollutantIndex < 0 || pollutantIndex >= Nobjects[POLLUT])
+             return ERR_API_OBJECT_INDEX;

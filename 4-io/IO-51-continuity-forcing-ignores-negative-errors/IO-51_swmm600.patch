@@ -1,0 +1,63 @@
+IO-51: force the continuity tables on large negative errors too
+
+DefaultReportPlugin writes the runoff, runoff quality, flow routing and
+quality routing continuity tables when [REPORT] CONTINUITY is YES or when
+the signed error exceeds 10 %, so a large negative error never forces them.
+Compare the magnitude instead, and keep the runoff quality error of largest
+magnitude rather than the largest positive one.
+
+Requires: IO-50
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b,
+after IO-50_swmm600.patch:
+    git apply IO-51_swmm600.patch
+
+diff --git a/src/engine/plugins/DefaultReportPlugin.cpp b/src/engine/plugins/DefaultReportPlugin.cpp
+index 362f119..951e6f2 100644
+--- a/src/engine/plugins/DefaultReportPlugin.cpp
++++ b/src/engine/plugins/DefaultReportPlugin.cpp
+@@ -961,7 +961,7 @@ void DefaultReportPlugin::write_results(std::FILE* f,
+             total_area_ft2 += ctx.subcatches.area[static_cast<std::size_t>(i)] * landAreaToFt2(fu);
+         const double runoff_err_pct = mb.runoff_error() * 100.0;
+         if (ctx.n_subcatches() > 0 && total_area_ft2 > 0.0 &&
+-            (opt.rpt_continuity || runoff_err_pct > 10.0)) {
++            (opt.rpt_continuity || std::fabs(runoff_err_pct) > 10.0)) {
+         std::fprintf(f, "\n  **************************        Volume         Depth");
+         std::fprintf(f, si_report
+             ? "\n  Runoff Quantity Continuity     hectare-m            mm"
+@@ -1026,7 +1026,7 @@ void DefaultReportPlugin::write_results(std::FILE* f,
+             else if (in_ > 0.0)  err = 100.0 * (1.0 - out_ / in_);
+             else if (out_ > 0.0) err = 100.0 * (in_ / out_ - 1.0);
+             else if (std::isnan(in_) || std::isnan(out_)) err = std::nan("");
+-            max_err = std::max(max_err, err);
++            if (std::fabs(err) > std::fabs(max_err)) max_err = err;
+             auto& v = vals[static_cast<std::size_t>(p)];
+             v = { at(mb.qual_init_buildup, p), at(mb.qual_surface_buildup, p),
+                   at(mb.qual_wet_deposition, p), at(mb.qual_sweeping, p),
+@@ -1036,7 +1036,7 @@ void DefaultReportPlugin::write_results(std::FILE* f,
+                                 ctx.pollutants.units[static_cast<std::size_t>(p)] == MassUnits::COUNTS_PER_L;
+             if (counts) for (int k = 0; k < 8; ++k) v[static_cast<std::size_t>(k)] = logn(v[static_cast<std::size_t>(k)]);
+         }
+-        if (opt.rpt_continuity || max_err > 10.0) {
++        if (opt.rpt_continuity || std::fabs(max_err) > 10.0) {
+             static const char* labels[9] = {
+                 "Initial Buildup ..........", "Surface Buildup ..........",
+                 "Wet Deposition ...........", "Sweeping Removal .........",
+@@ -1141,7 +1141,7 @@ void DefaultReportPlugin::write_results(std::FILE* f,
+     // legacy massbal_report: nodes present and routing on; printed under
+     // CONTINUITY or when the error exceeds MAX_FLOW_BALANCE_ERR (10).
+     if (ctx.n_nodes() > 0 && !opt.ignore_routing &&
+-        (opt.rpt_continuity || ctx.mass_balance.routing_error() * 100.0 > 10.0)) {
++        (opt.rpt_continuity || std::fabs(ctx.mass_balance.routing_error()) * 100.0 > 10.0)) {
+         const auto& mb = ctx.mass_balance;
+         std::fprintf(f, "\n  **************************        Volume        Volume");
+         std::fprintf(f, si_report
+@@ -1493,7 +1493,7 @@ void DefaultReportPlugin::write_results(std::FILE* f,
+             }
+             v[11] = err;
+         }
+-        if (opt.rpt_continuity || max_err > 10.0) {
++        if (opt.rpt_continuity || std::fabs(max_err) > 10.0) {
+             static const char* labels[12] = {
+                 "Dry Weather Inflow .......", "Wet Weather Inflow .......",
+                 "Groundwater Inflow .......", "RDII Inflow ..............",

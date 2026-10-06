@@ -1,0 +1,32 @@
+NUM-39: take a bio-retention underdrain without storage layer from the soil
+
+In LIDSolver::biocellFluxRates(), a unit with no storage layer (a bio-retention cell
+with a 0 in STORAGE layer or none, or a rain garden with a DRAIN line)
+computed an underdrain rate from the head in the soil but subtracted it from
+no layer, since f[STOR] is 0 and the soil only loses its percolation, which
+was capped at the exfiltration rate. The drain then created water for as
+long as the soil was above field capacity. Treat the zero-thickness storage
+layer as full, as getStorageDrainRate() already does: soil percolation goes
+to exfiltration first and the rest to the drain, up to the drain rate. With
+no drain the result is unchanged.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-39_swmm600.patch
+
+diff --git a/src/engine/hydrology/LID.cpp b/src/engine/hydrology/LID.cpp
+index 9aa0c73..a39b7c1 100644
+--- a/src/engine/hydrology/LID.cpp
++++ b/src/engine/hydrology/LID.cpp
+@@ -859,9 +859,10 @@ public:
+         }
+         if (storageThickness == 0.0) {
+             StorageEvap = 0.0;
+-            maxRate = std::min(SoilPerc, StorageExfil);
++            maxRate = std::min(SoilPerc, StorageExfil + StorageDrain);
+             SoilPerc = maxRate;
+-            StorageExfil = maxRate;
++            StorageExfil = std::min(StorageExfil, maxRate);
++            StorageDrain = maxRate - StorageExfil;
+             maxRate = (soilPorosity - soilTheta) * soilThickness / Tstep +
+                       SoilPerc + SoilEvap;
+             SurfaceInfil = std::min(SurfaceInfil, maxRate);

@@ -1,0 +1,73 @@
+NUM-47: integrate step-averaged loss rates over their own time step
+
+routing_execute() adds the step totals to the run totals twice, with half
+the routing step each time: at the end of step n and at the start of step
+n+1, before the totals are cleared, using step n+1's length. That is the
+trapezoidal rule for flows sampled at the end of a step, but the
+evaporation, seepage and reaction (decay, treatment) terms are the step's
+loss divided by its own length, so they were booked with the weight
+(dt_n + dt_n+1) / (2 dt_n) instead of 1. Under DYNWAVE with a variable step
+the first step is 0.5 s, so a loss in it was booked 10.5 times with a 10 s
+routing step. Remember the half length of the step whose losses are in the
+step totals and use it for those four terms in both updates.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-47_swmm530.patch
+
+diff --git a/src/legacy/engine/massbal.c b/src/legacy/engine/massbal.c
+index 80bb10e..d98822a 100644
+--- a/src/legacy/engine/massbal.c
++++ b/src/legacy/engine/massbal.c
+@@ -53,6 +53,8 @@ TRoutingTotals*  QualTotals;      // overall routed WQ continuity totals
+ TRoutingTotals   StepFlowTotals;  // routed flow totals over time step
+ TRoutingTotals   OldStepFlowTotals;
+ TRoutingTotals*  StepQualTotals;  // routed WQ totals over time step
++static double    LossHalfStep;    // half length of the step whose loss rates
++                                  // are in StepFlowTotals & StepQualTotals
+ 
+ //-----------------------------------------------------------------------------
+ //  Exportable variables
+@@ -377,6 +379,7 @@ void massbal_initTimeStepTotals()
+ {
+     int j;
+     OldStepFlowTotals = StepFlowTotals;
++    LossHalfStep = 0.0;
+     StepFlowTotals.dwInflow  = 0.0;
+     StepFlowTotals.wwInflow  = 0.0;
+     StepFlowTotals.gwInflow  = 0.0;
+@@ -554,6 +557,13 @@ void massbal_updateRoutingTotals(double tStep)
+ //
+ {
+     int j;
++
++    // --- evaporation, seepage and reaction losses are averages over the
++    //     step that produced them, so both half-step updates use that
++    //     step's length (the first update after massbal_initTimeStepTotals
++    //     is made at the end of that step)
++    if ( LossHalfStep == 0.0 ) LossHalfStep = tStep;
++
+     FlowTotals.dwInflow += StepFlowTotals.dwInflow * tStep;
+     FlowTotals.wwInflow += StepFlowTotals.wwInflow * tStep;
+     FlowTotals.gwInflow += StepFlowTotals.gwInflow * tStep;
+@@ -561,8 +571,8 @@ void massbal_updateRoutingTotals(double tStep)
+     FlowTotals.exInflow += StepFlowTotals.exInflow * tStep;
+     FlowTotals.flooding += StepFlowTotals.flooding * tStep;
+     FlowTotals.outflow  += StepFlowTotals.outflow * tStep;
+-    FlowTotals.evapLoss += StepFlowTotals.evapLoss * tStep;
+-    FlowTotals.seepLoss += StepFlowTotals.seepLoss * tStep;
++    FlowTotals.evapLoss += StepFlowTotals.evapLoss * LossHalfStep;
++    FlowTotals.seepLoss += StepFlowTotals.seepLoss * LossHalfStep;
+ 
+     for (j = 0; j < Nobjects[POLLUT]; j++)
+     {
+@@ -573,8 +583,8 @@ void massbal_updateRoutingTotals(double tStep)
+         QualTotals[j].exInflow += StepQualTotals[j].exInflow * tStep;
+         QualTotals[j].flooding += StepQualTotals[j].flooding * tStep;
+         QualTotals[j].outflow  += StepQualTotals[j].outflow * tStep;
+-        QualTotals[j].reacted  += StepQualTotals[j].reacted * tStep;
+-        QualTotals[j].seepLoss += StepQualTotals[j].seepLoss * tStep;
++        QualTotals[j].reacted  += StepQualTotals[j].reacted * LossHalfStep;
++        QualTotals[j].seepLoss += StepQualTotals[j].seepLoss * LossHalfStep;
+         QualTotals[j].finalStorage += StepQualTotals[j].finalStorage;
+     }
+ 

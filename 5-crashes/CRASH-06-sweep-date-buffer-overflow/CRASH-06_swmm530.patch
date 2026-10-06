@@ -1,0 +1,35 @@
+CRASH-06: make sstrcat() check the room left before each write
+
+sstrcat() stopped appending only when offset reached destsize - 1 after a
+write. When dest already held destsize - 1 characters, the first write took
+offset past that value, the check never matched, and the whole of src and
+its terminator were written beyond the buffer. project_readOption() reaches
+this with a SWEEP_START/SWEEP_END value of 24 or more characters
+(sstrncpy(strDate, s2, 24) then sstrcat(strDate, "/1947", 25)). Test the
+bound before writing; results are unchanged whenever there is room.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply CRASH-06_swmm530.patch
+
+diff --git a/src/legacy/engine/swmm5.c b/src/legacy/engine/swmm5.c
+index 4096c9a..d905790 100644
+--- a/src/legacy/engine/swmm5.c
++++ b/src/legacy/engine/swmm5.c
+@@ -3487,14 +3487,13 @@ size_t sstrcat(char *dest, const char *src, size_t destsize)
+ 
+     // append src
+     src_index = 0;
+-    while (*(src + src_index) != '\0')
++    // don't copy more than size - dest_len - 1 characters
++    // (checked before each write so that a full dest gets nothing)
++    while (*(src + src_index) != '\0' && offset < destsize - 1)
+     {
+         *(dest + offset) = *(src + src_index);
+         offset++;
+         src_index++;
+-        // don't copy more than size - dest_len - 1 characters
+-        if (offset == destsize - 1)
+-            break;
+     }
+     *(dest + offset) = '\0';
+     return strlen(dest);

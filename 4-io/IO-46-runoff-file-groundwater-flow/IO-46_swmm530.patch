@@ -1,0 +1,31 @@
+IO-46: read groundwater flow from a runoff interface file as a rate per unit area
+
+subcatch_getResults() saves a subcatchment's groundwater outflow as a total
+flow, gw->newFlow * area, in flow units. runoff_readFromFile() put it back
+into gw->newFlow converted only to cfs, but gw->newFlow is a flow per unit
+area (ft/s): addGroundwaterInflows() multiplies it by the area again. It also
+never moved gw->newFlow to gw->oldFlow, which addGroundwaterInflows()
+interpolates from. Divide by the area and shift the old value, as
+gwater_getGroundwater() does in the run that wrote the file.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-46_swmm530.patch
+
+diff --git a/src/legacy/engine/runoff.c b/src/legacy/engine/runoff.c
+index bf00bad..ae14425 100644
+--- a/src/legacy/engine/runoff.c
++++ b/src/legacy/engine/runoff.c
+@@ -465,7 +465,12 @@ void  runoff_readFromFile(void)
+         gw = Subcatch[j].groundwater;
+         if ( gw )
+         {
+-            gw->newFlow    = SubcatchResults[SUBCATCH_GW_FLOW] / UCF(FLOW);
++            // --- file holds total flow; gw->newFlow is flow per unit area
++            gw->oldFlow    = gw->newFlow;
++            gw->newFlow    = 0.0;
++            if ( Subcatch[j].area > 0.0 )
++                gw->newFlow = SubcatchResults[SUBCATCH_GW_FLOW] / UCF(FLOW) /
++                              Subcatch[j].area;
+             gw->lowerDepth = Aquifer[gw->aquifer].bottomElev -
+                              (SubcatchResults[SUBCATCH_GW_ELEV] / UCF(LENGTH));
+             gw->theta      = SubcatchResults[SUBCATCH_SOIL_MOIST];

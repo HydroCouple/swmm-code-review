@@ -1,0 +1,26 @@
+[TITLE]
+CRASH-08: a control-rule EXPRESSION and an invalid option value
+;; FLOW_UNITS BOGUS is rejected while objects are counted, so the arrays for
+;; control expressions are never allocated. Expected: ERROR 205 in the report.
+
+[OPTIONS]
+FLOW_UNITS BOGUS
+START_DATE 01/01/2004
+END_DATE   01/01/2004
+END_TIME   01:00:00
+
+[JUNCTIONS]
+J1 0 5 0 0 0
+
+[OUTFALLS]
+O1 0 FREE NO
+
+[CONDUITS]
+C1 J1 O1 100 0.01 0 0 0 0
+
+[XSECTIONS]
+C1 CIRCULAR 1 0 0 0
+
+[CONTROLS]
+VARIABLE D1 = NODE J1 DEPTH
+EXPRESSION E1 = D1 * 2

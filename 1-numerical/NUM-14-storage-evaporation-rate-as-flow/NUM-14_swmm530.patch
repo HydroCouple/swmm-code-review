@@ -1,0 +1,25 @@
+NUM-14: no evaporation from a storage unit holding less than FUDGE
+
+storage_getLosses() multiplies the evaporation rate (ft/s) by the surface
+area only when the unit holds more than FUDGE (1e-4 ft3). Otherwise it
+left the bare ft/s rate in evapRate and returned it as a loss in cfs, so a
+nearly empty unit lost rate x dt ft3 per step whatever its area, and booked
+it as evaporation. Set the rate to 0 in that case, as SWMM 5.1.013 did
+before 5.1.014 moved the FUDGE test from the whole loss block to the
+evaporation term only. Seepage is unchanged.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-14_swmm530.patch
+
+diff --git a/src/legacy/engine/node.c b/src/legacy/engine/node.c
+index 070db5a..32c5af8 100644
+--- a/src/legacy/engine/node.c
++++ b/src/legacy/engine/node.c
+@@ -1068,6 +1068,7 @@ double storage_getLosses(int j, double tStep)
+             // --- compute evap rate over this area (cfs)
+             if (Node[j].newVolume > FUDGE)
+                 evapRate = area * evapRate;
++            else evapRate = 0.0;
+ 
+             // --- find exfiltration rate (cfs) through bottom and side banks
+             if ( exfil != NULL )

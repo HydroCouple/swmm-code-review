@@ -1,0 +1,42 @@
+CRASH-01: clamp datetime::timeDiff() instead of overflowing a long conversion
+
+6.0.0's timeDiff() returns a long, so the NO_DATE case fits on LP64 platforms,
+but it still overflows where long is 32 bits (Windows) and, on every platform,
+for API arguments such as swmm_datetime_time_diff(1e15, 0, &out). Clamp to the
+range of long before converting, as the 5.3.0 patch does.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply CRASH-01_swmm600.patch
+
+diff --git a/src/engine/core/DateTime.hpp b/src/engine/core/DateTime.hpp
+index 27b5c23..5a9d2f3 100644
+--- a/src/engine/core/DateTime.hpp
++++ b/src/engine/core/DateTime.hpp
+@@ -48,6 +48,7 @@
+ #define OPENSWMM_ENGINE_DATETIME_HPP
+ 
+ #include <cmath>
++#include <limits>
+ 
+ namespace openswmm {
+ namespace datetime {
+@@ -195,9 +196,16 @@ inline long timeDiff(DateTime date1, DateTime date2) {
+     long s1 = 3600L * h + 60L * m + s;
+     decodeTime(date2, h, m, s);
+     long s2 = 3600L * h + 60L * m + s;
+-    long secs = static_cast<long>(std::floor((d1 - d2) * SecsPerDay + 0.5));
+-    secs += (s1 - s2);
+-    return secs;
++    const double secs = std::floor((d1 - d2) * SecsPerDay + 0.5)
++                      + static_cast<double>(s1 - s2);
++    // A difference that does not fit in a long (e.g. NO_DATE on a platform
++    // with a 32-bit long, or an API argument far out of range) is clamped
++    // instead of overflowing the conversion.
++    constexpr long kMax = std::numeric_limits<long>::max();
++    constexpr long kMin = std::numeric_limits<long>::min();
++    if (secs >= static_cast<double>(kMax)) return kMax;
++    if (secs <= static_cast<double>(kMin)) return kMin;
++    return static_cast<long>(secs);
+ }
+ 
+ /**

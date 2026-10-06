@@ -1,0 +1,29 @@
+IO-49: date the .out header one report step before the first saved period
+
+output_open() stores a "report start date" that readers turn into period
+dates as header + (k+1)*REPORT_STEP. With REPORT_START later than START it
+computed floor((ReportStart - StartDateTime)/step) - 1 steps, but the first
+saved period is the first report time at or after REPORT_START (a ceil), and
+the day-fraction quotient of an aligned REPORT_START is often n - 2e-10, so
+the header was usually one step early. Count the whole seconds to
+REPORT_START with datetime_timeDiff() and take the ceiling.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-49_swmm530.patch
+
+diff --git a/src/legacy/engine/output.c b/src/legacy/engine/output.c
+index f57370e..8441a3d 100644
+--- a/src/legacy/engine/output.c
++++ b/src/legacy/engine/output.c
+@@ -394,7 +394,10 @@ int output_open()
+     if ( StartDateTime + z > ReportStart ) z = StartDateTime;
+     else
+     {
+-        z = floor((ReportStart - StartDateTime)/z) - 1.0;
++        // --- the first saved period is the first report time at or
++        //     after ReportStart (count whole seconds, not day fractions)
++        z = ceil(datetime_timeDiff(ReportStart, StartDateTime) /
++                 (double)ReportStep) - 1.0;
+         z = StartDateTime + z*(double)ReportStep/86400.0;
+     }
+     fwrite(&z, sizeof(REAL8), 1, Fout.file);

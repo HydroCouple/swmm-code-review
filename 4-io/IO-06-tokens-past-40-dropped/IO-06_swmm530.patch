@@ -1,0 +1,26 @@
+IO-06: read every token on an input line, not just the first 40
+
+getTokens() stores at most MAXTOKS tokens per line and drops the rest of the
+line without a message. MAXTOKS was 40, so a [CURVES] or [TIMESERIES] line
+with more than 19 pairs, or a [TRANSECTS] GR line with more than 19 stations,
+lost its later values. MAXTOKS is now MAXLINE/2 (512), the most tokens that
+fit in the 1023 characters getTokens() is given, so no token of a line that
+is read can be dropped. Lines with 40 tokens or fewer are parsed exactly as
+before; getTokens() now clears 512 token pointers per line instead of 40.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-06_swmm530.patch
+
+diff --git a/src/legacy/engine/consts.h b/src/legacy/engine/consts.h
+index 23d0701..56beedf 100644
+--- a/src/legacy/engine/consts.h
++++ b/src/legacy/engine/consts.h
+@@ -79,7 +79,7 @@
+  * \def MAXTOKS
+  * \brief Maximum number of items per line of input
+  */
+-#define MAXTOKS 40 // Max. items per line of input
++#define MAXTOKS (MAXLINE/2) // Max. items per line of input (all that fit in a line)
+ 
+ /*!
+  * \def MAXSTATES

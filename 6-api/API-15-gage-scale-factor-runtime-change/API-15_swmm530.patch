@@ -1,0 +1,42 @@
+API-15: rescale a gage's rainfall when its scale factor is changed during a run
+
+convertRainfall() applies the scale factor when a record is read, so the
+current rainfall and the read-ahead rainfall of the next record keep the old
+factor after swmm_setValue(swmm_GAGE_SCALEFACTOR), and a co-gage, which
+divides that rainfall by the primary gage's new factor, gets a wrong value
+until both records have passed. Multiply both by new/old factor in the two
+setters (swmm_setValue and swmm_setValueExpanded), so the new factor applies
+from the next runoff step.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply API-15_swmm530.patch
+
+diff --git a/src/legacy/engine/swmm5.c b/src/legacy/engine/swmm5.c
+index 4096c9a..9b61d91 100644
+--- a/src/legacy/engine/swmm5.c
++++ b/src/legacy/engine/swmm5.c
+@@ -1403,7 +1403,13 @@ int EXPORT_OPENSWMMCORE_SOLVER_API swmm_setValue(int property, int index, double
+         if (index < 0 || index >= Nobjects[GAGE])
+             return 0;
+         if (value > 0.0)
++        {
++            // --- rescale the current and read-ahead rainfall, which were
++            //     converted with the old factor
++            Gage[index].rainfall *= value / Gage[index].scaleFactor;
++            Gage[index].nextRainfall *= value / Gage[index].scaleFactor;
+             Gage[index].scaleFactor = value;
++        }
+         return 0;
+     case swmm_SUBCATCH_RPTFLAG:
+         if (!IsStartedFlag && index >= 0 && index < Nobjects[SUBCATCH])
+@@ -1999,6 +2005,10 @@ int setGageValue(int property, int index, int subIndex, double value)
+     case swmm_GAGE_SCALEFACTOR:
+         if (value > 0.0)
+         {
++            // --- rescale the current and read-ahead rainfall, which were
++            //     converted with the old factor
++            Gage[index].rainfall *= value / Gage[index].scaleFactor;
++            Gage[index].nextRainfall *= value / Gage[index].scaleFactor;
+             Gage[index].scaleFactor = value;
+             return 0;
+         }

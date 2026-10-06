@@ -1,0 +1,33 @@
+CON-22: evaluate a STATUS premise as ON/OPEN when the link's setting is above 0
+
+ControlEngine::getVariableValue() returned the raw link setting for the STATUS
+attribute, and the rule's ON/OPEN parses to 1 and OFF/CLOSED to 0, so
+"PUMP P1 STATUS = ON" was false (and so was "= OFF") for a pump running at
+any speed setting other than 1, e.g. after a "PUMP P1 SETTING = 0.5" action
+or under a curve, time series or PID action. Return 1 for a positive setting
+and 0 otherwise. Conduit settings are always 0 or 1, so conduits are
+unaffected.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply CON-22_swmm600.patch
+
+diff --git a/src/engine/controls/Controls.cpp b/src/engine/controls/Controls.cpp
+index 88369ca..69008da 100644
+--- a/src/engine/controls/Controls.cpp
++++ b/src/engine/controls/Controls.cpp
+@@ -529,13 +529,13 @@ double ControlEngine::getVariableValue(const SimulationContext& ctx,
+         case ConditionVar::LINK_SETTING:
+             return (idx >= 0 && idx < ctx.n_links()) ? ctx.links.setting[ui] : MISSING;
+         case ConditionVar::LINK_STATUS:
+-            // Legacy controls.c:1863-1868: returns Link[j].setting (actual 0..1)
++            // Legacy controls.c:1863-1868: ON/OPEN (1) or OFF/CLOSED (0)
+             // for CONDUIT and PUMP only; MISSING for all other link types.
+             if (idx < 0 || idx >= ctx.n_links()) return MISSING;
+             if (ctx.links.type[ui] != LinkType::CONDUIT &&
+                 ctx.links.type[ui] != LinkType::PUMP)
+                 return MISSING;
+-            return ctx.links.setting[ui];
++            return (ctx.links.setting[ui] > 0.0) ? 1.0 : 0.0;
+         case ConditionVar::LINK_FULLFLOW: {
+             if (idx < 0 || idx >= ctx.n_links()) return MISSING;
+             const int cr = ctx.link_subtypes.conduit_row(idx);

@@ -1,0 +1,113 @@
+BND-08: let a pondable node pond only above its surcharge depth
+
+The input manual defines Apond as the "area subjected to surface ponding once
+water depth exceeds Ymax + Ysur", but with ALLOW_PONDING a node with a ponded
+area ponded from Ymax up and its Ysur was ignored. Use Ymax + Ysur as the
+ponding threshold in setNodeDepth() (ponded state, the two transition clamps
+and the flood depth), in node_getPondedArea(), and for an initial ponded
+volume in initNodes() under dynamic wave. Nodes with Ysur = 0, and nodes
+that cannot pond, are unchanged.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply BND-08_swmm530.patch
+
+diff --git a/src/legacy/engine/dynwave.c b/src/legacy/engine/dynwave.c
+index 972da8c..1135660 100644
+--- a/src/legacy/engine/dynwave.c
++++ b/src/legacy/engine/dynwave.c
+@@ -644,6 +644,7 @@ void setNodeDepth(int i, double dt)
+     double  dV;                        // change in node volume (ft3)
+     double  dy;                        // change in node depth (ft)
+     double  yMax;                      // max. depth at node (ft)
++    double  yPond;                     // depth above which node ponds (ft)
+     double  yOld;                      // node depth at previous time step (ft)
+     double  yLast;                     // previous node depth (ft)
+     double  yNew;                      // new node depth (ft)
+@@ -655,7 +656,8 @@ void setNodeDepth(int i, double dt)
+ 
+     // --- see if node can pond water above it
+     canPond = (AllowPonding && Node[i].pondedArea > 0.0);
+-    isPonded = (canPond && Node[i].newDepth > Node[i].fullDepth);
++    yPond = Node[i].fullDepth + Node[i].surDepth;
++    isPonded = (canPond && Node[i].newDepth > yPond);
+ 
+     // --- initialize value    
+     yCrown = Node[i].crownElev - Node[i].invertElev;
+@@ -705,8 +707,8 @@ void setNodeDepth(int i, double dt)
+         }
+ 
+         // --- don't allow a ponded node to drop much below full depth
+-        if ( isPonded && yNew < Node[i].fullDepth )
+-            yNew = Node[i].fullDepth - FUDGE;
++        if ( isPonded && yNew < yPond )
++            yNew = yPond - FUDGE;
+     }
+     // --- if node surcharged, base depth change on dqdh
+     //     NOTE: depth change is w.r.t depth from previous
+@@ -734,16 +736,16 @@ void setNodeDepth(int i, double dt)
+         if ( yNew < yCrown ) yNew = yCrown - FUDGE;
+ 
+         // --- don't allow a newly ponded node to rise much above full depth
+-        if ( canPond && yNew > Node[i].fullDepth )
+-            yNew = Node[i].fullDepth + FUDGE;
++        if ( canPond && yNew > yPond )
++            yNew = yPond + FUDGE;
+     }
+ 
+     // --- depth cannot be negative
+     if ( yNew < 0 ) yNew = 0.0;
+ 
+     // --- determine max. non-flooded depth
+-    yMax = Node[i].fullDepth;
+-    if ( canPond == FALSE ) yMax += Node[i].surDepth;
++    //     (a node can pond only above its surcharge depth)
++    yMax = yPond;
+ 
+     // --- find flooded depth & volume
+     if ( yNew > yMax )
+diff --git a/src/legacy/engine/flowrout.c b/src/legacy/engine/flowrout.c
+index b370219..8c5b0cf 100644
+--- a/src/legacy/engine/flowrout.c
++++ b/src/legacy/engine/flowrout.c
+@@ -436,6 +436,7 @@ void initNodes()
+ //
+ {
+     int i;
++    double yPond;
+ 
+     for ( i = 0; i < Nobjects[NODE]; i++ )
+     {
+@@ -444,13 +445,16 @@ void initNodes()
+         Node[i].outflow = 0.0;
+ 
+         // --- initialize node volume
++        //     (under dynamic wave a node ponds only above its surcharge depth)
+         Node[i].newVolume = 0.0;
++        yPond = Node[i].fullDepth;
++        if ( RouteModel == DW ) yPond += Node[i].surDepth;
+         if ( AllowPonding &&
+              Node[i].pondedArea > 0.0 &&
+-             Node[i].newDepth > Node[i].fullDepth )
++             Node[i].newDepth > yPond )
+         {
+             Node[i].newVolume = Node[i].fullVolume +
+-                                (Node[i].newDepth - Node[i].fullDepth) *
++                                (Node[i].newDepth - yPond) *
+                                 Node[i].pondedArea;
+         }
+         else Node[i].newVolume = node_getVolume(i, Node[i].newDepth);
+diff --git a/src/legacy/engine/node.c b/src/legacy/engine/node.c
+index 070db5a..ef034ed 100644
+--- a/src/legacy/engine/node.c
++++ b/src/legacy/engine/node.c
+@@ -541,7 +541,9 @@ double node_getPondedArea(int nodeIndex, double depth)
+     double a;
+ 
+     // --- use regular getSurfArea function if node not flooded
+-    if ( depth <= Node[nodeIndex].fullDepth || Node[nodeIndex].pondedArea == 0.0 )
++    //     (ponding starts above the node's surcharge depth)
++    if ( depth <= Node[nodeIndex].fullDepth + Node[nodeIndex].surDepth ||
++         Node[nodeIndex].pondedArea == 0.0 )
+     {
+         return node_getSurfArea(nodeIndex, depth);
+     }

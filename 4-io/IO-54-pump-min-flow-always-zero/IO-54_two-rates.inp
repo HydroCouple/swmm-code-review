@@ -1,0 +1,38 @@
+[TITLE]
+IO-54: ideal pump that runs for 6 hours at 1 cfs, then 3 cfs
+
+[OPTIONS]
+FLOW_UNITS           CFS
+FLOW_ROUTING         DYNWAVE
+START_DATE           01/01/2020
+START_TIME           00:00:00
+END_DATE             01/01/2020
+END_TIME             06:00:00
+REPORT_STEP          00:15:00
+ROUTING_STEP         5
+
+[JUNCTIONS]
+;;Name  Elev  MaxDepth  InitDepth  SurDepth  Aponded
+WW      100   10        0          0         0
+
+[OUTFALLS]
+O1      100   FREE
+
+[PUMPS]
+;;Name  From  To  Curve  Status  Startup  Shutoff
+P1      WW    O1  *      ON      0        0
+
+[INFLOWS]
+;;Node  Constituent  TimeSeries  Type  Mfactor  Sfactor
+WW      FLOW         Qin         FLOW  1.0      1.0
+
+[TIMESERIES]
+;; 1 cfs for 3 hours, ramp to 3 cfs over the 4th hour, 3 cfs to the end
+Qin     0:00   1.0
+Qin     3:00   1.0
+Qin     4:00   3.0
+Qin     6:00   3.0
+
+[REPORT]
+INPUT     NO
+CONTROLS  NO

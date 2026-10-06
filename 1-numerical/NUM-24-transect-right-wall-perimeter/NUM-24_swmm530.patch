@@ -1,0 +1,56 @@
+NUM-24: count the right end wall of a transect like the left one
+
+getFlow() closed the last sub-section at the last real station
+(k == Nstations - 1). The vertical wall that transect_validate() adds at the
+right end is the slice after it; it has no area, so its own flow is zero and
+its wetted perimeter was dropped, while the left end wall is carried into the
+first sub-section. Close a transect's last sub-section at the wall slice
+instead (LastSlice = Nstations), so both end walls count, as the reference
+manual's algorithm prescribes. Streets keep Nstations - 1, so their results do
+not change.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-24_swmm530.patch
+
+diff --git a/src/legacy/engine/transect.c b/src/legacy/engine/transect.c
+index c8e58ca..518dbe9 100644
+--- a/src/legacy/engine/transect.c
++++ b/src/legacy/engine/transect.c
+@@ -44,6 +44,7 @@ static double  Xrightbank;             // station where right overbank begins
+ static double  Xfactor;                // multiplier for station spacing
+ static double  Yfactor;                // factor added to station elevations
+ static double  Lfactor;                // main channel/flood plain length
++static int     LastSlice;              // slice that ends the last sub-section
+ 
+ //-----------------------------------------------------------------------------
+ //  External functions (declared in funcs.h)   
+@@ -253,6 +254,10 @@ void  transect_validate(int j)
+     Station[Nstations] = Station[Nstations-1];
+     Elev[Nstations] = Elev[0];
+ 
++    // --- the right end wall belongs to the last sub-section, as the
++    //     left end wall belongs to the first one
++    LastSlice = Nstations;
++
+     // --- create geometry tables
+     Transect[j].nTbl = N_TRANSECT_TBL;
+     createTables(&Transect[j], ymin, ymax);
+@@ -560,7 +565,7 @@ double getFlow(int k, double a, double wp, int findFlow)
+     if ( findFlow == FALSE)
+     {
+         // --- flow needs updating if we are at last station
+-        if ( k == Nstations - 1 ) findFlow = TRUE;
++        if ( k == LastSlice ) findFlow = TRUE;
+ 
+         // --- flow needs updating if we are at end of left overbank and
+         //     there is a change in Manning's n and section not vertical
+@@ -683,6 +688,9 @@ void  transect_createStreetTransect(TStreet* street)
+         street->transect.nTbl = N_TRANSECT_TBL;
+     }
+ 
++    // --- the last slice (crown or right sidewalk) forms its own sub-section
++    LastSlice = Nstations - 1;
++
+     // --- assign Manning's N to street
+     Nchannel = street->roughness;
+     if (street->backWidth == 0.0)

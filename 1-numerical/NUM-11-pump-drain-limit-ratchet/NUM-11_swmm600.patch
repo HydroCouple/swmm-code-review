@@ -1,0 +1,44 @@
+NUM-11: floor the wet-well area at MIN_SURFAREA in the pump drain limit
+
+StructureSolver::computePumpFlowK() predicts the inlet depth of a Type2/3/4
+pump at a non-storage node with the raw node surface area, kept unfloored for
+parity with legacy. For a junction fed by a free-falling conduit that area is
+0, any net withdrawal gives y = -inf, and the pump is pinned to the inflow at
+any depth. Floor the area at the run's MIN_SURFAREA, as the DW depth update
+does and as the 5.3.0 patch does.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-11_swmm600.patch
+
+diff --git a/src/engine/hydraulics/HydStructures.cpp b/src/engine/hydraulics/HydStructures.cpp
+index 77d61bf..cb472f1 100644
+--- a/src/engine/hydraulics/HydStructures.cpp
++++ b/src/engine/hydraulics/HydStructures.cpp
+@@ -437,18 +437,18 @@ void StructureSolver::computePumpFlowK(SimulationContext& ctx, double dt,
+             } else if (ct == 2 || ct == 3 || ct == 4) {
+                 // Non-storage TYPE2/3/4 pump: if pumping would make depth
+                 // negative, clamp q to inflow.
+-                // PARITY: legacy getModPumpFlow (dynwave.c:477-484) applies
+-                // this check ONLY for TYPE2/TYPE4/TYPE3 pumps and divides by
+-                // the RAW Xnode.newSurfArea — NO MinSurfArea floor. Flooring
+-                // the area suppresses the clamp exactly when a small-area
+-                // wet-well junction is about to be drawn dry (y <= 0), letting
+-                // the pump run at full curve rate where legacy pins it to the
+-                // node inflow (seen at Bellinge G70F11Pp1). A zero area gives
+-                // y = ±inf/NaN with the same comparison outcome as legacy.
++                // Legacy getModPumpFlow (dynwave.c:477-484) applies this
++                // check ONLY for TYPE2/TYPE4/TYPE3 pumps. The node area is
++                // floored at MIN_SURFAREA, as in the depth update: the raw
++                // area of a wet well fed by a free-falling conduit is 0, and
++                // y = -inf would pin the pump to the inflow at any depth.
+                 double net_inflow = nodes.inflow[un1] - nodes.outflow[un1] - q;
+                 double net_vol = 0.5 * (nodes.old_net_inflow[un1] + net_inflow) * dt;
++                const double min_area = (ctx.options.min_surf_area > 0.0)
++                    ? ctx.options.min_surf_area / (ucf_len * ucf_len)
++                    : constants::MIN_SURFAREA;
+                 double surf = (node_new_surf_area != nullptr)
+-                                ? node_new_surf_area[un1]
++                                ? std::max(node_new_surf_area[un1], min_area)
+                                 : constants::MIN_SURFAREA;
+                 double y_new = nodes.old_depth[un1] + net_vol / surf;
+                 if (y_new <= 0.0) q = std::max(nodes.inflow[un1], 0.0);

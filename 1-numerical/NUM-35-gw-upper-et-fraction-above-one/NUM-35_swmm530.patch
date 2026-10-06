@@ -1,0 +1,33 @@
+NUM-35: keep the aquifer upper-zone ET fraction within 0..1
+
+The lower-zone ET rate is (1 - upperFrac) * MaxEvap times the depth fraction.
+gwater_validateAquifer() rejected only ETu < 0, and getEvapRates() multiplies
+ETu by the monthly pattern factor without a limit, so an effective fraction
+above 1 made LowerEvap negative and added water to the saturated zone. Reject
+ETu > 1 at input (as 6.0.0 already does) and cap the pattern-adjusted
+fraction at 1. Upper-zone ET is unchanged, because it was already limited to
+the available evaporation, which never exceeds MaxEvap.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-35_swmm530.patch
+
+diff --git a/src/legacy/engine/gwater.c b/src/legacy/engine/gwater.c
+index d511143..0c159e2 100644
+--- a/src/legacy/engine/gwater.c
++++ b/src/legacy/engine/gwater.c
+@@ -353,6 +353,7 @@ void  gwater_validateAquifer(int aquiferIndex)
+     ||   Aquifer[aquiferIndex].conductSlope      <  0.0
+     ||   Aquifer[aquiferIndex].tensionSlope      <  0.0
+     ||   Aquifer[aquiferIndex].upperEvapFrac     <  0.0
++    ||   Aquifer[aquiferIndex].upperEvapFrac     >  1.0
+     ||   Aquifer[aquiferIndex].lowerEvapDepth    <  0.0
+     ||   Aquifer[aquiferIndex].waterTableElev    <  Aquifer[aquiferIndex].bottomElev
+     ||   Aquifer[aquiferIndex].upperMoisture     >  Aquifer[aquiferIndex].porosity 
+@@ -747,6 +748,7 @@ void getEvapRates(double theta, double upperDepth)
+         f = Pattern[p].factor[month-1];
+     }
+     upperFrac *= f;
++    upperFrac = MIN(upperFrac, 1.0);
+ 
+     // --- upper zone evaporation requires that soil moisture
+     //     be above the wilting point

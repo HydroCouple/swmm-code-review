@@ -1,0 +1,138 @@
+CON-09: keep pollutant in ponded surface water when the water evaporates
+
+The ponded-quality block of the runoff step rebuilt the ponded mass from
+the end-of-step depth, as 5.3.0 does, so pollutant in evaporated water
+was dropped. Keep the mass that infiltration and runoff did not remove.
+6.0.0 also zeroed the ponded mass of a surface that dried without booking
+it, and left the mass still ponded at the end out of Remaining Buildup.
+Book the dried-out mass to a new running total, qual_final_ponded_dry
+(MassBalance, next to qual_routing_final_dry), and add it and the ponded
+mass to Remaining Buildup in computeFinalQualityMassBalance(), as legacy's
+FINAL_LOAD and massbal_getBuildup() do.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply CON-09_swmm600.patch
+
+diff --git a/src/engine/core/SWMMEngine.cpp b/src/engine/core/SWMMEngine.cpp
+index 839529d..92c69b2 100644
+--- a/src/engine/core/SWMMEngine.cpp
++++ b/src/engine/core/SWMMEngine.cpp
+@@ -4093,17 +4093,11 @@ void SWMMEngine::stepSurfaceQuality(double dt_runoff) noexcept {
+                     double w_mass_pq = ctx_.subcatches.ponded_qual[sq_idx];  // mg
+ 
+                     if (v_inflow_pq <= 0.0) {
+-                        // Dry surface. The `+=` into qual_final_buildup that
+-                        // used to sit here was DEAD (Finding 9):
+-                        // computeFinalQualityMassBalance overwrites the term
+-                        // with `=` at end-of-run, discarding every value
+-                        // accumulated here — and it was in mg against that
+-                        // site's user mass, so surviving would have corrupted
+-                        // the term. Removed rather than converted. The
+-                        // residual ponded mass at final time is NOT in the
+-                        // final-buildup term on either path; that matches the
+-                        // 4073 computation and is recorded as a small parity
+-                        // gap against legacy's FINAL_STORED_LOAD.
++                        // Dry surface: legacy books what was ponded to the
++                        // FINAL_LOAD (Remaining Buildup) term, in user mass.
++                        if (up < ctx_.mass_balance.qual_final_ponded_dry.size())
++                            ctx_.mass_balance.qual_final_ponded_dry[up] +=
++                                w_mass_pq * mcf_p;
+                         ctx_.subcatches.ponded_qual[sq_idx] = 0.0;
+                     } else {
+                         // Complete-mix balance (matching legacy findPondedLoads):
+@@ -4148,19 +4142,10 @@ void SWMMEngine::stepSurfaceQuality(double dt_runoff) noexcept {
+                         if (w_outflow_pq > 0.0 && dt_runoff > 0.0)
+                             total_washoff_load += w_outflow_pq / dt_runoff;
+ 
+-                        // legacy closes by RE-DERIVING the ponded store from
+-                        // the mixed concentration and the depth the step
+-                        // actually ended at — `cPonded * subcatch_getDepth(j)
+-                        // * nonLidArea` — not by carrying whatever mass was
+-                        // left over. The two differ whenever the surface
+-                        // gained or lost water, and the leftover form drained
+-                        // the pool to nothing: a subcatchment shed its
+-                        // rainfall-borne load the instant the rain stopped
+-                        // instead of releasing it down the recession.
+-                        ctx_.subcatches.ponded_qual[sq_idx] = std::max(
+-                            c_ponded_pq * ctx_.subcatches.ponded_depth[ui] *
+-                                area_ft2_pq,
+-                            0.0);
++                        // What infiltration and runoff did not remove stays
++                        // ponded: evaporation takes water, not pollutant.
++                        ctx_.subcatches.ponded_qual[sq_idx] =
++                            std::max(w_total_pq, 0.0);
+                     }
+                 }
+ 
+@@ -5998,6 +5983,25 @@ void SWMMEngine::computeFinalQualityMassBalance() noexcept {
+                         total += surface_quality_.buildup[bu] * norm;
+                 }
+             }
++            // legacy massbal_getBuildup also counts the mass still ponded
++            // on the surface, and FINAL_LOAD the ponded mass of surfaces
++            // that dried out during the run.
++            double mcf = ucf::UCF(ucf::MASS, ctx_.options);
++            if (static_cast<std::size_t>(p) < ctx_.pollutants.units.size()) {
++                switch (ctx_.pollutants.units[static_cast<std::size_t>(p)]) {
++                    case MassUnits::UG_PER_L:     mcf /= 1000.0; break;
++                    case MassUnits::COUNTS_PER_L: mcf = 1.0; break;
++                    default: break;
++                }
++            }
++            for (int i = 0; i < ctx_.n_subcatches(); ++i) {
++                auto sq = static_cast<std::size_t>(i) * static_cast<std::size_t>(np)
++                          + static_cast<std::size_t>(p);
++                if (sq < ctx_.subcatches.ponded_qual.size())
++                    total += ctx_.subcatches.ponded_qual[sq] * mcf;
++            }
++            if (static_cast<std::size_t>(p) < ctx_.mass_balance.qual_final_ponded_dry.size())
++                total += ctx_.mass_balance.qual_final_ponded_dry[static_cast<std::size_t>(p)];
+             ctx_.mass_balance.qual_final_buildup[static_cast<std::size_t>(p)] = total;
+         }
+     }
+diff --git a/src/engine/core/SimulationContext.hpp b/src/engine/core/SimulationContext.hpp
+index 4038a9e..e8a9173 100644
+--- a/src/engine/core/SimulationContext.hpp
++++ b/src/engine/core/SimulationContext.hpp
+@@ -1228,6 +1228,9 @@ struct SimulationContext {
+         /// (massbal.c:885), so it is kept apart from qual_routing_final,
+         /// which SWMMEngine recomputes from state every routing step.
+         std::vector<double> qual_routing_final_dry;
++        /// Ponded surface mass booked to Remaining Buildup as a subcatchment
++        /// dried out (legacy FINAL_LOAD in findPondedLoads), in user mass.
++        std::vector<double> qual_final_ponded_dry;
+ 
+         void resize_quality(int n_pollutants) {
+             auto np = static_cast<std::size_t>(n_pollutants);
+@@ -1252,6 +1255,7 @@ struct SimulationContext {
+             qual_routing_seep.assign(np, 0.0);
+             qual_routing_evap.assign(np, 0.0);
+             qual_routing_final_dry.assign(np, 0.0);
++            qual_final_ponded_dry.assign(np, 0.0);
+             routing_forcing_qual_inflow.assign(np, 0.0);
+         }
+ 
+@@ -1278,6 +1282,7 @@ struct SimulationContext {
+             auto qrseep = std::move(qual_routing_seep);
+             auto qrevap = std::move(qual_routing_evap);
+             auto qrfd = std::move(qual_routing_final_dry);
++            auto qfpd = std::move(qual_final_ponded_dry);
+             auto qrfqi = std::move(routing_forcing_qual_inflow);
+             *this = MassBalance{};
+             qual_init_buildup = std::move(qi);
+@@ -1301,6 +1306,7 @@ struct SimulationContext {
+             qual_routing_seep = std::move(qrseep);
+             qual_routing_evap = std::move(qrevap);
+             qual_routing_final_dry = std::move(qrfd);
++            qual_final_ponded_dry = std::move(qfpd);
+             routing_forcing_qual_inflow = std::move(qrfqi);
+             // Zero out the quality vectors (except init_buildup which is
+             // computed once during initQuality and must survive reset)
+@@ -1318,6 +1324,7 @@ struct SimulationContext {
+                             &qual_routing_seep,
+                             &qual_routing_evap,
+                             &qual_routing_final_dry,
++                            &qual_final_ponded_dry,
+                             &routing_forcing_qual_inflow}) {
+                 std::fill(v->begin(), v->end(), 0.0);
+             }

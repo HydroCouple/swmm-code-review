@@ -1,0 +1,26 @@
+IO-56: clear a conduit's normal-flow and inlet-control flags when it is dry
+
+dwflow_findConduitFlow() resets Link.normalFlow and Link.inletControl only
+after its early return for a dry or closed conduit, so a conduit that was
+normal-flow limited (or inlet controlled) on its last flowing step keeps
+the flag for as long as it stays dry, and stats_updateLinkStats() adds
+every one of those steps to the Norm Ltd (Inlet Ctrl) time of the Flow
+Classification Summary. Clear both flags on the early-return path too. The
+flags are read only by the statistics, so the hydraulics do not change.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-56_swmm530.patch
+
+diff --git a/src/legacy/engine/dwflow.c b/src/legacy/engine/dwflow.c
+index 828431b..296f31a 100644
+--- a/src/legacy/engine/dwflow.c
++++ b/src/legacy/engine/dwflow.c
+@@ -200,6 +200,8 @@ void  dwflow_findConduitFlow(int linkIndex, int steps, double omega, double dt)
+         Link[linkIndex].newDepth = MIN(yMid, Link[linkIndex].xsect.yFull);
+         Link[linkIndex].newVolume = Conduit[k].a1 * link_getLength(linkIndex) * barrels;
+         Link[linkIndex].newFlow = 0.0;
++        Link[linkIndex].inletControl = FALSE;
++        Link[linkIndex].normalFlow = FALSE;
+         return;
+     }
+ 

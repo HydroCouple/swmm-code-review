@@ -1,0 +1,69 @@
+IO-46: route the groundwater flow read from a runoff interface file
+
+In a USE RUNOFF run RunoffInterfaceFile::readResults() restores each
+subcatchment's groundwater outflow into ctx.subcatches.gw_flow (cfs), but the
+node inflow is built from the groundwater solver's per-unit-area rate
+(groundwater_.state().gw_flow, interpolated from old_gw_rate_), which the file
+path never set, so no groundwater reached the drainage system. After reading a
+record, set the rate from the file's flow divided by the subcatchment area (the
+old rate is already rolled at the top of the runoff loop).
+
+The SAVE RUNOFF record was also written before the groundwater step (and
+before washoff and the LID fold), so each record carried the previous runoff
+step's groundwater flow. Write it after the groundwater step, where legacy
+runoff_saveToFile() writes it; the records then match 5.3.0's.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-46_swmm600.patch
+
+diff --git a/src/engine/core/SWMMEngine.cpp b/src/engine/core/SWMMEngine.cpp
+index 839529d..7896995 100644
+--- a/src/engine/core/SWMMEngine.cpp
++++ b/src/engine/core/SWMMEngine.cpp
+@@ -2137,6 +2137,17 @@ void SWMMEngine::stepRunoff(double dt_routing) noexcept {
+                 new_runoff_ms_ = ctx_.options.totalDurationMs();
+                 break;
+             }
++            // The file holds each subcatchment's groundwater outflow in cfs;
++            // the node inflow interpolates the per-unit-area rate (legacy
++            // gw->newFlow), whose old value was rolled at the top of the loop.
++            for (int i = 0; i < ctx_.n_subcatches(); ++i) {
++                const auto ui = static_cast<std::size_t>(i);
++                if (ui >= groundwater_.state().gw_flow.size()) break;
++                const double a = ctx_.subcatches.area[ui]
++                               / ucf::UCF(ucf::LANDAREA, ctx_.options);
++                groundwater_.state().gw_flow[ui] =
++                    a > 0.0 ? ctx_.subcatches.gw_flow[ui] / a : 0.0;
++            }
+             if (file_dt <= 0.0) file_dt = 1.0;
+             new_runoff_time_ = old_runoff_time_ + file_dt;
+             new_runoff_ms_ = new_runoff_ms_ + 1000.0 * file_dt;
+@@ -2397,12 +2408,6 @@ void SWMMEngine::stepRunoff(double dt_routing) noexcept {
+         // accumulating here would capture the pre-LID runoff and miss the LID
+         // exchange, leaving the continuity unbalanced (issue #102 D/E).
+ 
+-        // A4b'. Phase 1b auto-save hook — when the runoff interface file
+-        // is open in SAVE mode, emit one record per substep. saveResults
+-        // is a cheap no-op when the file is not in SAVE mode, so the
+-        // unconditional call here costs nothing for ordinary runs.
+-        saveRunoffIfaceStep(dt_runoff);
+-
+         // A4c. Surface quality: buildup + washoff. IGNORE_QUALITY skips all
+         //      pollutant buildup/washoff/sweeping (legacy runoff.c:274
+         //      `if (IgnoreQuality) continue;`).
+@@ -2914,6 +2919,15 @@ void SWMMEngine::stepRunoff(double dt_routing) noexcept {
+             stepGroundwater(dt_runoff);
+         }
+ 
++        // A4b'. Phase 1b auto-save hook — when the runoff interface file
++        // is open in SAVE mode, emit one record per substep. saveResults
++        // is a cheap no-op when the file is not in SAVE mode, so the
++        // unconditional call here costs nothing for ordinary runs.
++        // Written after the washoff, LID and groundwater steps, as legacy
++        // runoff_saveToFile() runs at the end of runoff_execute(), so the
++        // record holds this step's GW flow and washoff, not the last step's.
++        saveRunoffIfaceStep(dt_runoff);
++
+         // A6c. Accumulate runoff mass-balance totals now that the LID routing
+         // has finalised subcatches.runoff (moved from A4b — see note there).
+         accumulateRunoffMassBalance(dt_runoff);

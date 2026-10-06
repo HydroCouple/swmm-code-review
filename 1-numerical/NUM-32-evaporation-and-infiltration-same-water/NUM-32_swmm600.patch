@@ -1,0 +1,29 @@
+NUM-32: infiltrate only the ponded water left after evaporation
+
+RunoffSolver::execute() charges evaporation to the ponded water first
+(surfEvap = min(depth/dt, evapRate)) and then asks for the infiltration rate
+with the full ponded depth, so infiltration can take water that has already
+evaporated. When the two together use up the surface water the depth is set
+to zero but both full volumes are booked, up to evap x dt of water that never
+existed. Pass the depth left after evaporation to infilGetInfil() (the same
+change as the 5.3.0 patch).
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-32_swmm600.patch
+
+diff --git a/src/engine/hydrology/Runoff.cpp b/src/engine/hydrology/Runoff.cpp
+index aa81dc7..89f08a1 100644
+--- a/src/engine/hydrology/Runoff.cpp
++++ b/src/engine/hydrology/Runoff.cpp
+@@ -454,7 +454,10 @@ void RunoffSolver::execute(SimulationContext& ctx, double dt, double evap_rate_i
+                 }
+ 
+                 infil_factor_used_[ui] = local_infil;
+-                infil = infilGetInfil(ctx, i, precip, runon, depth, dt,
++                // from the ponded water left after evaporation, so the two
++                // losses never exceed the water available
++                infil = infilGetInfil(ctx, i, precip, runon,
++                                      std::max(0.0, depth - surfEvap * dt), dt,
+                                       local_infil, recovery_factor);
+             }
+ 

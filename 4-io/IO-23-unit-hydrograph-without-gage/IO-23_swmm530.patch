@@ -1,0 +1,62 @@
+IO-23: report a unit hydrograph group that has no rain gage
+
+A [HYDROGRAPHS] group's rain gage is set only by its "Name Gage" line, and
+UnitHyd[] is calloc'ed, so a group without that line silently used gage
+index 0: a gage that nothing else uses keeps its first rainfall value for
+the whole run, and with no gages in the project initGageData() reads past
+the end of Gage[]. rdii_initUnitHyd() now sets the gage to -1 and
+validateRdii() reports the new ERROR 152 for a group without one.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-23_swmm530.patch
+
+diff --git a/src/legacy/engine/error.h b/src/legacy/engine/error.h
+index 2bcea19..a4850f4 100644
+--- a/src/legacy/engine/error.h
++++ b/src/legacy/engine/error.h
+@@ -102,6 +102,8 @@ enum ErrorType {
+ // ... RDII Errors
+       /*! \brief RDII unit hydrograph time error */
+       ERR_UNITHYD_TIMES        = 151,
++      /*! \brief RDII unit hydrograph has no rain gage */
++      ERR_UNITHYD_GAGE         = 152,
+       /*! \brief RDII unit hydrograph ratios error */
+       ERR_UNITHYD_RATIOS       = 153,
+       /*! \brief RDII area error */
+diff --git a/src/legacy/engine/error.txt b/src/legacy/engine/error.txt
+index 801d96b..e75f233 100644
+--- a/src/legacy/engine/error.txt
++++ b/src/legacy/engine/error.txt
+@@ -34,6 +34,7 @@ ERR(143,"\n  ERROR 143: Regulator %s has invalid cross-section shape.")
+ ERR(145,"\n  ERROR 145: Drainage system has no acceptable outlet nodes.")
+ 
+ ERR(151,"\n  ERROR 151: a Unit Hydrograph in set %s has invalid time base.")
++ERR(152,"\n  ERROR 152: no rain gage assigned to Unit Hydrograph set %s.")
+ ERR(153,"\n  ERROR 153: a Unit Hydrograph in set %s has invalid response ratios.")
+ ERR(155,"\n  ERROR 155: invalid sewer area for RDII at node %s.")
+ 
+diff --git a/src/legacy/engine/rdii.c b/src/legacy/engine/rdii.c
+index d8835c5..7604803 100644
+--- a/src/legacy/engine/rdii.c
++++ b/src/legacy/engine/rdii.c
+@@ -203,6 +203,7 @@ void rdii_initUnitHyd(int unitHydIndex)
+     int i;                             // individual UH index
+     int m;                             // month index
+ 
++    UnitHyd[unitHydIndex].rainGage = -1;
+     for ( m=0; m<12; m++)
+     {
+         for (i=0; i<3; i++)
+@@ -864,6 +865,12 @@ void validateRdii()
+     // --- check each unit hydrograph for consistency
+     for (j=0; j<Nobjects[UNITHYD]; j++)
+     {
++        // --- UH group must have a rain gage
++        if ( UnitHyd[j].rainGage < 0 )
++        {
++            report_writeErrorMsg(ERR_UNITHYD_GAGE, UnitHyd[j].ID);
++        }
++
+         for (m=0; m<12; m++)
+         {
+             rsum = 0.0;

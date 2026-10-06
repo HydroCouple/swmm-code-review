@@ -1,0 +1,47 @@
+[TITLE]
+NUM-41: as NUM-41_burst.inp, but the UH falling limb (6 min) is shorter than WET_STEP (10 min)
+
+[OPTIONS]
+FLOW_UNITS       CFS
+INFILTRATION     HORTON
+FLOW_ROUTING     KINWAVE
+START_DATE       01/01/2020
+START_TIME       00:00:00
+END_DATE         01/01/2020
+END_TIME         06:00:00
+REPORT_STEP      00:15:00
+;; The UH falling limb is K*T = 0.1 h = 6 min, so RDII splits each 10-min
+;; WET_STEP into rain intervals of 6 min.
+WET_STEP         00:10:00
+DRY_STEP         01:00:00
+ROUTING_STEP     60
+
+[RAINGAGES]
+;;Name  Format  Interval  SCF  Source
+G1      VOLUME  0:15      1.0  TIMESERIES TS1
+
+[TIMESERIES]
+;; 1.0 in between 0:15 and 0:30, nothing else
+TS1  01/01/2020  00:15  1.0
+TS1  01/01/2020  00:30  0.0
+
+[HYDROGRAPHS]
+;; One triangular UH: R = 0.1, T = 1 h, K = 0.1 (base 1.1 h)
+UH1  G1
+UH1  ALL  SHORT  0.1  1  0.1
+
+[RDII]
+;;Node  UHgroup  SewerArea(ac)
+J1      UH1      100
+
+[JUNCTIONS]
+J1  0  10
+
+[OUTFALLS]
+O1  -1  FREE
+
+[CONDUITS]
+C1  J1  O1  100  0.01  0  0
+
+[XSECTIONS]
+C1  CIRCULAR  2  0  0  0  1

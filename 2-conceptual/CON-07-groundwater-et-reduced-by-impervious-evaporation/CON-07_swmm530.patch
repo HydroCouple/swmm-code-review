@@ -1,0 +1,27 @@
+CON-07: subtract only pervious-surface evaporation from the GW ET budget
+
+getSubareaRunoff() is called for IMPERV0, IMPERV1 and PERV in that order and
+added the running total Vevap to Vpevap at the pervious call, so Vpevap held
+the evaporation of all three subareas. gwater_getGroundwater() subtracts it
+from the evaporation available to the aquifer, so water evaporating from the
+impervious surface took ET away from the soil and the saturated zone.
+Vol I eq. 5-11/5-12 subtract only the pervious surface's evaporation, as 5.1
+did before 5.1.008 and as lid.c still does for LID units. Add only the
+pervious subarea's own evaporation.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply CON-07_swmm530.patch
+
+diff --git a/src/legacy/engine/subcatch.c b/src/legacy/engine/subcatch.c
+index 7c1d97c..ed949fc 100644
+--- a/src/legacy/engine/subcatch.c
++++ b/src/legacy/engine/subcatch.c
+@@ -981,7 +981,7 @@ double getSubareaRunoff(int j, int i, double area, double precip, double evap,
+     // --- update total inflow, evaporation & infiltration volumes
+     Vinflow += precip * area * tStep;
+     Vevap += surfEvap * area * tStep;
+-    if ( i == PERV ) Vpevap += Vevap;
++    if ( i == PERV ) Vpevap += surfEvap * area * tStep;
+     Vinfil += infil * area * tStep;
+ 
+     // --- assign adjusted runoff coeff. & storage to shared variables

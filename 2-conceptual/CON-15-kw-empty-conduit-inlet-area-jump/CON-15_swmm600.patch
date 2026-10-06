@@ -1,0 +1,28 @@
+CON-15: KINWAVE: raise the inlet area only by what the inflow fills
+
+KWSolver::solveConduit() copies legacy's no-flow branch: when the rise in
+inlet area needs more water than the step supplies, f(a) > 0 on the whole
+bracket, the outlet area is clamped to 0 and the conduit is booked with
+water that never entered. In that branch, lower the inlet area to the value
+for which the equation holds with aout = 0 (C2 = 0), never below the
+previous inlet area, as the 5.3.0 patch does.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply CON-15_swmm600.patch
+
+diff --git a/src/engine/hydraulics/KinematicWave.cpp b/src/engine/hydraulics/KinematicWave.cpp
+index a79bd76..25c65c5 100644
+--- a/src/engine/hydraulics/KinematicWave.cpp
++++ b/src/engine/hydraulics/KinematicWave.cpp
+@@ -337,6 +337,11 @@ int KWSolver::solveConduit(int idx, const XSectParams& xs,
+         // both bounds positive → no flow
+         a = 0.0;
+         result = -3;
++        // CON-15: the inflow cannot fill the rise in inlet area within this
++        // step; raise the inlet area only by what it fills, so that
++        // continuity still holds
++        if (a_in_norm > prev_a1)
++            a_in_norm = std::max(prev_a1, a_in_norm - C2 * WX / ((1.0 - WT) * dxdt));
+     } else {
+         result = -1;
+     }

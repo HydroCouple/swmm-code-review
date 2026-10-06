@@ -1,0 +1,24 @@
+IO-43: write a dated SAVE HOTSTART file when the run reaches its date
+
+iface_readFileParams() stores the date and time given after a SAVE HOTSTART
+file name as a DateTime (days since 12/30/1899), but hotstart_save() compared
+it with NewRoutingTime, the elapsed time in milliseconds. For any date after
+1900 the test passed once about 44 seconds had been simulated, and the file
+held the state at that step. Compare the current date and time instead.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-43_swmm530.patch
+
+diff --git a/src/legacy/engine/hotstart.c b/src/legacy/engine/hotstart.c
+index c03ca4a..0982714 100644
+--- a/src/legacy/engine/hotstart.c
++++ b/src/legacy/engine/hotstart.c
+@@ -108,7 +108,7 @@ void hotstart_save()
+     {
+         if (FhotstartOutputs[i].file && 
+             FhotstartOutputs[i].saveDateTime > 0 && 
+-            NewRoutingTime >= FhotstartOutputs[i].saveDateTime)
++            getDateTime(NewRoutingTime) >= FhotstartOutputs[i].saveDateTime)
+         {
+             saveRunoff(&FhotstartOutputs[i]);
+             saveRouting(&FhotstartOutputs[i]);

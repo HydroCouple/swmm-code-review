@@ -1,0 +1,27 @@
+IO-61: use the continuity tables' gallons factor in the summary tables
+
+statsrpt_writeReport() converted every summary-table volume to 10^6 gal
+with 7.48 gal/ft3, while the continuity tables in report.c use
+MGDperCFS / SECperDAY = 7.48056 gal/ft3 (true value 7.48052). The same
+water printed 0.0074 % smaller in the summary tables. Use the report.c
+factor in both unit systems (the SI factors already agreed to 5e-6).
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-61_swmm530.patch
+
+diff --git a/src/legacy/engine/statsrpt.c b/src/legacy/engine/statsrpt.c
+index 8050f24..ee83648 100644
+--- a/src/legacy/engine/statsrpt.c
++++ b/src/legacy/engine/statsrpt.c
+@@ -96,8 +96,9 @@ void statsrpt_writeReport()
+     else sstrncpy(FlowFmt, "%9.2f", 5);
+ 
+     // --- conversion factor from cu. ft. to mil. gallons or megaliters
+-    if (UnitSystem == US) Vcf = 7.48 / 1.0e6;
+-    else                  Vcf = 28.317 / 1.0e6;
++    //     (the same factor as the continuity tables in report.c)
++    if (UnitSystem == US) Vcf = MGDperCFS / SECperDAY;
++    else                  Vcf = MLDperCFS / SECperDAY;
+ 
+     // --- report summary results for subcatchment runoff 
+     if ( Nobjects[SUBCATCH] > 0 )

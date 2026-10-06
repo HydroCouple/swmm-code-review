@@ -1,0 +1,38 @@
+[TITLE]
+IO-35: the same with REPORT_START_TIME 00:00:00 added
+
+[OPTIONS]
+FLOW_UNITS           CFS
+FLOW_ROUTING         DYNWAVE
+START_DATE           01/01/2020
+START_TIME           00:00:00
+REPORT_START_DATE    01/02/2020
+REPORT_START_TIME    00:00:00
+END_DATE             01/02/2020
+END_TIME             06:00:00
+REPORT_STEP          01:00:00
+ROUTING_STEP         30
+
+[JUNCTIONS]
+;;Name  Elev  MaxDepth  InitDepth  SurDepth  Aponded
+J1      100   10        0          0         0
+
+[OUTFALLS]
+;;Name  Elev  Type
+O1      99    FREE
+
+[CONDUITS]
+;;Name  From  To  Length  Roughness  InOffset  OutOffset  InitFlow
+C1      J1    O1  400     0.013      0         0         0
+
+[XSECTIONS]
+;;Link  Shape     Geom1  Geom2  Geom3  Geom4  Barrels
+C1      CIRCULAR  1.5    0      0      0      1
+
+[INFLOWS]
+;;Node  Constituent  Time Series  Type  Mfactor  Sfactor  Baseline
+J1      FLOW         ""           FLOW  1.0      1.0      1.0
+
+[REPORT]
+NODES ALL
+LINKS ALL

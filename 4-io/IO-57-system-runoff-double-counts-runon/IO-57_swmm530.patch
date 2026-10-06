@@ -1,0 +1,27 @@
+IO-57: count runoff routed onto another subcatchment once in the system runoff
+
+output_saveSubcatchResults() added every subcatchment's runoff to the .out
+system "Runoff" (and so to "Total lateral inflow"), including subcatchments
+whose outlet is another subcatchment, whose runoff already contains that
+runon. Add a subcatchment's runoff only when the runoff mass balance books it
+(outlet is a node, or the subcatchment itself), as subcatch_getRunoff() does.
+Projects without subcatchment-to-subcatchment routing are unchanged.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-57_swmm530.patch
+
+diff --git a/src/legacy/engine/output.c b/src/legacy/engine/output.c
+index f57370e..6372ac0 100644
+--- a/src/legacy/engine/output.c
++++ b/src/legacy/engine/output.c
+@@ -617,7 +617,9 @@ void output_saveSubcatchResults(double reportTime, FILE* file)
+             (REAL4)(Subcatch[j].groundwater->evapLoss * UCF(EVAPRATE) * area);
+         SysResults[SYS_INFIL] +=
+             (REAL4)(SubcatchResults[SUBCATCH_INFIL] * area);
+-        SysResults[SYS_RUNOFF] += (REAL4)SubcatchResults[SUBCATCH_RUNOFF];
++        // --- runoff sent onto another subcatchment is counted there
++        if ( Subcatch[j].outNode >= 0 || Subcatch[j].outSubcatch == j )
++            SysResults[SYS_RUNOFF] += (REAL4)SubcatchResults[SUBCATCH_RUNOFF];
+     }
+ 
+     // --- normalize system-wide results to catchment area

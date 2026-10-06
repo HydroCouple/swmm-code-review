@@ -1,0 +1,29 @@
+API-15: rescale a gage's current rainfall when its scale factor is changed
+
+recordRate() applies the scale factor when a record becomes current, so the
+current record's rate (st_rain) keeps the old factor after
+swmm_gage_set_scale_factor(), and a co-gage, which divides the primary's
+rainfall by its new factor, gets a wrong value until that record has passed.
+Multiply st_rain by new/old factor in the setter, so the new value "takes
+effect on the next timestep" as the header documents.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply API-15_swmm600.patch
+
+diff --git a/src/engine/core/openswmm_gages_impl.cpp b/src/engine/core/openswmm_gages_impl.cpp
+index daf90cf..d92f748 100644
+--- a/src/engine/core/openswmm_gages_impl.cpp
++++ b/src/engine/core/openswmm_gages_impl.cpp
+@@ -229,7 +229,11 @@ SWMM_ENGINE_API int swmm_gage_set_scale_factor(SWMM_Engine engine, int idx, doub
+     if (factor <= 0.0) return SWMM_ERR_BADPARAM;
+     auto& ctx = to_engine(engine)->context();
+     CHECK_INDEX(idx >= 0 && idx < ctx.n_gages());
+-    ctx.gages.scale_factor[static_cast<std::size_t>(idx)] = factor;
++    const auto uidx = static_cast<std::size_t>(idx);
++    // the current record's rate (st_rain) was computed with the old factor
++    if (uidx < ctx.gages.st_rain.size())
++        ctx.gages.st_rain[uidx] *= factor / ctx.gages.scale_factor[uidx];
++    ctx.gages.scale_factor[uidx] = factor;
+     return SWMM_OK;
+ }
+ 

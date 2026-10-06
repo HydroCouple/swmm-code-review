@@ -1,0 +1,45 @@
+CON-16: book a subarea's runoff as the water that left it during the step
+
+RunoffSolver::execute() integrates the ponded depth over the step with the
+nonlinear-reservoir ODE, so the depth change already contains the outflow,
+but it then takes the runoff rate at the END of the step,
+alpha*(d - Ds)^5/3, and books it over the whole step. The volume sent to the
+outlet therefore differs from the water that left the ponded depth. For a
+subarea with routing (N > 0 and alpha > 0), use the depth the ODE removed
+divided by the step instead (the same change as the 5.3.0 patch).
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply CON-16_swmm600.patch
+
+diff --git a/src/engine/hydrology/Runoff.cpp b/src/engine/hydrology/Runoff.cpp
+index aa81dc7..8467079 100644
+--- a/src/engine/hydrology/Runoff.cpp
++++ b/src/engine/hydrology/Runoff.cpp
+@@ -488,6 +488,7 @@ void RunoffSolver::execute(SimulationContext& ctx, double dt, double evap_rate_i
+             // all water is consumed — no runoff, depth goes to zero.
+             double runoff_rate = 0.0;
+             double t_runoff = dt;   // legacy tRunoff
++            double d_no_runoff = 0.0;   // ponded depth if nothing ran off
+             if (surfEvap + infil >= surfMoisture) {
+                 depth = 0.0;
+             } else {
+@@ -502,6 +503,7 @@ void RunoffSolver::execute(SimulationContext& ctx, double dt, double evap_rate_i
+                 // on). Impervious subareas have infil == 0.0 and are
+                 // unaffected either way.
+                 double net_inflow = inflow - (surfEvap + infil);
++                d_no_runoff = depth + net_inflow * dt;
+                 // Step 3.8: Integrate ponded depth (legacy updatePondedDepth:
+                 // with alpha 0 the depth simply accumulates), and keep the
+                 // time it spent above storage for the no-routing case.
+@@ -546,6 +548,11 @@ void RunoffSolver::execute(SimulationContext& ctx, double dt, double evap_rate_i
+                 // PERV → IMPERV: pervious fOutlet = 1 - pct_routed
+                 fOutlet = 1.0 - pct;
+             }
++            // With routing, the runoff over the step is the depth that left
++            // the subarea while its ponded depth was integrated, not the
++            // end-of-step rate times the step.
++            if (subarea_n > 0.0 && alpha > 0.0)
++                runoff_rate = std::max(0.0, d_no_runoff - depth) / dt;
+             Voutflow += fOutlet * runoff_rate * subarea_area * dt;
+ 
+             return runoff_rate;

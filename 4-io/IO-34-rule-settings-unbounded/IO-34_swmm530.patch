@@ -1,0 +1,41 @@
+IO-34: keep rule-action settings within their valid range
+
+addAction() rejected a numeric orifice, weir or outlet setting outside 0..1
+but accepted any numeric pump setting, so "PUMP P1 SETTING = -1" ran the
+pump backwards. And the values a CURVE or TIMESERIES action produces were
+used as they came: a series that strayed to 3 gave an outlet three times its
+rating curve, and a negative value reversed the flow. Only the PID branch
+clamped its result. Reject a negative numeric pump setting (ERROR 211, as
+for regulators) and clamp every action's value in updateActionValue() to
+>= 0, and to <= 1 for a link that is not a pump, as getPIDSetting() does.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-34_swmm530.patch
+
+diff --git a/src/legacy/engine/controls.c b/src/legacy/engine/controls.c
+index e423886..a62b1fa 100644
+--- a/src/legacy/engine/controls.c
++++ b/src/legacy/engine/controls.c
+@@ -1492,6 +1492,8 @@ int addAction(int r, char *tok[], int nToks)
+                                    &attrib, values);
+             if (err > 0)
+                 return err;
++            if (attrib == r_SETTING && values[0] < 0.0)
++                return error_setInpError(ERR_NUMBER, tok[5]);
+         }
+         else
+             return error_setInpError(ERR_KEYWORD, tok[3]);
+@@ -1642,6 +1644,13 @@ void updateActionValue(struct TAction *a, DateTime currentTime, double dt)
+     {
+         a->value = getPIDSetting(a, dt);
+     }
++
++    // --- keep a curve or time series setting within its feasible
++    //     range, as getPIDSetting() does
++    if (a->value < 0.0)
++        a->value = 0.0;
++    if (Link[a->link].type != PUMP && a->value > 1.0)
++        a->value = 1.0;
+ }
+ 
+ /*!

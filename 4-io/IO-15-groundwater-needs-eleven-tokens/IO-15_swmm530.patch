@@ -1,0 +1,24 @@
+IO-15: accept [GROUNDWATER] rows with the 10 required fields
+
+gwater_readGroundwaterParams() reads seven required numbers from tokens 3-9
+(Esurf A1 B1 A2 B2 A3 Dsw) and treats tokens 10-13 (Egwt Ebot Egw Umc) as
+optional, but it rejected any row with fewer than 11 tokens with ERROR 203.
+A row that leaves out the optional fields, as the input reference allows
+("Leave blank (or enter *)"), could not be read. Require 10 tokens.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-15_swmm530.patch
+
+diff --git a/src/legacy/engine/gwater.c b/src/legacy/engine/gwater.c
+index d511143..49c2193 100644
+--- a/src/legacy/engine/gwater.c
++++ b/src/legacy/engine/gwater.c
+@@ -217,7 +217,7 @@ int gwater_readGroundwaterParams(char* tok[], int ntoks)
+     if ( j < 0 ) return error_setInpError(ERR_NAME, tok[0]);
+ 
+     // --- check for enough tokens
+-    if ( ntoks < 11 ) return error_setInpError(ERR_ITEMS, "");
++    if ( ntoks < 10 ) return error_setInpError(ERR_ITEMS, "");
+ 
+     // --- check that specified aquifer and node exists
+     k = project_findObject(AQUIFER, tok[1]);

@@ -1,0 +1,43 @@
+IO-39: write each unknown-section warning once
+
+SWMMEngine::open() inserted each unknown-section warning into ctx_.warnings
+and sent it to the warning callback, then did both again through
+push_report_warning(), to reproduce the 5.3.0 reader's two copies. The
+report therefore showed the warning twice and swmm_get_warning_count()
+counted it twice. Drop the second copy, matching the 5.3.0 patch.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-39_swmm600.patch
+
+diff --git a/src/engine/core/SWMMEngine.cpp b/src/engine/core/SWMMEngine.cpp
+index 839529d..8657abc 100644
+--- a/src/engine/core/SWMMEngine.cpp
++++ b/src/engine/core/SWMMEngine.cpp
+@@ -544,13 +544,12 @@ int SWMMEngine::open(const char* inp_path,
+         }
+     }
+ 
+-    // Warn about unknown/skipped sections. Route through push_report_warning so
+-    // the warning reaches the .rpt (legacy report_writeWarningMsg), not just the
+-    // API callback. Wording matches legacy input.c: legacy reads the file twice
+-    // (object count, then data) and warns for every unknown header on each
+-    // pass, each warning after a blank line (report_writeLine of "\n  WARNING").
+-    // The count pass runs before any [OPTIONS] keyword warning, so its copies
+-    // go to the front. Plugins without source lines fall back to the tag alone.
++    // Warn about unknown/skipped sections, once each: ctx_.warnings reaches the
++    // .rpt (legacy report_writeWarningMsg) and the warning count, emit_warning
++    // the API callback. Wording matches legacy input.c's counting pass, each
++    // warning after a blank line (report_writeLine of "\n  WARNING"). They go
++    // to the front, ahead of any [OPTIONS] keyword warning. Plugins without
++    // source lines fall back to the tag alone.
+     if (!ctx_.unknown_section_headers.empty()) {
+         std::vector<std::string> msgs;
+         for (const auto& [tok, line] : ctx_.unknown_section_headers)
+@@ -558,7 +557,6 @@ int SWMMEngine::open(const char* inp_path,
+                            std::to_string(line) + " will be skipped.");
+         ctx_.warnings.insert(ctx_.warnings.begin(), msgs.begin(), msgs.end());
+         for (const auto& m : msgs) emit_warning(100, m.c_str());
+-        for (const auto& m : msgs) push_report_warning(m, 100);
+     } else {
+         for (const auto& tag : input_plugin->skipped_sections()) {
+             push_report_warning(

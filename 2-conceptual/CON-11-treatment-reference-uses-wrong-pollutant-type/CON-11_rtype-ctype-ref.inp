@@ -1,0 +1,62 @@
+[TITLE]
+CON-11: storage unit SU1 (1000 ft2, 4 ft deep, no outflow) holds TSS = 100
+mg/L and TP = 10 mg/L and fills with 1 cfs of water carrying TP = 10 mg/L and
+no TSS. TP has the removal-type equation R = 0.005*TSS; TSS has the
+concentration-type equation C = TSS (no change). In a removal-type equation
+TSS is the concentration in the node's inflow (manual, section 5.4.2), which
+is 0, so TP's removal is 0 and TP stays at 10 mg/L.
+
+[OPTIONS]
+FLOW_UNITS           CFS
+FLOW_ROUTING         DYNWAVE
+START_DATE           01/01/2020
+START_TIME           00:00:00
+REPORT_START_DATE    01/01/2020
+REPORT_START_TIME    00:00:00
+END_DATE             01/01/2020
+END_TIME             01:00:00
+DRY_STEP             00:05:00
+WET_STEP             00:05:00
+ROUTING_STEP         10
+REPORT_STEP          00:15:00
+
+[JUNCTIONS]
+;;Name  Elev  MaxDepth  InitDepth  SurDepth  Aponded
+J2      0     5         0          0         0
+
+[OUTFALLS]
+;;Name  Elev  Type
+O1      0     FREE
+
+[STORAGE]
+;;Name  Elev  MaxDepth  InitDepth  Shape       Coeff  Expon  Const
+SU1     0     10        4          FUNCTIONAL  0      0      1000
+
+[CONDUITS]
+;;Name  From  To  Length  Roughness  InOffset  OutOffset  InitFlow
+C1      SU1   J2  400     0.013      11        0          0
+C2      J2    O1  400     0.013      0         0          0
+
+[XSECTIONS]
+;;Link  Shape     Geom1  Geom2  Geom3  Geom4  Barrels
+C1      CIRCULAR  1      0      0      0      1
+C2      CIRCULAR  1      0      0      0      1
+
+[POLLUTANTS]
+;;Name  Units  Crain  Cgw  Crdii  Kdecay  SnowOnly  CoPollut  CoFrac  Cdwf  Cinit
+TSS     MG/L   0      0    0      0       NO        *         0       0     100
+TP      MG/L   0      0    0      0       NO        *         0       0     10
+
+[DWF]
+;;Node  Constituent  Baseline
+SU1     FLOW         1
+SU1     TP           10
+
+[TREATMENT]
+;;Node  Pollutant  Function
+SU1     TSS        C = TSS
+SU1     TP         R = 0.005*TSS
+
+[REPORT]
+NODES ALL
+LINKS ALL

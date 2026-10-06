@@ -1,0 +1,56 @@
+API-08: convert the API pollutant mass flux from mass/sec like [INFLOWS] MASS
+
+swmm_NODE_POLLUTANT_LATMASS_FLUX and swmm_LINK_POLLUTANT_LATMASS_FLUX are
+documented as mass/sec in the pollutant's mass units (mg/s for MG/L), but
+the setters stored the value as it came, while the engine's internal mass
+rate is concentration x cfs. A mass inflow from [INFLOWS] is divided by
+LperFT3 for that reason (inflow.c); the API was not, so every API flux
+delivered 28.317 times the requested mass. The running setters now divide
+by LperFT3 and the getters multiply by it, so a value reads back as set.
+The pre-start branches are left to CRASH-13, which refuses them.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply API-08_swmm530.patch
+
+diff --git a/src/legacy/engine/swmm5.c b/src/legacy/engine/swmm5.c
+index 4096c9a..1adc6a1 100644
+--- a/src/legacy/engine/swmm5.c
++++ b/src/legacy/engine/swmm5.c
+@@ -2278,7 +2278,8 @@ int setNodeValue(int property, int index, int subIndex, int pollutantIndex, doub
+             if (pollutantIndex < 0 || pollutantIndex >= Nobjects[POLLUT])
+                 return ERR_API_OBJECT_INDEX;
+ 
+-            Node[index].apiExtQualMassFlux[pollutantIndex] = value;
++            // --- mass/sec to internal (concen. x cfs), as for [INFLOWS] MASS
++            Node[index].apiExtQualMassFlux[pollutantIndex] = value / LperFT3;
+             return 0;
+         }
+         default:
+@@ -2392,7 +2393,8 @@ int setLinkValue(int property, int index, int subIndex, int pollutantIndex, doub
+             if (pollutantIndex < 0 || pollutantIndex >= Nobjects[POLLUT])
+                 return ERR_API_OBJECT_INDEX;
+ 
+-            link->apiExtQualMassFlux[pollutantIndex] = value;
++            // --- mass/sec to internal (concen. x cfs), as for [INFLOWS] MASS
++            link->apiExtQualMassFlux[pollutantIndex] = value / LperFT3;
+             return 0;
+         }
+         default:
+@@ -2750,7 +2752,7 @@ static double getNodeValue(int property, int index, int subIndex, int pollutantI
+         case swmm_NODE_POLLUTANT_LATMASS_FLUX:
+             if (pollutantIndex < 0 || pollutantIndex >= Nobjects[POLLUT])
+                 return ERR_API_OBJECT_INDEX;
+-            return node->apiExtQualMassFlux[pollutantIndex];
++            return node->apiExtQualMassFlux[pollutantIndex] * LperFT3;
+         default:
+             return ERR_API_OBJECT_TYPE;
+         }
+@@ -2857,7 +2859,7 @@ static double getLinkValue(int property, int index, int subIndex, int pollutantI
+     case swmm_LINK_POLLUTANT_LATMASS_FLUX:
+         if (pollutantIndex < 0 || pollutantIndex >= Nobjects[POLLUT])
+             return ERR_API_OBJECT_INDEX;
+-        return link->apiExtQualMassFlux[pollutantIndex];
++        return link->apiExtQualMassFlux[pollutantIndex] * LperFT3;
+     default:
+         return ERR_API_OBJECT_TYPE;
+     }

@@ -1,0 +1,42 @@
+API-07: return total buildup per unit area from swmm_SUBCATCH_POLLUTANT_BUILDUP
+
+The getter added up buildup_i / area_i over the land uses, i.e. the sum of
+each land use's own buildup density, which is N times the subcatchment's
+buildup per area for N land uses with equal densities and has no physical
+meaning otherwise. It now divides the total buildup by the total area
+covered by land uses. With a single land use the result is unchanged.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply API-07_swmm530.patch
+
+diff --git a/src/legacy/engine/swmm5.c b/src/legacy/engine/swmm5.c
+index 4096c9a..472e358 100644
+--- a/src/legacy/engine/swmm5.c
++++ b/src/legacy/engine/swmm5.c
+@@ -2659,6 +2659,8 @@ static double getSubcatchValue(int property, int index, int subIndex, int pollut
+         }
+     }
+     case swmm_SUBCATCH_POLLUTANT_BUILDUP:
++    {
++        double landuseArea = 0.0;
+         if (pollutantIndex < 0 || pollutantIndex >= Nobjects[POLLUT])
+             return ERR_API_OBJECT_INDEX;
+ 
+@@ -2670,11 +2672,16 @@ static double getSubcatchValue(int property, int index, int subIndex, int pollut
+ 
+             if (sub_catch_area > 0)
+             {
+-                prop_results += subcatch->landFactor[i].buildup[pollutantIndex] / sub_catch_area;
++                prop_results += subcatch->landFactor[i].buildup[pollutantIndex];
++                landuseArea += sub_catch_area;
+             }
+         }
+ 
++        // --- total buildup per unit area covered by land uses
++        if (landuseArea > 0.0)
++            prop_results /= landuseArea;
+         return prop_results;
++    }
+     case swmm_SUBCATCH_EXTERNAL_POLLUTANT_BUILDUP:
+         if (pollutantIndex < 0 || pollutantIndex >= Nobjects[POLLUT])
+             return ERR_API_OBJECT_INDEX;

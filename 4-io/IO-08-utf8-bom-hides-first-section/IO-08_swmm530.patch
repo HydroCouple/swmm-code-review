@@ -1,0 +1,38 @@
+IO-08: skip a UTF-8 byte order mark at the start of the input file
+
+A file saved as "UTF-8 with BOM" starts with the bytes EF BB BF. Both input
+passes look for a section header as a line whose first token starts with
+'[', so the first header ("\xEF\xBB\xBF[OPTIONS]") was not recognised: the
+object-count pass skipped that whole section and the data pass read its
+lines as [TITLE] text, with no message. Both passes now step over a BOM
+before reading the first line (rewinding if the first three bytes are
+anything else). Files without a BOM are read exactly as before.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-08_swmm530.patch
+
+diff --git a/src/legacy/engine/input.c b/src/legacy/engine/input.c
+index 5a58319..c7782c4 100644
+--- a/src/legacy/engine/input.c
++++ b/src/legacy/engine/input.c
+@@ -90,6 +90,11 @@ int input_countObjects()
+     for (i = 0; i < MAX_LINK_TYPES; i++) Nlinks[i] = 0;
+     controls_init();
+ 
++    // --- skip a UTF-8 byte order mark at the start of the file
++    rewind(Finp.file);
++    if ( fgetc(Finp.file) != 0xEF || fgetc(Finp.file) != 0xBB ||
++         fgetc(Finp.file) != 0xBF ) rewind(Finp.file);
++
+     // --- make pass through data file counting number of each object
+     while ( fgets(line, MAXLINE, Finp.file) != NULL )
+     {
+@@ -180,6 +185,8 @@ int input_readData()
+     sect = 0;
+     errsum = 0;
+     rewind(Finp.file);
++    if ( fgetc(Finp.file) != 0xEF || fgetc(Finp.file) != 0xBB ||
++         fgetc(Finp.file) != 0xBF ) rewind(Finp.file);    // skip a UTF-8 BOM
+     while ( fgets(line, MAXLINE, Finp.file) != NULL )
+     {
+         // --- make copy of line and scan for tokens

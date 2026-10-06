@@ -1,0 +1,112 @@
+API-10: recompute a conduit's slope when a node invert or link offset is set
+
+setNodeValue() and setLinkValue() accepted swmm_NODE_ELEV, swmm_LINK_OFFSET1
+and swmm_LINK_OFFSET2 between swmm_open() and swmm_start() but only stored
+them. The conduit slope, beta, qFull, qMax and the lengthened length are
+computed once, in conduit_validate() during swmm_open(), so the edit had no
+effect on LINK_SLOPE, LINK_FULLFLOW or kinematic-wave routing.
+
+The part of conduit_validate() that starts at "compute conduit slope" is
+split off unchanged into link_updateSlope(j), which conduit_validate() calls
+and the three setters call for the affected conduits (all conduits ending at
+the node for NODE_ELEV). It also resets modLength before the lengthening
+step, so that a second call does not keep a stale lengthened length. Input
+files run as before.
+
+Requires: API-01
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply API-10_swmm530.patch
+
+diff --git a/src/legacy/engine/funcs.h b/src/legacy/engine/funcs.h
+index 20e8975..8414414 100644
+--- a/src/legacy/engine/funcs.h
++++ b/src/legacy/engine/funcs.h
+@@ -1936,6 +1936,7 @@ int link_readXsectParams(char *tok[], int ntoks);
+ int link_readLossParams(char *tok[], int ntoks);
+ 
+ void link_validate(int link);
++void link_updateSlope(int link);
+ void link_initState(int link);
+ void link_setOldHydState(int link);
+ void link_setOldQualState(int link);
+diff --git a/src/legacy/engine/link.c b/src/legacy/engine/link.c
+index 31925e1..cd22150 100644
+--- a/src/legacy/engine/link.c
++++ b/src/legacy/engine/link.c
+@@ -1000,9 +1000,6 @@ void  conduit_validate(int j, int k)
+ //  Purpose: validates a conduit's properties.
+ //
+ {
+-    double aa;
+-    double lengthFactor, roughness, slope;
+-
+     // --- a storage node cannot have a dummy outflow link
+     if ( Link[j].xsect.type == DUMMY && RouteModel == DW )
+     {
+@@ -1075,6 +1072,21 @@ void  conduit_validate(int j, int k)
+         Link[j].offset1 += Link[j].xsect.yBot;
+         Link[j].offset2 += Link[j].xsect.yBot;
+     }
++    link_updateSlope(j);
++}
++
++void  link_updateSlope(int j)
++//
++//  Input:   j = link index of a conduit
++//  Output:  none
++//  Purpose: computes a conduit's slope and the flow parameters that depend
++//           on it (also called when an end node's invert or the conduit's
++//           offsets are changed through the API before a run starts).
++//
++{
++    int    k = Link[j].subIndex;
++    double aa;
++    double lengthFactor, roughness, slope;
+ 
+     // --- compute conduit slope
+     slope = conduit_getSlope(j);
+@@ -1105,6 +1117,7 @@ void  conduit_validate(int j, int k)
+     }
+ 
+     // --- lengthen conduit if lengthening option is in effect
++    Conduit[k].modLength = Conduit[k].length;
+     lengthFactor = 1.0;
+     if ( RouteModel == DW &&
+          LengtheningStep > 0.0 &&
+diff --git a/src/legacy/engine/swmm5.c b/src/legacy/engine/swmm5.c
+index 94aaa58..22e0e48 100644
+--- a/src/legacy/engine/swmm5.c
++++ b/src/legacy/engine/swmm5.c
+@@ -2283,8 +2283,19 @@ int setNodeValue(int property, int index, int subIndex, int pollutantIndex, doub
+         switch (property)
+         {
+         case swmm_NODE_ELEV:
++        {
++            int j;
+             Node[index].invertElev = value / UCF(LENGTH);
++
++            // --- update the slopes of conduits connected to the node
++            for (j = 0; j < Nobjects[LINK]; j++)
++            {
++                if (Link[j].type == CONDUIT &&
++                    (Link[j].node1 == index || Link[j].node2 == index))
++                    link_updateSlope(j);
++            }
+             return 0;
++        }
+         case swmm_NODE_MAXDEPTH:
+             if (value >= 0.0)
+             {
+@@ -2401,9 +2412,11 @@ int setLinkValue(int property, int index, int subIndex, int pollutantIndex, doub
+             return ERR_API_NOT_STARTED;
+         case swmm_LINK_OFFSET1:
+             Link[index].offset1 = value / UCF(LENGTH);
++            if (Link[index].type == CONDUIT) link_updateSlope(index);
+             return 0;
+         case swmm_LINK_OFFSET2:
+             Link[index].offset2 = value / UCF(LENGTH);
++            if (Link[index].type == CONDUIT) link_updateSlope(index);
+             return 0;
+         case swmm_LINK_INITIAL_FLOW:
+             Link[index].q0 = value / UCF(FLOW);

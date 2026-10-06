@@ -1,0 +1,100 @@
+[TITLE]
+NUM-16: seven identical storage units, each draining through a 90-degree V-notch weir
+(TRIANGULAR 2 ft high x 4 ft wide, Cd 2.5, crest 1 ft) whose setting is fixed by a rule:
+W1..W7 = 1, 0.999, 0.99, 0.95, 0.9, 0.75, 0.5. Inflow 2 cfs to each.
+
+[OPTIONS]
+FLOW_UNITS           CFS
+FLOW_ROUTING         DYNWAVE
+START_DATE           01/01/2020
+START_TIME           00:00:00
+REPORT_START_DATE    01/01/2020
+REPORT_START_TIME    00:00:00
+END_DATE             01/01/2020
+END_TIME             12:00:00
+REPORT_STEP          00:15:00
+WET_STEP             00:05:00
+DRY_STEP             01:00:00
+ROUTING_STEP         5
+
+[STORAGE]
+;;Name Elev MaxDepth InitDepth Shape     Coeff Expon Const SurDepth Fevap
+S1     100  10       0         FUNCTIONAL 0     0     1000  0        0
+S2     100  10       0         FUNCTIONAL 0     0     1000  0        0
+S3     100  10       0         FUNCTIONAL 0     0     1000  0        0
+S4     100  10       0         FUNCTIONAL 0     0     1000  0        0
+S5     100  10       0         FUNCTIONAL 0     0     1000  0        0
+S6     100  10       0         FUNCTIONAL 0     0     1000  0        0
+S7     100  10       0         FUNCTIONAL 0     0     1000  0        0
+
+[OUTFALLS]
+;;Name  Elev  Type  Stage Gated
+O1      90    FREE        NO
+O2      90    FREE        NO
+O3      90    FREE        NO
+O4      90    FREE        NO
+O5      90    FREE        NO
+O6      90    FREE        NO
+O7      90    FREE        NO
+
+[WEIRS]
+;;Name From To  Type    CrestHt Cd  Gated EC
+W1      S1   O1  V-NOTCH 1       2.5 NO    0
+W2      S2   O2  V-NOTCH 1       2.5 NO    0
+W3      S3   O3  V-NOTCH 1       2.5 NO    0
+W4      S4   O4  V-NOTCH 1       2.5 NO    0
+W5      S5   O5  V-NOTCH 1       2.5 NO    0
+W6      S6   O6  V-NOTCH 1       2.5 NO    0
+W7      S7   O7  V-NOTCH 1       2.5 NO    0
+
+[XSECTIONS]
+W1      TRIANGULAR 2  4  0  0
+W2      TRIANGULAR 2  4  0  0
+W3      TRIANGULAR 2  4  0  0
+W4      TRIANGULAR 2  4  0  0
+W5      TRIANGULAR 2  4  0  0
+W6      TRIANGULAR 2  4  0  0
+W7      TRIANGULAR 2  4  0  0
+
+[INFLOWS]
+;;Node Param TSeries Type Mfactor Sfactor Baseline
+S1     FLOW  ""      FLOW 1.0     1.0     2
+S2     FLOW  ""      FLOW 1.0     1.0     2
+S3     FLOW  ""      FLOW 1.0     1.0     2
+S4     FLOW  ""      FLOW 1.0     1.0     2
+S5     FLOW  ""      FLOW 1.0     1.0     2
+S6     FLOW  ""      FLOW 1.0     1.0     2
+S7     FLOW  ""      FLOW 1.0     1.0     2
+
+[CONTROLS]
+RULE R1
+IF SIMULATION TIME > 0
+THEN WEIR W1 SETTING = 1
+
+RULE R2
+IF SIMULATION TIME > 0
+THEN WEIR W2 SETTING = 0.999
+
+RULE R3
+IF SIMULATION TIME > 0
+THEN WEIR W3 SETTING = 0.99
+
+RULE R4
+IF SIMULATION TIME > 0
+THEN WEIR W4 SETTING = 0.95
+
+RULE R5
+IF SIMULATION TIME > 0
+THEN WEIR W5 SETTING = 0.9
+
+RULE R6
+IF SIMULATION TIME > 0
+THEN WEIR W6 SETTING = 0.75
+
+RULE R7
+IF SIMULATION TIME > 0
+THEN WEIR W7 SETTING = 0.5
+
+[REPORT]
+NODES ALL
+LINKS ALL

@@ -1,0 +1,49 @@
+CRASH-16: range-check the object index in swmm_getSavedValue
+
+swmm_getSavedValue() checked the period but not the object index, and
+getSavedSubcatchValue/getSavedNodeValue/getSavedLinkValue read
+Subcatch/Node/Link[index].rptFlag directly, so an index of -1 or >= the
+object count read outside the array and used the garbage as a record offset
+into the output file. Treat an index outside 0..count-1 like an object that
+was not saved: return 0, as the function does for an invalid period.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply CRASH-16_swmm530.patch
+
+diff --git a/src/legacy/engine/swmm5.c b/src/legacy/engine/swmm5.c
+index 4096c9a..68aec29 100644
+--- a/src/legacy/engine/swmm5.c
++++ b/src/legacy/engine/swmm5.c
+@@ -3068,7 +3068,9 @@ static double getSavedSubcatchValue(int property, int index, int period)
+     extern float *SubcatchResults;
+ 
+     // --- order in which subcatchment was saved to output results file
+-    int outIndex = Subcatch[index].rptFlag - 1;
++    int outIndex = -1;
++    if (index >= 0 && index < Nobjects[SUBCATCH])
++        outIndex = Subcatch[index].rptFlag - 1;
+     if (outIndex < 0)
+         return 0;
+ 
+@@ -3098,7 +3100,9 @@ static double getSavedNodeValue(int property, int index, int period)
+     extern float *NodeResults;
+ 
+     // --- order in which node was saved to output results file
+-    int outIndex = Node[index].rptFlag - 1;
++    int outIndex = -1;
++    if (index >= 0 && index < Nobjects[NODE])
++        outIndex = Node[index].rptFlag - 1;
+     if (outIndex < 0)
+         return 0;
+ 
+@@ -3134,7 +3138,9 @@ static double getSavedLinkValue(int property, int index, int period)
+     extern float *LinkResults;
+ 
+     // --- order in which link was saved to output results file
+-    int outIndex = Link[index].rptFlag - 1;
++    int outIndex = -1;
++    if (index >= 0 && index < Nobjects[LINK])
++        outIndex = Link[index].rptFlag - 1;
+     if (outIndex < 0)
+         return 0;
+ 

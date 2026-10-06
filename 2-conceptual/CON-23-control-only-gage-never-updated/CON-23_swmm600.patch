@@ -1,0 +1,40 @@
+CON-23: update rain gages that only control rules read
+
+updateAllGages() advances a gage through its record only if gageIsUsed()
+reports it, which checks subcatchments, unit hydrographs and the 2D mesh. A
+gage read only by a control rule premise or VARIABLE kept the rainfall of
+its first record for the whole run, so "IF GAGE G2 INTENSITY > 0.1" never
+followed the gage. gageIsUsed() now also reports a gage that a rule names
+("GAGE <id>"), as the legacy patch flags it in getPremiseVariable(). Gages
+are already updated at every runoff step when there are no subcatchments.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply CON-23_swmm600.patch
+
+diff --git a/src/engine/hydrology/Gage.cpp b/src/engine/hydrology/Gage.cpp
+index ce8b7a1..1ff9ea1 100644
+--- a/src/engine/hydrology/Gage.cpp
++++ b/src/engine/hydrology/Gage.cpp
+@@ -33,6 +33,7 @@
+ #include <cmath>
+ #include <algorithm>
+ #include <cstdio>
++#include <sstream>
+ 
+ namespace openswmm {
+ namespace gage {
+@@ -184,6 +185,14 @@ bool gageIsUsed(const SimulationContext& ctx, int gage_idx) {
+         if (ctx.subcatches.gage[static_cast<std::size_t>(i)] == gage_idx) return true;
+     for (const auto& gname : ctx.unit_hyds.gage_names)
+         if (ctx.gage_names.find(gname) == gage_idx) return true;
++    // A control rule premise or VARIABLE reads the gage ("GAGE <id> ..."),
++    // as legacy getPremiseVariable() marks it.
++    for (const auto& text : ctx.control_rules.rule_text) {
++        std::istringstream in(text);
++        std::string prev, tok;
++        for (; in >> tok; prev = tok)
++            if (ieq(prev, "GAGE") && ctx.gage_names.find(tok) == gage_idx) return true;
++    }
+     // S7 (2026-09-19): the 2D mesh reads EVERY gage under RAINFALL_MODE
+     // SYSTEM / NATURAL_NEIGHBOUR (SurfaceRouter2D::updateRainfall). A gage no
+     // subcatchment names kept its seeded first record for the whole run

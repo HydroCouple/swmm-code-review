@@ -1,0 +1,48 @@
+[TITLE]
+BND-16: evaporation time series, run starts between two entries (Jan 15)
+
+[OPTIONS]
+FLOW_UNITS       CFS
+INFILTRATION     HORTON
+FLOW_ROUTING     KINWAVE
+START_DATE       01/15/2020
+START_TIME       00:00:00
+END_DATE         02/10/2020
+END_TIME         00:00:00
+REPORT_STEP      01:00:00
+WET_STEP         00:15:00
+DRY_STEP         01:00:00
+ROUTING_STEP     600
+
+[EVAPORATION]
+TIMESERIES EV1
+DRY_ONLY NO
+
+[RAINGAGES]
+G1 VOLUME 1:00 1.0 TIMESERIES TS1
+
+[TIMESERIES]
+;6 in of rain in the first hour, all held in depression storage
+TS1 01/15/2020 00:00 6.0
+;evaporation in in/day, each value holds from its date to the next entry
+EV1 12/01/2019 00:00 0.05
+EV1 01/01/2020 00:00 0.10
+EV1 02/01/2020 00:00 0.20
+EV1 03/01/2020 00:00 0.30
+
+[SUBCATCHMENTS]
+;Name Gage Outlet Area %Imperv Width Slope CurbLen
+S1    G1   O1     10   100     500   1     0
+
+[SUBAREAS]
+;Nimp Nperv Simp Sperv %Zero RouteTo
+S1 0.01 0.1 6.0 6.0 0 OUTLET
+
+[INFILTRATION]
+S1 0 0 4 7 0
+
+[OUTFALLS]
+O1 0 FREE
+
+[REPORT]
+SUBCATCHMENTS ALL

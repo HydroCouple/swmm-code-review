@@ -1,0 +1,34 @@
+CON-02: do not let MIN_SURFAREA override a smaller storage unit's own area
+
+DWSolver::setNodeDepth() floors every non-virtual node's surface area at
+MIN_SURFAREA, storage units included, while their volume comes from their
+own area curve, so a storage unit smaller than MIN_SURFAREA loses most of
+its inflow. Cap a storage unit's floor at its own area at full depth, as the
+5.3.0 patch does.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply CON-02_swmm600.patch
+
+diff --git a/src/engine/hydraulics/DynamicWave.cpp b/src/engine/hydraulics/DynamicWave.cpp
+index c83bf96..87d7339 100644
+--- a/src/engine/hydraulics/DynamicWave.cpp
++++ b/src/engine/hydraulics/DynamicWave.cpp
+@@ -3823,8 +3823,16 @@ void DWSolver::setNodeDepth(SimulationContext& ctx, int node_idx, double dt,
+     // MIN_SURFAREA storage smearing is the thing the feature removes; the
+     // natural area is the correct continuity linearization and their
+     // committed volume stays identically zero).
+-    if (t.is_virtual == 0)
+-        surf_area = std::max(surf_area, min_surf_area_);
++    if (t.is_virtual == 0) {
++        // MIN_SURFAREA does not override a smaller storage unit's own area.
++        double a_min = min_surf_area_;
++        if (is_storage) {
++            const double a_full = node::getSurfArea(nodes, node_idx, full_depth,
++                &ctx.tables, unit_sys_, &ctx.node_subtypes);
++            if (a_full > 0.0) a_min = std::min(a_min, a_full);
++        }
++        surf_area = std::max(surf_area, a_min);
++    }
+     else if (nodes.lat_flow[ui] != 0.0 && ui < vj_wet_floor_.size())
+         surf_area = std::max(surf_area, vj_wet_floor_[ui]);
+ 

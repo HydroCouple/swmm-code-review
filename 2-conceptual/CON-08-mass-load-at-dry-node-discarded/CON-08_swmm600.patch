@@ -1,0 +1,49 @@
+CON-08: keep a MASS-type load that reaches a node with no flow
+
+QualitySolver::mixAtNodes() booked a MASS-type inflow as External Inflow
+but, like legacy, ignored qual_mass_in when the node's inflow was at or
+below ZERO, so the load went nowhere (100 % quality continuity error). Mix
+such a load into the stored water of a reactor node that holds water; at a
+node that holds none, add it to qual_routing_final_dry, where the contents
+of a node or link that dries out already go. Same rule as
+CON-08_swmm530.patch.
+
+Requires: NUM-45
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b,
+after NUM-45_swmm600.patch:
+    git apply CON-08_swmm600.patch
+
+diff --git a/src/engine/quality/QualityRouting.cpp b/src/engine/quality/QualityRouting.cpp
+index b5a5c29..6635094 100644
+--- a/src/engine/quality/QualityRouting.cpp
++++ b/src/engine/quality/QualityRouting.cpp
+@@ -1116,6 +1116,13 @@ void QualitySolver::mixAtNodes(SimulationContext& ctx, double dt) {
+                     // (qual_mass_in) is not a concentration.
+                     nodes.conc[idx] = 0.0;
+                 }
++                // A load with no flow to carry it (MASS-type inflow) stays
++                // at the node as residue, like the contents of a node that
++                // dries out.
++                if (q_node <= LEGACY_ZERO && idx < nodes.qual_mass_in.size() &&
++                    static_cast<size_t>(p) < mb.qual_routing_final_dry.size())
++                    mb.qual_routing_final_dry[static_cast<size_t>(p)] +=
++                        nodes.qual_mass_in[idx] * dt;
+             }
+             continue;
+         }
+@@ -1206,6 +1213,14 @@ void QualitySolver::mixAtNodes(SimulationContext& ctx, double dt) {
+             double c_new;
+             if (q_in <= LEGACY_ZERO) {
+                 c_new = c1;
++                // A load that arrives with no flow (MASS-type inflow) mixes
++                // into the stored water, or stays as residue if there is none.
++                if (mass_in != 0.0) {
++                    if (v_old > ZERO_VOLUME)
++                        c_new = std::max(0.0, c1 + mass_in / v_old);
++                    else if (up < mb.qual_routing_final_dry.size())
++                        mb.qual_routing_final_dry[up] += mass_in;
++                }
+             } else {
+                 const double c_in  = mass_in / v_in;
+                 const double c_max = std::max(c1, c_in);

@@ -1,0 +1,3 @@
+;; Station Year Month Day Hour Minute Rain(in)
+STA1 2020 1 1 0 0 0.5
+STA1 2020 1 1 1 0 0.25

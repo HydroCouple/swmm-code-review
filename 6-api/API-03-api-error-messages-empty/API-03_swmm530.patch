@@ -1,0 +1,54 @@
+API-03: give the 5.3.0 API error codes (-999901..-999912) their message text
+
+5.3.0 renumbered the API errors from 501..509 to -999901..-999912
+(openswmm_solver.h) but error.txt still listed 501..509, so error_getMsg()
+returned "" for every API error and swmm_getErrorFromCode() gave no text.
+Replace the stale 501..509 entries (no 5.3.0 code returns them) with entries
+for the twelve declared codes, and let swmm_getError() look up the text for
+any non-zero code instead of positive codes only.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply API-03_swmm530.patch
+
+diff --git a/src/legacy/engine/error.txt b/src/legacy/engine/error.txt
+index 801d96b..e17f4a8 100644
+--- a/src/legacy/engine/error.txt
++++ b/src/legacy/engine/error.txt
+@@ -124,12 +124,15 @@ ERR(363,"\n  ERROR 363: invalid data in external file used for Time Series %s.")
+ 
+ // API Error Keys
+ ERR(500,"\n  ERROR 500: System exception thrown.")
+-ERR(501,"\n  API Error 501: project not opened.")
+-ERR(502,"\n  API Error 502: simulation not started.")
+-ERR(503,"\n  API Error 503: simulation not ended.")
+-ERR(504,"\n  API Error 504: invalid object type.")
+-ERR(505,"\n  API Error 505: invalid object index.")
+-ERR(506,"\n  API Error 506: invalid object name.")
+-ERR(507,"\n  API Error 507: invalid property type.")
+-ERR(508,"\n  API Error 508: invalid property value.")
+-ERR(509,"\n  API Error 509: invalid time period.")
++ERR(-999901,"\n  API Error -999901: project not opened.")
++ERR(-999902,"\n  API Error -999902: simulation not started.")
++ERR(-999903,"\n  API Error -999903: simulation not ended.")
++ERR(-999904,"\n  API Error -999904: invalid object type.")
++ERR(-999905,"\n  API Error -999905: invalid object index.")
++ERR(-999906,"\n  API Error -999906: invalid object name.")
++ERR(-999907,"\n  API Error -999907: invalid property type.")
++ERR(-999908,"\n  API Error -999908: invalid property value.")
++ERR(-999909,"\n  API Error -999909: invalid time period.")
++ERR(-999910,"\n  API Error -999910: cannot open hot start file.")
++ERR(-999911,"\n  API Error -999911: invalid hot start file format.")
++ERR(-999912,"\n  API Error -999912: simulation is running.")
+diff --git a/src/legacy/engine/swmm5.c b/src/legacy/engine/swmm5.c
+index 4096c9a..6425307 100644
+--- a/src/legacy/engine/swmm5.c
++++ b/src/legacy/engine/swmm5.c
+@@ -1215,7 +1215,7 @@ int EXPORT_OPENSWMMCORE_SOLVER_API swmm_setWarningCallback(swmm_LegacyWarningCal
+ int EXPORT_OPENSWMMCORE_SOLVER_API swmm_getError(char *errMsg, int msgLen)
+ {
+     // --- copy text of last error message into errMsg
+-    if (ErrorCode > 0 && strlen(ErrorMsg) == 0)
++    if (ErrorCode != 0 && strlen(ErrorMsg) == 0)
+         error_getMsg(ErrorCode, ErrorMsg);
+ 
+     sstrncpy(errMsg, ErrorMsg, msgLen);

@@ -1,0 +1,44 @@
+CRASH-11: index the averaged node depths by reported node, in user units
+
+Since 5.3.0 (commit 7266536f, #188) output_saveAvgResults() updated each
+node's "Reported Max Depth" from AvgNodeResults[i] for every node i, but
+AvgNodeResults holds one entry per reported node, in reported-node order.
+With [REPORT] NODES listing a subset the loop read past the end of the block
+(heap-buffer-overflow) and credited reported nodes' depths to other nodes.
+The averages also hold node_getResults() values, already in user units, and
+were multiplied by UCF(LENGTH) again (SI depths x 0.3048). Walk the reported
+nodes with their own counter, drop the second conversion, and give
+unreported nodes the point depth that 5.2.4 used for all nodes. US-unit
+projects that report every node get bit-identical results.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply CRASH-11_swmm530.patch
+
+diff --git a/src/legacy/engine/output.c b/src/legacy/engine/output.c
+index f57370e..f408d6a 100644
+--- a/src/legacy/engine/output.c
++++ b/src/legacy/engine/output.c
+@@ -906,7 +906,7 @@ void output_updateAvgResults()
+ 
+ void output_saveAvgResults(FILE* file)
+ {
+-    int i, j;
++    int i, j, k;
+ 
+     // --- examine each reportable node
+     for (i = 0; i < NumNodes; i++)
+@@ -922,9 +922,13 @@ void output_saveAvgResults(FILE* file)
+     }
+ 
+     // --- update each node's max depth and contribution to system storage
++    //     (AvgNodeResults holds reported nodes only, already in user units)
++    k = 0;
+     for (i = 0; i < Nobjects[NODE]; i++)
+     {
+-        stats_updateMaxNodeDepth(i, AvgNodeResults[i].xAvg[NODE_DEPTH] * UCF(LENGTH) / Nsteps);
++        if ( Node[i].rptFlag ) stats_updateMaxNodeDepth(i,
++            AvgNodeResults[k++].xAvg[NODE_DEPTH] / (double)Nsteps);
++        else stats_updateMaxNodeDepth(i, Node[i].newDepth * UCF(LENGTH));
+         SysResults[SYS_STORAGE] += (REAL4)(Node[i].newVolume * UCF(VOLUME));
+     }
+ 

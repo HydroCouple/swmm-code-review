@@ -1,0 +1,53 @@
+IO-12: keep the Geom3 size code of ellipse and arch pipes; reject non-whole codes
+
+XSection.cpp setParams() has the legacy rule: Geom1 replaces the size code
+whenever Geom2 is 0, even when Geom3 holds one, and the size code is
+truncated to a whole number. Apply the SWMM 5.0 form only when Geom3 is 0 and
+reject a size code that is not a whole number, as the 5.3.0 patch does.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-12_swmm600.patch
+
+diff --git a/src/engine/hydraulics/XSection.cpp b/src/engine/hydraulics/XSection.cpp
+index a01fe26..eedca19 100644
+--- a/src/engine/hydraulics/XSection.cpp
++++ b/src/engine/hydraulics/XSection.cpp
+@@ -474,10 +474,10 @@ int setParams(XSectParams& xs, int type, const double p[], double ucf) {
+ 
+         case XSectShape::HORIZ_ELLIPSE: {
+             double code = p[2];
+-            if (p[1] == 0.0) code = p[0];
++            if (p[1] == 0.0 && code == 0.0) code = p[0];  // SWMM 5.0 format
+             if (code > 0.0) {                        // standard ellipse pipe
+                 int idx = static_cast<int>(std::floor(code)) - 1;
+-                if (idx < 0 || idx >= xsect_tables::NumCodesEllipse) return -1;
++                if (idx < 0 || idx + 1 != code || idx >= xsect_tables::NumCodesEllipse) return -1;
+                 xs.y_full = xsect_tables::MinorAxis_Ellipse[idx] / 12.0;
+                 xs.w_max  = xsect_tables::MajorAxis_Ellipse[idx] / 12.0;
+                 xs.a_full = xsect_tables::Afull_Ellipse[idx];
+@@ -496,10 +496,10 @@ int setParams(XSectParams& xs, int type, const double p[], double ucf) {
+         }
+         case XSectShape::VERT_ELLIPSE: {
+             double code = p[2];
+-            if (p[1] == 0.0) code = p[0];
++            if (p[1] == 0.0 && code == 0.0) code = p[0];  // SWMM 5.0 format
+             if (code > 0.0) {                        // standard ellipse pipe
+                 int idx = static_cast<int>(std::floor(code)) - 1;
+-                if (idx < 0 || idx >= xsect_tables::NumCodesEllipse) return -1;
++                if (idx < 0 || idx + 1 != code || idx >= xsect_tables::NumCodesEllipse) return -1;
+                 xs.y_full = xsect_tables::MajorAxis_Ellipse[idx] / 12.0;
+                 xs.w_max  = xsect_tables::MinorAxis_Ellipse[idx] / 12.0;
+                 xs.a_full = xsect_tables::Afull_Ellipse[idx];
+@@ -518,10 +518,10 @@ int setParams(XSectParams& xs, int type, const double p[], double ucf) {
+         }
+         case XSectShape::ARCH: {
+             double code = p[2];
+-            if (p[1] == 0.0) code = p[0];
++            if (p[1] == 0.0 && code == 0.0) code = p[0];  // SWMM 5.0 format
+             if (code > 0.0) {                        // standard arch pipe
+                 int idx = static_cast<int>(std::floor(code)) - 1;
+-                if (idx < 0 || idx >= xsect_tables::NumCodesArch) return -1;
++                if (idx < 0 || idx + 1 != code || idx >= xsect_tables::NumCodesArch) return -1;
+                 xs.y_full = xsect_tables::Yfull_Arch[idx] / 12.0;  // inches
+                 xs.w_max  = xsect_tables::Wmax_Arch[idx] / 12.0;
+                 xs.a_full = xsect_tables::Afull_Arch[idx];

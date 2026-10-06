@@ -1,0 +1,55 @@
+NUM-33: apply the Horton maximum infiltration volume to constant-rate curves
+
+horton_getInfil() and modHorton_getInfil() return early when the curve is a
+constant rate (f0 == fmin or decay == 0), before the block that limits the
+cumulative infiltration to Fmax, so Fmax is ignored. Apply the same cap in the
+constant-rate branch (Fe for Horton, Fmh for modified Horton, the variables
+the decaying branch caps), and let the accumulated volume recover during dry
+steps with the drying-time constant, Fe *= exp(-kr*tstep), as modified Horton
+already does. Decks without Fmax, or with a decaying curve, are unchanged.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-33_swmm530.patch
+
+diff --git a/src/legacy/engine/infil.c b/src/legacy/engine/infil.c
+index dc6a51e..6656118 100644
+--- a/src/legacy/engine/infil.c
++++ b/src/legacy/engine/infil.c
+@@ -417,7 +417,17 @@ double horton_getInfil(THorton *infil, double tstep, double irate, double depth)
+         fp = f0;
+         fa = irate + depth / tstep;
+         if ( fp > fa ) fp = fa;
+-        return MAX(0.0, fp);
++        fp = MAX(0.0, fp);
++
++        // --- limit cumulative infiltration to Fmax (recovers when dry)
++        if ( Fmax > 0.0 )
++        {
++            if ( infil->Fe + fp * tstep > Fmax )
++                fp = MAX((Fmax - infil->Fe) / tstep, 0.0);
++            infil->Fe += fp * tstep;
++            if ( fa <= ZERO ) infil->Fe *= exp(-kr * tstep);
++        }
++        return fp;
+     }
+ 
+     // --- compute water available for infiltration
+@@ -526,7 +536,17 @@ double modHorton_getInfil(THorton *infil, double tstep, double irate,
+         fp = f0;
+         fa = irate + depth / tstep;
+         if ( fp > fa ) fp = fa;
+-        return MAX(0.0, fp);
++        fp = MAX(0.0, fp);
++
++        // --- limit cumulative infiltration to Fmax (recovers when dry)
++        if ( infil->Fmax > 0.0 )
++        {
++            if ( infil->Fmh + fp * tstep > infil->Fmax )
++                fp = MAX((infil->Fmax - infil->Fmh) / tstep, 0.0);
++            infil->Fmh += fp * tstep;
++            if ( fa <= ZERO ) infil->Fmh *= exp(-kr * tstep);
++        }
++        return fp;
+     }
+ 
+     // --- compute water available for infiltration

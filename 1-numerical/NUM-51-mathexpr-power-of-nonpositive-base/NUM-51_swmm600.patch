@@ -1,0 +1,57 @@
+NUM-51: return 0, not NaN, for a fractional power of a negative number
+
+The expression evaluators (math/MathExpr.cpp for [GWF] and control rules,
+quality/Treatment.cpp for [TREATMENT]) call std::pow directly, so (-4)^0.5
+is NaN and the NaN becomes the result, e.g. a node concentration. Use the
+legacy rule, as corrected for 5.3.0 by this issue: pow() for a positive base
+and for a negative base with a whole-number exponent, 0 otherwise (fractional
+power of a negative number, zero base).
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-51_swmm600.patch
+
+diff --git a/src/engine/math/MathExpr.cpp b/src/engine/math/MathExpr.cpp
+index 4eb512e..da8435d 100644
+--- a/src/engine/math/MathExpr.cpp
++++ b/src/engine/math/MathExpr.cpp
+@@ -238,7 +238,7 @@ double evaluate(const Expression& expr,
+                     case TokenType::SUB: stk.push(a-b); break;
+                     case TokenType::MUL: stk.push(a*b); break;
+                     case TokenType::DIV: stk.push(b!=0?a/b:0); break;
+-                    case TokenType::POW: stk.push(std::pow(a,b)); break;
++                    case TokenType::POW: stk.push((a > 0.0 || (a < 0.0 && b == std::floor(b))) ? std::pow(a,b) : 0.0); break;
+                     default: break;
+                 }
+                 break;
+@@ -397,7 +397,8 @@ double evaluate_fast(const Expression& expr, const double* vars) noexcept {
+             }
+             case TokenType::POW: {
+                 double b=stk[--sp];
+-                stk[sp-1] = std::pow(stk[sp-1], b); break;
++                double a=stk[sp-1];
++                stk[sp-1] = (a > 0.0 || (a < 0.0 && b == std::floor(b))) ? std::pow(a, b) : 0.0; break;
+             }
+             case TokenType::FUNC_ABS:  stk[sp-1] = std::fabs(stk[sp-1]); break;
+             case TokenType::FUNC_SQRT:
+diff --git a/src/engine/quality/Treatment.cpp b/src/engine/quality/Treatment.cpp
+index 9ed6c1d..918e267 100644
+--- a/src/engine/quality/Treatment.cpp
++++ b/src/engine/quality/Treatment.cpp
+@@ -602,7 +602,7 @@ double evaluate(const TreatExpr& expr, double c, double dt,
+                     case TokenType::SUB: stk.push(a - b); break;
+                     case TokenType::MUL: stk.push(a * b); break;
+                     case TokenType::DIV: stk.push(b != 0.0 ? a / b : 0.0); break;
+-                    case TokenType::POW: stk.push(std::pow(a, b)); break;
++                    case TokenType::POW: stk.push((a > 0.0 || (a < 0.0 && b == std::floor(b))) ? std::pow(a, b) : 0.0); break;
+                     default: break;
+                 }
+                 break;
+@@ -827,7 +827,7 @@ double evaluate(const TreatExpr& expr, double c, double dt,
+                     case TokenType::SUB: stk.push(a - b); break;
+                     case TokenType::MUL: stk.push(a * b); break;
+                     case TokenType::DIV: stk.push(b != 0.0 ? a / b : 0.0); break;
+-                    case TokenType::POW: stk.push(std::pow(a, b)); break;
++                    case TokenType::POW: stk.push((a > 0.0 || (a < 0.0 && b == std::floor(b))) ? std::pow(a, b) : 0.0); break;
+                     default: break;
+                 }
+                 break;

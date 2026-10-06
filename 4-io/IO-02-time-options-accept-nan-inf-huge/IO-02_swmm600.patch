@@ -1,0 +1,104 @@
+IO-02: range-check clock-time and step options
+
+OptionsHandler stored START_TIME, END_TIME, REPORT_START_TIME and the
+WET/DRY/REPORT/RULE_STEP options as parse_time_seconds() returned them, with
+no check: nan and inf (read by from_chars), 1e30, and negative steps all
+reached the run. A NaN start or a huge end time made the run go on past its
+end date with datetime::decodeDate() converting NaN or 1e25 to int, and a
+negative report step was written to the report and output as it was.
+
+The time-of-day options must now lie between 0:00:00 and 24:00:00 (ERROR
+213) and the steps must be positive (RULE_STEP non-negative) and below
+2^31 s, since the output and report writers convert the report step to int
+(ERROR 211). A rejected value is not stored, so the open-failure report does
+not print it. This matches the patched legacy reader.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-02_swmm600.patch
+
+diff --git a/src/engine/input/handlers/OptionsHandler.cpp b/src/engine/input/handlers/OptionsHandler.cpp
+index 90d0814..80b714e 100644
+--- a/src/engine/input/handlers/OptionsHandler.cpp
++++ b/src/engine/input/handlers/OptionsHandler.cpp
+@@ -278,11 +278,26 @@ void handle_options(SimulationContext& ctx, const std::vector<std::string>& line
+         } else if (key == "DRY_DAYS") {
+             openswmm::from_chars_double(val.data(), val.data() + val.size(), opt.dry_days);
+         } else if (key == "DRY_STEP") {
+-            opt.dry_step = parse_time_seconds(val);
++            const double step = parse_time_seconds(val);
++            if (!(step > 0.0 && step < 2147483647.0)) {  // legacy: ERROR 211
++                ctx.errors.push_back(format_error(ERR_NUMBER, val));
++                continue;
++            }
++            opt.dry_step = step;
+         } else if (key == "WET_STEP") {
+-            opt.wet_step = parse_time_seconds(val);
++            const double step = parse_time_seconds(val);
++            if (!(step > 0.0 && step < 2147483647.0)) {  // legacy: ERROR 211
++                ctx.errors.push_back(format_error(ERR_NUMBER, val));
++                continue;
++            }
++            opt.wet_step = step;
+         } else if (key == "REPORT_STEP") {
+-            opt.report_step = parse_time_seconds(val);
++            const double step = parse_time_seconds(val);
++            if (!(step > 0.0 && step < 2147483647.0)) {  // legacy: ERROR 211
++                ctx.errors.push_back(format_error(ERR_NUMBER, val));
++                continue;
++            }
++            opt.report_step = step;
+         } else if (key == "QUALITY_STEP") {
+             // X3a: LARD transport substep (strategy §4.2). Same time
+             // spelling as the other *_STEP keys.
+@@ -312,19 +327,34 @@ void handle_options(SimulationContext& ctx, const std::vector<std::string>& line
+             start_date_part = parse_date(val);
+             got_start_date  = true;
+         } else if (key == "START_TIME") {
+-            start_time_part = parse_time_seconds(val) / datetime::SecsPerDay;
++            const double t = parse_time_seconds(val) / datetime::SecsPerDay;
++            if (!(t >= 0.0 && t <= 1.0)) {  // a time of day, 0:00 to 24:00
++                ctx.errors.push_back(format_error(ERR_DATETIME, val));
++                continue;
++            }
++            start_time_part = t;
+             got_start_time  = true;
+         } else if (key == "END_DATE") {
+             end_date_part = parse_date(val);
+             got_end_date  = true;
+         } else if (key == "END_TIME") {
+-            end_time_part = parse_time_seconds(val) / datetime::SecsPerDay;
++            const double t = parse_time_seconds(val) / datetime::SecsPerDay;
++            if (!(t >= 0.0 && t <= 1.0)) {  // a time of day, 0:00 to 24:00
++                ctx.errors.push_back(format_error(ERR_DATETIME, val));
++                continue;
++            }
++            end_time_part = t;
+             got_end_time  = true;
+         } else if (key == "REPORT_START_DATE") {
+             rpt_date_part = parse_date(val);
+             got_rpt_date  = true;
+         } else if (key == "REPORT_START_TIME") {
+-            rpt_time_part = parse_time_seconds(val) / datetime::SecsPerDay;
++            const double t = parse_time_seconds(val) / datetime::SecsPerDay;
++            if (!(t >= 0.0 && t <= 1.0)) {  // a time of day, 0:00 to 24:00
++                ctx.errors.push_back(format_error(ERR_DATETIME, val));
++                continue;
++            }
++            rpt_time_part = t;
+             got_rpt_time  = true;
+ 
+         // -----------------------------------------------------------------
+@@ -349,7 +379,12 @@ void handle_options(SimulationContext& ctx, const std::vector<std::string>& line
+             openswmm::from_chars_double(val.data(), val.data() + val.size(), opt.variable_step);
+ 
+         } else if (key == "RULE_STEP") {
+-            opt.rule_step = parse_time_seconds(val);
++            const double step = parse_time_seconds(val);
++            if (!(step >= 0.0 && step < 2147483647.0)) {  // legacy: ERROR 211
++                ctx.errors.push_back(format_error(ERR_NUMBER, val));
++                continue;
++            }
++            opt.rule_step = step;
+ 
+         } else if (key == "THREADS") {
+             double d = 0.0;

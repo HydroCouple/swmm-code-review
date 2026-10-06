@@ -1,0 +1,25 @@
+BND-18: clear the averages of periods that fall before REPORT_START
+
+With [REPORT] AVERAGES YES, the REPORT_START gate in postOutputSnapshot()
+returned before applyAvgResults(), the only place the averaging
+accumulators are reset, so the first saved period averaged every routing
+step since START. Reset the accumulators when a period is skipped, as the
+patched legacy output_saveResults() does.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply BND-18_swmm600.patch
+
+diff --git a/src/engine/core/SWMMEngine.cpp b/src/engine/core/SWMMEngine.cpp
+index 839529d..47bdabc 100644
+--- a/src/engine/core/SWMMEngine.cpp
++++ b/src/engine/core/SWMMEngine.cpp
+@@ -6086,6 +6086,9 @@ void SWMMEngine::postOutputSnapshot(double /*dt_step*/) noexcept {
+         // periods before ReportStart are not written (no bytes, no Nperiods,
+         // no interface row), but the report grid still advances.
+         if (report_date < ctx_.options.report_start) {
++            // The averages of an unsaved period must not carry into the
++            // first saved one (legacy output_saveResults, output.c).
++            if (ctx_.options.rpt_averages) avg_.reset();
+             hydraulics::TimestepController::reset_output_timer(ctx_);
+             return;
+         }

@@ -1,0 +1,23 @@
+IO-31: accept the deprecated [REPORT] NODESTATS keyword instead of reading it as NODES
+
+report_readOptions() finds the keyword with findmatch(), which accepts any
+token that starts with a keyword. ReportWords lists NODE before NODESTATS, so
+"NODESTATS YES" was read as a node list and failed with ERROR 209 "undefined
+object YES"; the branch that ignores NODESTATS could never run. Select that
+branch when the token is NODESTATS.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-31_swmm530.patch
+
+diff --git a/src/legacy/engine/report.c b/src/legacy/engine/report.c
+index 604507d..63218e4 100644
+--- a/src/legacy/engine/report.c
++++ b/src/legacy/engine/report.c
+@@ -103,6 +103,7 @@ int report_readOptions(char* tok[], int ntoks)
+     if ( ntoks < 2 ) return error_setInpError(ERR_ITEMS, "");
+     k = (char)findmatch(tok[0], ReportWords);
+     if ( k < 0 ) return error_setInpError(ERR_KEYWORD, tok[0]);
++    if ( match(tok[0], w_NODESTATS) ) k = 9;  // NODE is a prefix of NODESTATS
+ 
+     // --- keyword not SUBCATCHMENT, NODE, or LINK
+     if (k < 2 || k > 4)

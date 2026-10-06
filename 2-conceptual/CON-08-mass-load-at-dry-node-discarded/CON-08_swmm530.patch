@@ -1,0 +1,81 @@
+CON-08: keep a MASS-type load that reaches a node with no flow
+
+addExternalInflows() books a MASS-type inflow (and a positive API mass
+flux) as External Inflow and adds it to the node's mass accumulator, but
+findStorageQual() (through getMixedQual) and findNodeQual() ignore the
+accumulator when the node's inflow is at or below ZERO, so the load went
+nowhere and the quality continuity error was 100 %. Mix such a load into
+the stored water of a node that holds water; at a node that holds none,
+book it as residue in Final Stored Mass, the way qualrout.c already books
+the contents of a node or link that dries out. findNodeQual() takes the
+time step for that.
+
+Requires: NUM-45
+Requires: NUM-46
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b,
+after NUM-45_swmm530.patch and NUM-46_swmm530.patch:
+    git apply CON-08_swmm530.patch
+
+diff --git a/src/legacy/engine/qualrout.c b/src/legacy/engine/qualrout.c
+index ea19995..4e5e6c6 100644
+--- a/src/legacy/engine/qualrout.c
++++ b/src/legacy/engine/qualrout.c
+@@ -52,7 +52,7 @@ static const double ZeroDepth = 0.003281;   // 1 mm in ft
+ //  Function declarations
+ //-----------------------------------------------------------------------------
+ static void findLinkMassFlow(int i, double tStep);
+-static void findNodeQual(int j);
++static void findNodeQual(int j, double tStep);
+ static void findLinkQual(int i, double tStep);
+ static void findSFLinkQual(int i, double qSeep, double fEvap, double tStep);
+ static void findStorageQual(int j, double tStep);
+@@ -134,7 +134,7 @@ void qualrout_execute(double tStep)
+             findStorageQual(j, tStep);
+         }
+         else
+-            findNodeQual(j);
++            findNodeQual(j, tStep);
+ 
+         // --- apply treatment to new quality values
+         if (Node[j].treatment)
+@@ -224,9 +224,10 @@ void findLinkMassFlow(int i, double tStep)
+ 
+ //=============================================================================
+ 
+-void findNodeQual(int j)
++void findNodeQual(int j, double tStep)
+ //
+ //  Input:   j = node index
++//           tStep = routing time step (sec)
+ //  Output:  none
+ //  Purpose: finds new quality in a node with no storage volume.
+ //
+@@ -261,6 +262,11 @@ void findNodeQual(int j)
+     {
+         for (p = 0; p < Nobjects[POLLUT]; p++)
+         {
++            // --- a mass load with no flow to carry it (MASS-type or API
++            //     inflow) stays at the node as residue, like the contents
++            //     of a node that dries out
++            massbal_addToFinalStorage(p, Node[j].newQual[p] * tStep);
++
+             if ( ZeroOutfallBackflowQual && Node[j].type == OUTFALL )
+                 Node[j].newQual[p] = 0.0;
+             else if (Node[j].newDepth > ZeroDepth)
+@@ -549,6 +555,15 @@ void findStorageQual(int j, double tStep)
+         wIn = Node[j].newQual[p];
+         c2 = getMixedQual(c1, v1, wIn, qIn, tStep);
+ 
++        // --- a mass load that arrives with no flow (MASS-type or API
++        //     inflow) mixes into the stored water, or stays at the node
++        //     as residue if it holds none
++        if (qIn <= ZERO && wIn != 0.0)
++        {
++            if (v1 > ZeroVolume) c2 = MAX(0.0, c2 + wIn * tStep / v1);
++            else massbal_addToFinalStorage(p, wIn * tStep);
++        }
++
+         // --- set concen. to zero if remaining volume & inflow is negligible
+         if ((Node[j].newVolume <= ZeroVolume ||
+              Node[j].newDepth <= ZeroDepth) &&

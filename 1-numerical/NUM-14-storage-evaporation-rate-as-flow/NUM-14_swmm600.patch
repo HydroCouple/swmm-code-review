@@ -1,0 +1,38 @@
+NUM-14: no evaporation from a storage unit holding less than FUDGE
+
+storage_getLosses() multiplies the evaporation rate (ft/s) by the surface
+area only when the unit holds more than FUDGE (1e-4 ft3). Otherwise it
+left the bare ft/s rate in evapRate and returned it as a loss in cfs, so a
+nearly empty unit lost rate x dt ft3 per step whatever its area, and booked
+it as evaporation. Set the rate to 0 in that case, as SWMM 5.1.013 did
+before 5.1.014 moved the FUDGE test from the whole loss block to the
+evaporation term only. Seepage is unchanged.
+The 6.0.0 router had zeroed this case and was changed to copy legacy;
+the comment describing that is replaced.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-14_swmm600.patch
+
+diff --git a/src/engine/hydraulics/Routing.cpp b/src/engine/hydraulics/Routing.cpp
+index 8398cc4..a3df763 100644
+--- a/src/engine/hydraulics/Routing.cpp
++++ b/src/engine/hydraulics/Routing.cpp
+@@ -709,15 +709,9 @@ void Router::initNodeFlows(SimulationContext& ctx, double dt, double evap_rate)
+                     ucf::getUnitSystem(static_cast<int>(ctx.options.flow_units)),
+                     &ctx.node_subtypes);
+ 
+-                // Evaporation rate over surface area (cfs). Legacy
+-                // storage_getLosses (node.c:1069) multiplies by the area ONLY
+-                // when the stored volume exceeds FUDGE and otherwise leaves
+-                // `evapRate` as the bare ft/s rate — which it then returns as
+-                // a cfs loss. v6 zeroed that case; an almost-empty storage
+-                // therefore lost nothing where legacy books ~4e-8 cfs, and the
+-                // 1-ULP gap in the node's outflow grew into a deck-wide
+-                // divergence (usgs-runoff's P005). Quirk reproduced verbatim.
+-                double evap_cfs = stor_evap_rate;
++                // Evaporation rate over surface area (cfs); none from an
++                // almost-empty unit (legacy storage_getLosses, node.c:1069).
++                double evap_cfs = 0.0;
+                 if (nodes.volume[ui] > constants::FUDGE)
+                     evap_cfs = area * stor_evap_rate;
+ 

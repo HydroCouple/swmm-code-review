@@ -1,0 +1,55 @@
+[TITLE]
+API-01: forcing values set through the toolkit between swmm_open and swmm_start
+
+[OPTIONS]
+FLOW_UNITS           CFS
+INFILTRATION         HORTON
+FLOW_ROUTING         DYNWAVE
+START_DATE           01/01/2020
+START_TIME           00:00:00
+REPORT_START_DATE    01/01/2020
+REPORT_START_TIME    00:00:00
+END_DATE             01/01/2020
+END_TIME             02:00:00
+WET_STEP             00:01:00
+DRY_STEP             00:01:00
+ROUTING_STEP         0:00:30
+REPORT_STEP          00:15:00
+
+;; The gage's own series is dry, so any rain in the run comes from the API.
+[RAINGAGES]
+G1   INTENSITY 0:15 1.0 TIMESERIES DRY
+
+[SUBCATCHMENTS]
+S1   G1   J1   10   50   500   0.5   0
+
+[SUBAREAS]
+S1   0.01  0.1  0.05  0.05  25  OUTLET
+
+[INFILTRATION]
+S1   3.0  0.5  4  7  0
+
+[JUNCTIONS]
+J1   100   10   0   0   0
+J2   99    10   0   0   0
+
+[OUTFALLS]
+O1   97   FREE   NO
+
+[CONDUITS]
+C1   J1   J2   400   0.013   0   0   0   0
+
+[ORIFICES]
+OR1  J2   O1   SIDE  0   0.65   NO   0
+
+[XSECTIONS]
+C1   CIRCULAR   1.5   0   0   0   1
+OR1  CIRCULAR   1.0   0   0   0
+
+[TIMESERIES]
+DRY   0:00   0
+DRY   2:00   0
+
+[REPORT]
+INPUT NO
+CONTROLS NO

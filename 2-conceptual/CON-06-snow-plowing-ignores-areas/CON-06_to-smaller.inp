@@ -1,0 +1,70 @@
+[TITLE]
+CON-06: snow plowed from S1 (10 ac) onto the pervious area of S2 (1 ac)
+
+;; 1 in of snow falls on both subcatchments in the first hour (air at 20 degF).
+;; S1 is all plowable impervious area: whenever its pack reaches 0.1 in, all of
+;; it is plowed onto the pervious area of S2 (REMOVAL Fsub = 1.0). From day 2
+;; the air is at 60 degF and all snow melts and runs off within the 10 days.
+;; There is no infiltration or evaporation, so all precipitation must leave as
+;; runoff: the runoff continuity error should be close to zero.
+
+[OPTIONS]
+FLOW_UNITS       CFS
+INFILTRATION     HORTON
+FLOW_ROUTING     KINWAVE
+START_DATE       01/01/2020
+START_TIME       00:00:00
+END_DATE         01/11/2020
+END_TIME         00:00:00
+REPORT_STEP      01:00:00
+WET_STEP         00:05:00
+DRY_STEP         00:05:00
+ROUTING_STEP     60
+
+[EVAPORATION]
+CONSTANT 0.0
+
+[TEMPERATURE]
+TIMESERIES TEMP1
+SNOWMELT 34 0.5 0.6 0 40 0
+
+[RAINGAGES]
+G1 VOLUME 1:00 1.0 TIMESERIES TS1
+
+[TIMESERIES]
+TS1   01/01/2020 00:00 1.0
+TS1   01/01/2020 01:00 0.0
+TEMP1 01/01/2020 00:00 20
+TEMP1 01/02/2020 00:00 20
+TEMP1 01/02/2020 01:00 60
+TEMP1 01/11/2020 00:00 60
+
+[SNOWPACKS]
+;;Name Surface    Cmin Cmax Tbase FWF SD0 FW0 SNN0/SD100
+SP1    PLOWABLE   0.05 0.05 32    0.1 0   0   1.0
+SP1    IMPERVIOUS 0.05 0.05 32    0.1 0   0   0
+SP1    PERVIOUS   0.05 0.05 32    0.1 0   0   0
+;;Name REMOVAL    Dplow Fout Fimp Fperv Fimelt Fsub Subcatch
+SP1    REMOVAL    0.1   0    0    0     0      1.0  S2
+SP2    PLOWABLE   0.05 0.05 32    0.1 0   0   0
+SP2    IMPERVIOUS 0.05 0.05 32    0.1 0   0   0
+SP2    PERVIOUS   0.05 0.05 32    0.1 0   0   0
+
+[SUBCATCHMENTS]
+;;Name Gage Outlet Area %Imperv Width %Slope CurbLen SnowPack
+S1     G1   O1     10   100     500   1      0       SP1
+S2     G1   O1     1   0       500   1      0       SP2
+
+[SUBAREAS]
+S1 0.01 0.1 0 0 0 OUTLET
+S2 0.01 0.1 0 0 0 OUTLET
+
+[INFILTRATION]
+S1 0 0 4 7 0
+S2 0 0 4 7 0
+
+[OUTFALLS]
+O1 0 FREE
+
+[REPORT]
+SUBCATCHMENTS ALL

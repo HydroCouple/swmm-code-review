@@ -1,0 +1,50 @@
+[TITLE]
+IO-44: day 2 only, for 6.0.0's native hot start API (swmm_hotstart_apply)
+
+[OPTIONS]
+FLOW_UNITS           CFS
+INFILTRATION         MODIFIED_HORTON
+FLOW_ROUTING         KINWAVE
+START_DATE           06/02/2020
+START_TIME           00:00:00
+REPORT_START_DATE    06/02/2020
+REPORT_START_TIME    00:00:00
+END_DATE             06/03/2020
+END_TIME             00:00:00
+WET_STEP             00:05:00
+DRY_STEP             01:00:00
+REPORT_STEP          01:00:00
+ROUTING_STEP         0:00:30
+IGNORE_ROUTING       YES
+
+[EVAPORATION]
+CONSTANT         0.0
+
+[RAINGAGES]
+G1   INTENSITY 1:00 1.0 TIMESERIES R1
+
+[SUBCATCHMENTS]
+;;Name  Gage  Outlet  Area  %Imperv  Width  %Slope  CurbLen
+S1      G1    OF1     1.0   0        100    1.0     0
+
+[SUBAREAS]
+;;Name  N-Imperv  N-Perv  S-Imperv  S-Perv  PctZero  RouteTo
+S1      0.01      0.1     0.05      0.0     0        OUTLET
+
+[INFILTRATION]
+;;Name  MaxRate  MinRate  Decay  DryTime  MaxInfil
+S1      3.0      0.5      4      1000     1.0
+
+[OUTFALLS]
+OF1  0   FREE
+
+[TIMESERIES]
+;; a 0.8 in storm at the start of each day
+R1   06/01/2020 00:00   0.8
+R1   06/01/2020 01:00   0.0
+R1   06/02/2020 00:00   0.8
+R1   06/02/2020 01:00   0.0
+
+[REPORT]
+SUBCATCHMENTS ALL
+

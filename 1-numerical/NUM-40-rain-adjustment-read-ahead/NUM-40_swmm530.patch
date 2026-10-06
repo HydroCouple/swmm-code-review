@@ -1,0 +1,88 @@
+NUM-40: apply the monthly rainfall adjustment of the month each record falls in
+
+convertRainfall() multiplied every rain record by Adjust.rainFactor, the
+factor of the month that is current when the record is read. Records are read
+ahead: the first one at start-up, before climate_setState() has set any month
+(factor 1.0), and each later one as soon as the record before it becomes
+current, which can be in an earlier month. Pass the record's own date to
+convertRainfall() and use Adjust.rain[] of that month instead.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-40_swmm530.patch
+
+diff --git a/src/legacy/engine/gage.c b/src/legacy/engine/gage.c
+index 69f7ce0..705bef7 100644
+--- a/src/legacy/engine/gage.c
++++ b/src/legacy/engine/gage.c
+@@ -52,7 +52,7 @@ static int    readGageSeriesFormat(char* tok[], int ntoks, double x[]);
+ static int    readGageFileFormat(char* tok[], int ntoks, double x[]);
+ static int    getFirstRainfall(int gage);
+ static int    getNextRainfall(int gage);
+-static double convertRainfall(int gage, double rain);
++static double convertRainfall(int gage, double rain, DateTime aDate);
+ static void   initPastRain(int gage);
+ 
+ /*!
+@@ -601,7 +601,8 @@ int getFirstRainfall(int j)
+             Gage[j].currentFilePos = ftell(Frain.file);
+ 
+             // --- convert rainfall to intensity
+-            Gage[j].rainfall = convertRainfall(j, (double)vFirst);
++            Gage[j].rainfall = convertRainfall(j, (double)vFirst,
++                                               Gage[j].startDate);
+             return 1;
+         }
+         return 0;
+@@ -618,7 +619,8 @@ int getFirstRainfall(int j)
+                                      &rFirst) )
+             {
+                 // --- convert rainfall to intensity
+-                Gage[j].rainfall = convertRainfall(j, rFirst);
++                Gage[j].rainfall = convertRainfall(j, rFirst,
++                                                   Gage[j].startDate);
+                 return 1;
+             }
+         }
+@@ -655,7 +657,7 @@ int getNextRainfall(int j)
+                 fread(&Gage[j].nextDate, sizeof(DateTime), 1, Frain.file);
+                 fread(&vNext, sizeof(float), 1, Frain.file);
+                 Gage[j].currentFilePos = ftell(Frain.file);
+-                rNext = convertRainfall(j, (double)vNext);
++                rNext = convertRainfall(j, (double)vNext, Gage[j].nextDate);
+             }
+             else return 0;
+         }
+@@ -667,7 +669,7 @@ int getNextRainfall(int j)
+             {
+                 if ( !table_getNextEntry(&Tseries[k],
+                         &Gage[j].nextDate, &rNext) ) return 0;
+-                rNext = convertRainfall(j, rNext);
++                rNext = convertRainfall(j, rNext, Gage[j].nextDate);
+             }
+             else return 0;
+         }
+@@ -678,10 +680,11 @@ int getNextRainfall(int j)
+ 
+ //=============================================================================
+ 
+-double convertRainfall(int j, double r)
++double convertRainfall(int j, double r, DateTime aDate)
+ //
+ //  Input:   j = rain gage index
+ //           r = rainfall value (user units)
++//           aDate = date of the rainfall record
+ //  Output:  returns rainfall intensity (user units)
+ //  Purpose: converts rainfall value to an intensity (depth per hour).
+ //
+@@ -707,7 +710,10 @@ double convertRainfall(int j, double r)
+       default: r1 = r;
+     }
+     
+-    return r1 * Gage[j].unitsFactor * Gage[j].scaleFactor * Adjust.rainFactor;
++    // --- apply the monthly adjustment of the month the record falls in
++    //     (records are read ahead, before that month's factor is current)
++    return r1 * Gage[j].unitsFactor * Gage[j].scaleFactor *
++           Adjust.rain[datetime_monthOfYear(aDate) - 1];
+ }
+ 
+ //=============================================================================

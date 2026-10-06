@@ -1,0 +1,31 @@
+IO-11: read the Barrels item of IRREGULAR cross sections
+
+link_readXsectParams() returned as soon as it had found the transect of an
+IRREGULAR line, before the code that reads Barrels, so a conduit written as
+"Link IRREGULAR Tsect 0 0 0 Barrels" (the layout the GUI writes) always had
+one barrel, without a message. 6.0.0 reads the value. Read it here too, with
+the same check as for the other shapes. The value is assigned without a
+(char) cast so that the line stays correct with IO-10's int field.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-11_swmm530.patch
+
+diff --git a/src/legacy/engine/link.c b/src/legacy/engine/link.c
+index 31925e1..76925f5 100644
+--- a/src/legacy/engine/link.c
++++ b/src/legacy/engine/link.c
+@@ -202,6 +202,14 @@ int link_readXsectParams(char* tok[], int ntoks)
+         if ( i < 0 ) return error_setInpError(ERR_NAME, tok[2]);
+         Link[j].xsect.type = k;
+         Link[j].xsect.transect = i;
++
++        // --- parse number of barrels if present (Tsect 0 0 0 Barrels)
++        if ( Link[j].type == CONDUIT && ntoks >= 7 )
++        {
++            i = atoi(tok[6]);
++            if ( i <= 0 ) return error_setInpError(ERR_NUMBER, tok[6]);
++            Conduit[Link[j].subIndex].barrels = i;
++        }
+         return 0;
+     }
+ 

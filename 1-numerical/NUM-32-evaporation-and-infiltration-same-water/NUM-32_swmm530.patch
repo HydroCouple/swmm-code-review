@@ -1,0 +1,66 @@
+NUM-32: infiltrate only the ponded water left after evaporation
+
+getSubareaRunoff() charges evaporation to the ponded water first
+(surfEvap = MIN(depth/tStep, evap)) and then asks for the infiltration rate
+with the full ponded depth, so infiltration can take water that has already
+evaporated. When the two together use up the surface water the depth is set
+to zero but both full volumes are booked, up to evap x tStep of water that
+never existed. Pass the depth left after evaporation to infil_getInfil(), as
+the infiltration routines document (net rainfall = rainfall + runon -
+evaporation); the infiltration state then advances by the water actually
+infiltrated.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-32_swmm530.patch
+
+diff --git a/src/legacy/engine/subcatch.c b/src/legacy/engine/subcatch.c
+index 7c1d97c..d2fcd42 100644
+--- a/src/legacy/engine/subcatch.c
++++ b/src/legacy/engine/subcatch.c
+@@ -110,7 +110,7 @@ static void   getNetPrecip(int j, double* netPrecip, double tStep);
+ static double getSubareaRunoff(int subcatch, int subarea, double area,
+               double rainfall, double evap, double tStep);
+ static double getSubareaInfil(int j, TSubarea* subarea, double precip,
+-              double tStep);
++              double evap, double tStep);
+ static double findSubareaRunoff(TSubarea* subarea, double tRunoff);
+ static void   updatePondedDepth(TSubarea* subarea, double* tx);
+ static void   getDdDt(double t, double* d, double* dddt);
+@@ -972,7 +972,7 @@ double getSubareaRunoff(int j, int i, double area, double precip, double evap,
+     surfEvap = MIN(surfMoisture, evap);
+ 
+     // --- compute infiltration loss rate
+-    if ( i == PERV ) infil = getSubareaInfil(j, subarea, precip, tStep);
++    if ( i == PERV ) infil = getSubareaInfil(j, subarea, precip, surfEvap, tStep);
+ 
+     // --- add precip to other subarea inflows
+     subarea->inflow += precip;
+@@ -1015,21 +1015,24 @@ double getSubareaRunoff(int j, int i, double area, double precip, double evap,
+ 
+ //=============================================================================
+ 
+-double getSubareaInfil(int j, TSubarea* subarea, double precip, double tStep)
++double getSubareaInfil(int j, TSubarea* subarea, double precip, double evap,
++                       double tStep)
+ //
+ //  Purpose: computes infiltration rate at current time step.
+ //  Input:   j = subcatchment index
+ //           subarea = ptr. to a subarea
+ //           precip = rainfall + snowmelt over subarea (ft/sec)
++//           evap = evaporation from ponded water (ft/sec)
+ //           tStep = time step (sec)
+ //  Output:  returns infiltration rate (ft/s)
+ //
+ {
+     double infil = 0.0;                     // actual infiltration rate (ft/sec)
+ 
+-    // --- compute infiltration rate 
+-    infil = infil_getInfil(j, tStep, precip,
+-                           subarea->inflow, subarea->depth);
++    // --- compute infiltration rate from the ponded water left after
++    //     evaporation, so the two losses never exceed the water available
++    infil = infil_getInfil(j, tStep, precip, subarea->inflow,
++                           MAX(0.0, subarea->depth - evap * tStep));
+ 
+     // --- limit infiltration rate by available void space in unsaturated
+     //     zone of any groundwater aquifer

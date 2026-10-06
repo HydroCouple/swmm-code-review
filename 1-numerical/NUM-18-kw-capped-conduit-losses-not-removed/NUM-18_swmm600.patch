@@ -1,0 +1,47 @@
+NUM-18: take a full conduit's losses from its inflow (STEADY, KINWAVE)
+
+When the inflow to a conduit exceeds its full flow, the steady-flow solve
+in Routing.cpp and the kinematic-wave solve in KinematicWave.cpp cap the
+inflow taken from the upstream node at the full flow and deliver the full
+flow at the outlet. The conduit's evaporation and seepage loss, already
+stored for the mass balance, is then taken from neither, so it is booked
+without being removed from the water. Cap the inflow at the full flow plus
+the loss instead, as the 5.3.0 patch does. Results do not change for
+conduits without losses or that are not full.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-18_swmm600.patch
+
+diff --git a/src/engine/hydraulics/KinematicWave.cpp b/src/engine/hydraulics/KinematicWave.cpp
+index a79bd76..2c50cd0 100644
+--- a/src/engine/hydraulics/KinematicWave.cpp
++++ b/src/engine/hydraulics/KinematicWave.cpp
+@@ -359,7 +359,8 @@ int KWSolver::solveConduit(int idx, const XSectParams& xs,
+     // and a multiply by it again — a round trip that is NOT the identity in
+     // IEEE-754. Keeping the raw dimensional inflow instead left the upstream
+     // node's outflow 1 ULP light (1710-2014-20year-r3's J1 at step 6).
+-    if (q_in_norm > 1.0) q_in_norm = 1.0;
++    // A full conduit takes in its full flow plus its losses.
++    if (q_in_norm > 1.0 + q3) q_in_norm = 1.0 + q3;
+     q_in_[ui] = q_in_norm * q_full;
+ 
+     // Update state for next timestep
+diff --git a/src/engine/hydraulics/Routing.cpp b/src/engine/hydraulics/Routing.cpp
+index 8398cc4..076f9b1 100644
+--- a/src/engine/hydraulics/Routing.cpp
++++ b/src/engine/hydraulics/Routing.cpp
+@@ -1043,11 +1043,11 @@ int Router::executeSteadyFlow(SimulationContext& ctx, double dt) {
+         double a_full = links.xsect_a_full[uj];
+         double a;
+         if (q >= q_full) {
+-            // Cap at full flow; adjust qin to reflect the cap.
+-            // Matches legacy: (*qin) = q * barrels when q > qFull.
++            // Cap at full flow; adjust qin to reflect the cap. The full
++            // conduit takes in its full flow plus its losses.
+             q   = q_full;
+             a   = a_full;
+-            qin = q * barrels;
++            qin = (q + loss_rate) * barrels;
+         } else {
+             // s = q / beta  →  a = xsect::getAofS(xs, s)
+             // Matches legacy: s = q / beta; a1 = xsect_getAofS(&xsect, s).

@@ -1,0 +1,25 @@
+CRASH-18: restore the missing "else" in SMO_getSystemResult()
+
+The period check sets error 422 (or 411 when the allocation fails), but the
+block that seeks and freads the system values is not attached to the
+if/else-if chain, so it runs on every error path with the result buffer
+unallocated: fread writes through a NULL pointer when the period is -1 and
+the function hands back a NULL buffer with a length of SysVars when the period
+is past the end. Attach the block with "else", as in SMO_getLinkResult() and
+the other result getters.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply CRASH-18_swmm530.patch
+
+diff --git a/src/legacy/output/swmm_output.c b/src/legacy/output/swmm_output.c
+index 8a30764..b9287ba 100644
+--- a/src/legacy/output/swmm_output.c
++++ b/src/legacy/output/swmm_output.c
+@@ -1690,6 +1690,7 @@ int EXPORT_OPENSWMMCORE_OUTPUT_API SMO_getSystemResult(SMO_Handle p_handle, int
+         errorcode = ERR422;
+     else if MEMCHECK (temp = newFloatArray(p_data->SysVars))
+         errorcode = ERR411;
++    else
+     {
+         // calculate byte offset to start time for series
+         offset = p_data->ResultsPos + (periodIndex)*p_data->BytesPerPeriod +

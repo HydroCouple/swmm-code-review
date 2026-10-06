@@ -1,0 +1,40 @@
+[TITLE]
+BND-17: hourly temperature from daily Tmax 40 F / Tmin 20 F at latitude 70 N, Dec 20-21
+
+[OPTIONS]
+FLOW_UNITS       CFS
+INFILTRATION     HORTON
+FLOW_ROUTING     KINWAVE
+START_DATE       12/20/2019
+START_TIME       00:00:00
+END_DATE         12/22/2019
+END_TIME         00:00:00
+REPORT_STEP      00:10:00
+WET_STEP         00:10:00
+DRY_STEP         00:10:00
+ROUTING_STEP     600
+
+[TEMPERATURE]
+;climate file with Tmax 40 F and Tmin 20 F every day of December 2019
+FILE BND-17_clim.txt
+;divide temp, ATI weight, neg. melt ratio, elevation, latitude, longitude correction (min)
+SNOWMELT 34 0.5 0.6 0 70 -30
+
+[RAINGAGES]
+G1 INTENSITY 1:00 1.0 TIMESERIES TS1
+
+[TIMESERIES]
+TS1 12/20/2019 00:00 0.0
+
+[SUBCATCHMENTS]
+;Name Gage Outlet Area %Imperv Width Slope CurbLen
+S1    G1   O1     1    50      100   1     0
+
+[SUBAREAS]
+S1 0.01 0.1 0 0 0 OUTLET
+
+[INFILTRATION]
+S1 0 0 4 7 0
+
+[OUTFALLS]
+O1 0 FREE

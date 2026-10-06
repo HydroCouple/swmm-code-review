@@ -1,0 +1,51 @@
+CRASH-07: check cross-section table ratios before converting them to an int index
+
+lookup() and tabular_getdSdA() found a table segment with (int)(x / delta)
+and checked only the upper end of the result, and xsect_getYcrit() capped its
+critical-depth estimate with a test that NaN passes before getYcritEnum()
+converted it to int. A NaN or very large ratio (a "nan" size or initial flow,
+or a 1e-30 ft diameter) made the conversion undefined and the table was read
+far outside its bounds. Check the value first, with NaN-safe comparisons:
+x <= 0 or NaN takes the first table entry, x > 1 the last, and a NaN or
+too-large critical-depth estimate is capped like a too-large one. Results for
+ratios between 0 and 1 are unchanged.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply CRASH-07_swmm530.patch
+
+diff --git a/src/legacy/engine/xsect.c b/src/legacy/engine/xsect.c
+index cf40f97..4ac7c60 100644
+--- a/src/legacy/engine/xsect.c
++++ b/src/legacy/engine/xsect.c
+@@ -1304,7 +1304,7 @@ double xsect_getYcrit(TXsect* xsect, double q)
+         // --- first estimate yCritical for an equivalent circular conduit
+         //     using 1.01 * (q2g / yFull)^(1/4)
+         y = 1.01 * pow(q2g / xsect->yFull, 1./4.);
+-        if (y >= xsect->yFull) y = 0.97 * xsect->yFull;
++        if ( !(y < xsect->yFull) ) y = 0.97 * xsect->yFull;    // also NaN
+ 
+         // --- then find ratio of conduit area to equiv. circular area
+         r = xsect->aFull / (PI / 4.0 * SQR(xsect->yFull));
+@@ -1442,7 +1442,10 @@ double tabular_getdSdA(TXsect* xsect, double a, double *table, int nItems)
+     double dSdA;
+ 
+     // --- find which segment of table contains alpha
+-    i = (int)(alpha / delta);
++    //     (alpha outside 0-1, or NaN, cannot be converted to a table index)
++    if ( !(alpha > 0.0) ) i = 0;
++    else if ( alpha > 1.0 ) i = nItems - 2;
++    else i = (int)(alpha / delta);
+     if ( i >= nItems - 1 ) i = nItems - 2;
+ 
+     // --- compute slope from this interval of table
+@@ -1488,7 +1491,10 @@ double lookup(double x, double *table, int nItems)
+     int     i;
+ 
+     // --- find which segment of table contains x
++    //     (x outside 0-1, or NaN, cannot be converted to a table index)
+     delta = 1.0 / ((double)nItems-1);
++    if ( !(x > 0.0) ) return table[0];
++    if ( x > 1.0 ) return table[nItems-1];
+     i = (int)(x / delta);
+     if ( i >= nItems - 1 ) return table[nItems-1];
+ 

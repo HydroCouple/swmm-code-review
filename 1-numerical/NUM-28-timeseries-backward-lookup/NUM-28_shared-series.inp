@@ -1,0 +1,104 @@
+[TITLE]
+NUM-28: time series read by an EXT buildup function and by a node inflow
+
+[OPTIONS]
+FLOW_UNITS           CFS
+INFILTRATION         HORTON
+FLOW_ROUTING         KINWAVE
+START_DATE           01/01/2020
+START_TIME           00:00:00
+END_DATE             01/01/2020
+END_TIME             02:00:00
+REPORT_STEP          00:15:00
+WET_STEP             00:18:00
+DRY_STEP             00:18:00
+ROUTING_STEP         60
+
+[RAINGAGES]
+;;Name  Format     Interval  SCF  Source
+G1      INTENSITY  3:00      1.0  TIMESERIES  RAIN
+
+[SUBCATCHMENTS]
+;;Name  Gage  Outlet  Area  %Imperv  Width  %Slope  CurbLen
+S1      G1    O1      10    100      500    0.5     0
+
+[SUBAREAS]
+;;Subcatch  N-Imperv  N-Perv  S-Imperv  S-Perv  PctZero  RouteTo
+S1          0.01      0.1     0.05      0.05    100      OUTLET
+
+[INFILTRATION]
+;;Subcatch  MaxRate  MinRate  Decay  DryTime  MaxInfil
+S1          3.0      0.5      4      7        0
+
+[POLLUTANTS]
+;;Name  Units  Crain  Cgw  Crdii  Kdecay
+P1      MG/L   0      0    0      0
+P2      MG/L   0      0    0      0
+
+[LANDUSES]
+L1
+
+[COVERAGES]
+S1  L1  100
+
+[BUILDUP]
+;; The buildup rates are read from TS1 and TS2 at the END of each 18-minute
+;; runoff step, ahead of the routing clock.
+;;LandUse  Pollutant  Function  Cmax  Scale  Tseries  Normalizer
+L1         P1         EXT       1000  1.0    TS1      AREA
+L1         P2         EXT       1000  1.0    TS2      AREA
+
+[WASHOFF]
+L1  P1  EXP  0.1  1  0  0
+L1  P2  EXP  0.1  1  0  0
+
+[JUNCTIONS]
+;;Name  Elev  MaxDepth  InitDepth  SurDepth  Aponded
+J1      100   5         0          0         0
+J2      100   5         0          0         0
+
+[OUTFALLS]
+;;Name  Elev  Type
+O1      99    FREE
+
+[CONDUITS]
+;;Name  From  To  Length  Roughness  InOffset  OutOffset  InitFlow
+C1      J1    O1  400     0.013      0         0         0
+C2      J2    O1  400     0.013      0         0         0
+
+[XSECTIONS]
+;;Link  Shape     Geom1  Geom2  Geom3  Geom4  Barrels
+C1      CIRCULAR  3      0      0      0      1
+C2      CIRCULAR  3      0      0      0      1
+
+[INFLOWS]
+;; The same series are read at the START of each 1-minute routing step,
+;; so the first lookup after every runoff step goes back in time.
+;;Node  Constituent  Tseries  Type  Mfactor  Sfactor
+J1      FLOW         TS1      FLOW  1.0      1.0
+J2      FLOW         TS2      FLOW  1.0      1.0
+
+[TIMESERIES]
+;; No rain, so the subcatchment produces no runoff (it drains to O1 anyway):
+;; the lateral inflows of J1 and J2 are exactly TS1 and TS2.
+RAIN  0:00  0
+RAIN  3:00  0
+;; TS1 starts at the start of the run. Integral 58,500 ft3.
+TS1   0:00  0
+TS1   0:15  10
+TS1   0:30  20
+TS1   0:45  0
+TS1   1:00  0
+TS1   1:15  30
+TS1   1:30  5
+TS1   1:45  0
+;; TS2 starts 5 minutes into the run. Integral 18,000 ft3.
+TS2   0:05  0
+TS2   0:10  5
+TS2   0:15  10
+TS2   0:20  30
+TS2   0:30  0
+
+[REPORT]
+NODES ALL
+LINKS ALL

@@ -1,0 +1,370 @@
+NUM-48: apply first-order decay as exp(-K1 dt), and growth under STEADY
+
+The node reactor (mixAtNodes) and the KINWAVE/DYNWAVE link kernel computed
+c1 * (1 - k dt), copying 5.3.0's getReactedQual(), instead of
+c1 * exp(-k dt) of reference manual eq. 5-6, so results depended on the
+routing step. Use exp(), which also handles a negative k (growth). The
+STEADY branch, which already uses exp(), skipped k < 0; apply it for any
+non-zero k. Same change as NUM-48_swmm530.patch.
+
+Unit tests that pinned the linear factor are updated: test_quality_routing
+(ExecuteFirstOrderDecay), the manufactured benchmark
+quality-cstr-first-order-decay (reference.csv is now 100 exp(-0.001 t), the
+exact solution, instead of the recurrence 100 x 0.94^n), and
+test_reaction_legacy_binding (the no-reactions parity guard now expects the
+exponential, and the link double-decay bracket is re-measured: correct run
+0.899 x legacy, double decay 0.150 x).
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-48_swmm600.patch
+
+diff --git a/src/engine/quality/QualityRouting.cpp b/src/engine/quality/QualityRouting.cpp
+index 917fc1d..a4c1f98 100644
+--- a/src/engine/quality/QualityRouting.cpp
++++ b/src/engine/quality/QualityRouting.cpp
+@@ -1188,7 +1188,7 @@ void QualitySolver::mixAtNodes(SimulationContext& ctx, double dt) {
+                 k = 0.0;
+             double reacted = 0.0;
+             if (k != 0.0) {
+-                const double c2 = std::max(0.0, c1 * (1.0 - k * dt));
++                const double c2 = c1 * std::exp(-k * dt);
+                 reacted = (c1 - c2) * v_old;
+                 c1 = c2;
+             }
+@@ -1358,7 +1358,7 @@ void QualitySolver::updateLinkQuality(SimulationContext& ctx, double dt) {
+                 seeped = q_seep * c1 * dt;
+                 c1 *= f_evap;
+                 c_new = c1;
+-                if (k > 0.0) {
++                if (k != 0.0) {
+                     c_new = std::max(0.0, c1 * std::exp(-k * dt));
+                     // legacy findSFLinkQual: lossRate = (c1 - c2) * newFlow
+                     reacted = (c1 - c_new) * links.flow[uj] * dt;
+@@ -1368,11 +1368,9 @@ void QualitySolver::updateLinkQuality(SimulationContext& ctx, double dt) {
+                 seeped = q_seep * c1 * dt;
+                 c1 *= f_evap;
+ 
+-                // getReactedQual: c2 = max(0, c1 * (1 - k*dt)); the factor is
+-                // clamped rather than the product so the booked removal below
+-                // equals the actual loss even when 1 - k*dt goes negative
+-                // (KD1).
+-                double c2 = c1 * std::max(1.0 - k * dt, 0.0);
++                // getReactedQual: c2 = c1 * exp(-k*dt) (reference manual
++                // eq. 5-6; a negative k is growth).
++                double c2 = c1 * std::exp(-k * dt);
+                 reacted = (c1 - c2) * v_old;
+ 
+                 // getMixedQual(c2, v_old, wIn, q_in, dt), spelled in legacy's
+diff --git a/tests/benchmarks/manufactured/quality-cstr-first-order-decay/definition.md b/tests/benchmarks/manufactured/quality-cstr-first-order-decay/definition.md
+index 28477b2..a374e0d 100644
+--- a/tests/benchmarks/manufactured/quality-cstr-first-order-decay/definition.md
++++ b/tests/benchmarks/manufactured/quality-cstr-first-order-decay/definition.md
+@@ -10,29 +10,25 @@ governing ODE is:
+ dC/dt = -k * C,    C(0) = C_0
+ ```
+ 
+-The continuous exact solution is exponential:
++The exact solution is exponential:
+ 
+ ```
+ C(t) = C_0 * exp(-k * t)
+ ```
+ 
+-SWMM's quality engine (`QualitySolver::execute`) applies a discrete first-order
+-approximation instead of the continuous exponential.  For the KINWAVE/DYNWAVE
+-routing path, the decay factor per step is:
++SWMM's quality engine (`QualitySolver::execute`) applies first-order decay over
++each routing step as the exact factor of the reference manual (Vol. III,
++eq. 5-6):
+ 
+ ```
+-factor = 1 - k * dt
++factor = exp(-k * dt)
+ C[n+1] = C[n] * factor
+ ```
+ 
+-Because the factor is constant, the discrete solution is:
+-
+-```
+-C[N] = C_0 * factor^N = C_0 * (1 - k * dt)^N
+-```
+-
+-This is the reference used in the benchmark — NOT the continuous exponential.
+-The test verifies that the engine applies decay correctly over multiple timesteps.
++so the product over N steps is the exact solution at t = N * dt, whatever the
++step.  (Until the code review's NUM-48 fix the node and link reactors used the
++linear factor `1 - k * dt`, and this benchmark pinned that discrete recurrence,
++C_0 * (1 - k * dt)^N, which is 1.9% low at t = 600 s and depends on dt.)
+ 
+ ## Parameters
+ 
+@@ -41,44 +37,28 @@ The test verifies that the engine applies decay correctly over multiple timestep
+ | C_0     | 100.0  | mg/L  | initial concentration              |
+ | k       | 1.0e-3 | 1/s   | first-order decay coefficient      |
+ | dt      | 60.0   | s     | timestep per benchmark row         |
+-| factor  | 0.94   | —     | 1 - k*dt (per-step decay factor)  |
+ | N       | 10     | —     | number of steps (t = 0 to 600 s)  |
+ 
+-## Exact solution (discrete)
++## Exact solution
+ 
+ ```
+-C[N] = 100.0 * 0.94^N
++C(t) = 100.0 * exp(-0.001 * t)
+ ```
+ 
+ Values at benchmark times:
+ - t=0:    C = 100.0
+-- t=60:   C = 94.0
+-- t=120:  C = 88.36
++- t=60:   C = 94.1764533584249
++- t=120:  C = 88.6920436717158
+ - ...
+-- t=600:  C = 53.8615114094900 mg/L
+-
+-## Note on continuous vs discrete decay
+-
+-The test benchmarks the discrete (linear-approximation) solver path, NOT the
+-continuous exponential.  The STEADY routing path uses `exp(-k*dt)` (see
+-`QualitySolver::updateLinkQuality`), but the node-level decay in `applyDecay`
+-uses the linear factor `1 - k*dt`.  These are equivalent only at very small dt.
+-
+-At k*dt = 0.06, the two formulas differ by about 0.18%:
+-- Discrete: (1 - 0.06)^10 = 0.5386
+-- Continuous: exp(-0.06)^10 = exp(-0.6) = 0.5488
+-
+-The benchmark tests the discrete path to machine precision.
++- t=600:  C = 54.8811636094026 mg/L
+ 
+ ## Numerical accuracy and tolerance
+ 
+-The factor `1 - k*dt` is not exactly representable in IEEE 754 double (since
+-0.001 and 60.0 are both exact, but 0.001*60 = 0.06 has a tiny rounding error).
+-However, the factor is computed identically in both the reference CSV and the
+-engine, so the error between them is at most 1-2 ULP per step (~10^{-15} per
+-step, ~10^{-14} over 10 steps).
++The engine multiplies by `exp(-k * dt)` once per step; the reference evaluates
++`exp(-k * t)` directly.  The two differ only by rounding, about 1 ULP per step
++(~10^{-15} relative, ~10^{-13} mg/L over 10 steps).
+ 
+-Test tolerance: 1e-9 mg/L — a factor of 10^5 above expected rounding noise.
++Test tolerance: 1e-9 mg/L — a factor of 10^4 above expected rounding noise.
+ 
+ ## Multi-step test protocol
+ 
+@@ -88,14 +68,14 @@ mirrors what the simulation loop does between routing steps.
+ 
+ ## Verification target
+ 
+-`src/engine/quality/QualityRouting.cpp` — `QualitySolver::applyDecay`
+-specifically the linear factor `1 - k_decay * dt` applied at each node.
++`src/engine/quality/QualityRouting.cpp` — the first-order reaction applied to
++the stored concentration in `QualitySolver::mixAtNodes`.
+ 
+ ## Reference dataset
+ 
+ `reference.csv` columns:
+ - `t_s` — time in seconds
+-- `C_mgl` — exact (discrete) concentration in mg/L
++- `C_mgl` — exact concentration in mg/L, 100 * exp(-0.001 * t_s)
+ 
+ ## Consuming test
+ 
+diff --git a/tests/benchmarks/manufactured/quality-cstr-first-order-decay/provenance.yaml b/tests/benchmarks/manufactured/quality-cstr-first-order-decay/provenance.yaml
+index 7ce6409..f861ecc 100644
+--- a/tests/benchmarks/manufactured/quality-cstr-first-order-decay/provenance.yaml
++++ b/tests/benchmarks/manufactured/quality-cstr-first-order-decay/provenance.yaml
+@@ -2,23 +2,24 @@ benchmark: quality-cstr-first-order-decay
+ type: manufactured
+ description: >
+   CSTR first-order decay trajectory.  No inflow, no outflow, constant volume.
+-  The discrete solver applies factor = 1 - k*dt per step; reference is
+-  C[N] = C_0 * (1 - k*dt)^N — the exact solution of the discrete recurrence.
+-swmm_target: src/engine/quality/QualityRouting.cpp (QualitySolver::applyDecay)
++  The solver applies factor = exp(-k*dt) per step (reference manual Vol. III
++  eq. 5-6); reference is the exact solution C(t) = C_0 * exp(-k*t).
++  (Before the code review's NUM-48 fix the solver used 1 - k*dt and this
++  benchmark pinned C_0 * (1 - k*dt)^N.)
++swmm_target: src/engine/quality/QualityRouting.cpp (QualitySolver::mixAtNodes)
+ 
+ problem:
+   name: cstr-first-order-decay
+   ode_continuous: "dC/dt = -k*C"
+   exact_continuous: "C(t) = C_0 * exp(-k*t)"
+-  ode_discrete: "C[n+1] = C[n] * (1 - k*dt)"
+-  exact_discrete: "C[N] = C_0 * (1 - k*dt)^N"
+-  benchmark_tests: discrete  # engine uses linear approximation, not exp(-k*dt)
++  per_step_factor: "exp(-k*dt)"
++  benchmark_tests: continuous  # the per-step product equals the exact solution
+ 
+ parameters:
+   C_0_mgl: 100.0
+   k_decay_per_s: 1.0e-3
+   dt_s: 60.0
+-  factor: 0.94                 # 1 - k*dt = 1 - 0.06 = 0.94 (approx in double)
++  factor: 0.9417645335842487   # exp(-k*dt) = exp(-0.06)
+   n_steps: 10
+   node_count: 1
+   pollutant_count: 1
+@@ -27,7 +28,7 @@ dataset:
+   file: reference.csv
+   columns:
+     t_s:   time in seconds
+-    C_mgl: exact (discrete) concentration in mg/L
++    C_mgl: exact concentration in mg/L, 100 * exp(-0.001 * t_s)
+   n_points: 11
+   t_values_s: [0, 60, 120, 180, 240, 300, 360, 420, 480, 540, 600]
+   dt_s: 60.0
+@@ -36,10 +37,10 @@ tolerances:
+   C_max_abs_mgl: 1.0e-9
+   rms_mgl: 1.0e-10
+   basis: >
+-    The factor 1.0 - 1e-3*60.0 is not exactly 0.94 in IEEE 754 double, but the
+-    same computation is done in both the engine and the reference generation.
+-    Per-step IEEE 754 rounding is ~10^{-15}; accumulated over 10 steps: ~10^{-14}.
+-    The 1e-9 threshold absorbs minor platform differences.
++    The engine multiplies by exp(-k*dt) once per step and the reference
++    evaluates exp(-k*t) directly; they differ only by rounding, about 1 ULP
++    per step (~10^{-13} mg/L over 10 steps). The 1e-9 threshold absorbs
++    platform differences in exp().
+ 
+ test_protocol: >
+   For a multi-step trajectory test, the caller must copy conc -> conc_old at
+@@ -58,18 +59,15 @@ attribution:
+   license_note: benchmark data are original to this project; no copied source code.
+ 
+ provenance:
+-  generated_by: exact rational arithmetic under the recurrence C[n] = C[n-1]*0.94
+-  tool: hand computation using exact fraction multiplication
+-  date: "2026-05-13"
+-  author: openswmm.engine development team
++  generated_by: direct evaluation of the exact solution
++  tool: Python 3 math.exp, printed to 13 decimal places
++  date: "2026-10-06"
++  author: SWMM code review (NUM-48); replaces the 2026-05-13 discrete-recurrence data
+   computation: |
+-    factor = 0.94 (exact under rational arithmetic)
+-    C[0] = 100.0
+-    C[n] = C[n-1] * 94 / 100  (exact rational multiply)
+-    Final 15-decimal-place values stored in reference.csv.
++    C(t) = 100.0 * exp(-0.001 * t)   for t = 0, 60, ..., 600 s
+   reproducible: true
+   notes: >
+-    All values are exact rational multiples of 100/100^N * 94^N.
+-    The continuous exponential C(600) = 100*exp(-0.6) = 54.88 differs from
+-    the discrete C[10] = 53.86 by ~1.9%, confirming non-trivial discrete/continuous
+-    discrepancy that validates the test is checking the right code path.
++    The previous reference was the recurrence C[n] = C[n-1] * 0.94, i.e. the
++    linear factor 1 - k*dt the engine used before NUM-48; at t = 600 s it was
++    53.86 mg/L against the exact 54.88 mg/L (1.9% low), and it changed with
++    the step length.
+diff --git a/tests/benchmarks/manufactured/quality-cstr-first-order-decay/reference.csv b/tests/benchmarks/manufactured/quality-cstr-first-order-decay/reference.csv
+index 420001f..e0c3967 100644
+--- a/tests/benchmarks/manufactured/quality-cstr-first-order-decay/reference.csv
++++ b/tests/benchmarks/manufactured/quality-cstr-first-order-decay/reference.csv
+@@ -1,12 +1,12 @@
+ t_s,C_mgl
+ 0,100.0000000000000
+-60,94.0000000000000
+-120,88.3600000000000
+-180,83.0584000000000
+-240,78.0748960000000
+-300,73.3904022400000
+-360,68.9869781056000
+-420,64.8477594192640
+-480,60.9568938541082
+-540,57.2994802228617
+-600,53.8615114094900
++60,94.1764533584249
++120,88.6920436717158
++180,83.5270211411272
++240,78.6627861066553
++300,74.0818220681718
++360,69.7676326071031
++420,65.7046819815057
++480,61.8783391806141
++540,58.2748252373990
++600,54.8811636094026
+diff --git a/tests/unit/engine/test_quality_routing.cpp b/tests/unit/engine/test_quality_routing.cpp
+index 093155d..6550194 100644
+--- a/tests/unit/engine/test_quality_routing.cpp
++++ b/tests/unit/engine/test_quality_routing.cpp
+@@ -269,7 +269,8 @@ TEST_F(QualityRoutingTest, ExecuteFirstOrderDecay) {
+ 
+     solver.execute(ctx, dt);
+ 
+-    double decay_factor = 1.0 - 0.01 * dt;
++    // first-order decay over one step: exp(-k dt) (reference manual eq. 5-6)
++    double decay_factor = std::exp(-0.01 * dt);
+ 
+     // P0 at nodes should be decayed; P1 should remain unchanged
+     for (int i = 0; i < ctx.n_nodes(); ++i) {
+diff --git a/tests/unit/engine/test_reaction_legacy_binding.cpp b/tests/unit/engine/test_reaction_legacy_binding.cpp
+index 40c0285..908d00b 100644
+--- a/tests/unit/engine/test_reaction_legacy_binding.cpp
++++ b/tests/unit/engine/test_reaction_legacy_binding.cpp
+@@ -32,8 +32,9 @@
+  *            `k = 0.0` zeroing in updateLinkQuality. The node gates cannot
+  *            see it: J0 is upstream of C1, so link concentration never
+  *            reaches the node. Falsifying the zeroing drives the link/legacy
+- *            ratio from 1.215 to 0.197; dropping reactLegacyLinks entirely
+- *            drives it to 26.4. The gate brackets both.
++ *            ratio from 0.899 to 0.150 (from 1.215 to 0.197 before legacy
++ *            decay became exp(-k dt)); dropping reactLegacyLinks entirely
++ *            drove it to 26.4. The gate brackets both.
+  *          - MsxPipeScopeFormulaTracksLinkPollutant covers [REACTION_PIPES]
+  *            (tank scope alone leaves half the binding unexercised) and is
+  *            falsified by dropping reactLegacyLinks: msx_link_conc stays 0
+@@ -199,20 +200,22 @@ protected:
+ 
+ // Steps over the 2-minute horizon.
+ constexpr int kSteps = static_cast<int>(120.0 / kDt);
+-const double kLinear = std::pow(1.0 - kK * kDt, kSteps);   // legacy product
++const double kLinear = std::pow(1.0 - kK * kDt, kSteps);   // old legacy product
+ const double kExp    = std::exp(-kK * kDt * kSteps);       // exact
+ 
+ // ---------------------------------------------------------------------------
+ // Gate 1 — parity guard: WITHOUT a reactions component the node decays by
+-// the legacy linear product (proves the untouched path; validator sha256
+-// is the bitwise version of this claim).
++// the legacy first-order factor, exp(-k dt) per step since the review's
++// NUM-48 fix (it was the linear product (1 - k dt)^N), which compounds to
++// the exact exponential (proves the untouched path; validator sha256 is the
++// bitwise version of this claim).
+ // ---------------------------------------------------------------------------
+ TEST_F(ReactionLegacyBindingTest, ParityGuardWhenNoConfig) {
+     write_deck("_r4_plain.inp", "");
+     ASSERT_NO_FATAL_FAILURE(
+         run_deck("_r4_plain.inp", "_r4_plain.rpt", "_r4_plain.out"));
+-    EXPECT_NEAR(node_conc(), kC0 * kLinear, 0.01 * kC0 * kLinear)
+-        << "legacy linear-decay path must be untouched without reactions";
++    EXPECT_NEAR(node_conc(), kC0 * kExp, 0.01 * kC0 * kExp)
++        << "legacy decay path must be untouched without reactions";
+     std::remove("_r4_plain.inp");
+ }
+ 
+@@ -338,9 +341,12 @@ TEST_F(ReactionLegacyBindingTest, FailureIsLoudActionableAndNonFatal) {
+ // handoff's own falsifier (i) left every delivered gate green.
+ //
+ // The claim is bracketed rather than pinned to a magic number: reacting
+-// links must land ABOVE the legacy run (mix-then-exponential is gentler than
+-// decay-then-mix) but nowhere near the undecayed value.
+-//   measured  correct 1.215x legacy | double-decay 0.197x | no decay 26.4x
++// links must land near the legacy run but far above the double-decayed
++// value and nowhere near the undecayed value. With legacy decay as
++// exp(-k dt) (NUM-48), mix-then-exponential also decays the step's inflow
++// and lands a little BELOW decay-then-mix.
++//   measured  correct 0.899x legacy | double-decay 0.150x
++//   (with the old linear legacy decay: 1.215x | 0.197x | no decay 26.4x)
+ // ---------------------------------------------------------------------------
+ TEST_F(ReactionLegacyBindingTest, LinkDecayIsNotDoubleApplied) {
+     write_rxn("_r4_lnk.rxn",
+@@ -353,7 +359,7 @@ TEST_F(ReactionLegacyBindingTest, LinkDecayIsNotDoubleApplied) {
+     const double rxn    = link_conc_of("_r4_lnk_rxn.inp");
+     ASSERT_GT(legacy, 0.0);
+     ASSERT_GT(rxn, 0.0);
+-    EXPECT_GT(rxn, legacy * 1.10)
++    EXPECT_GT(rxn, legacy * 0.50)
+         << "link decayed twice — the in-mix k was not zeroed (rxn/legacy = "
+         << rxn / legacy << ")";
+     EXPECT_LT(rxn, legacy * 1.50)

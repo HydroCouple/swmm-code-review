@@ -1,0 +1,29 @@
+BND-02: look up a TIDAL outfall's curve at the hour of the day
+
+The input reference defines a tidal curve as outfall stage versus hour of
+the day, but outfall_setOutletDepth() looked it up at the hours elapsed
+since the start of the run (NewRoutingTime), so every run that does not
+start at midnight got a tide shifted by its start time. Add the start time
+of day before taking the hour. Runs that start at midnight add exactly 0
+and are unchanged.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply BND-02_swmm530.patch
+
+diff --git a/src/legacy/engine/node.c b/src/legacy/engine/node.c
+index 070db5a..3acf02f 100644
+--- a/src/legacy/engine/node.c
++++ b/src/legacy/engine/node.c
+@@ -1430,7 +1430,11 @@ void outfall_setOutletDepth(int j, double yNorm, double yCrit, double z)
+       case TIDAL_OUTFALL:
+         k = Outfall[i].tideCurve;
+         table_getFirstEntry(&Curve[k], &x, &y);
+-        currentDate = NewRoutingTime / MSECperDAY;
++
++        // --- the curve gives stage by hour of the day, so add the time of
++        //     day at which the simulation starts
++        currentDate = NewRoutingTime / MSECperDAY +
++                      ( StartDateTime - floor(StartDateTime) );
+         x += ( currentDate - floor(currentDate) ) * 24.0;
+         stage = table_lookup(&Curve[k], x) / UCF(LENGTH);
+         break;

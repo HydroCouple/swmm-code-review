@@ -1,0 +1,30 @@
+NUM-53: give control rules the rule step, not the routing step, when RULE_STEP > 0
+
+With RULE_STEP > 0 the rules are evaluated once per rule step, but
+SWMMEngine::stepRouting() passed the current routing step as the
+evaluation's time step. That step is the width of the "=" window for
+SIMULATION TIME / CLOCKTIME / TIMEOPEN / TIMECLOSED premises, which became
+narrower than the spacing of the evaluations (a premise such as
+"CLOCKTIME = 01:03:00" never held), and the dt of a PID action, whose
+integral and derivative terms were scaled by the routing step although the
+controller acts once per rule step. Pass the rule step instead.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-53_swmm600.patch
+
+diff --git a/src/engine/core/SWMMEngine.cpp b/src/engine/core/SWMMEngine.cpp
+index 839529d..d4a7040 100644
+--- a/src/engine/core/SWMMEngine.cpp
++++ b/src/engine/core/SWMMEngine.cpp
+@@ -4693,7 +4693,10 @@ void SWMMEngine::stepRouting(double dt_routing) noexcept {
+     const bool rule_time_reached =
+         ctx_.options.rule_step <= 0.0 ||
+         std::fabs(ctx_.elapsed_ms - new_rule_time_ms_) < 1.0;
+-    controls_.evaluate(ctx_, routing_date, dt_routing, rule_time_reached);
++    // An evaluation covers one rule step when RULE_STEP > 0.
++    controls_.evaluate(ctx_, routing_date,
++                       ctx_.options.rule_step > 0.0 ? ctx_.options.rule_step : dt_routing,
++                       rule_time_reached);
+     // Apply setting transitions: move setting toward target_setting
+     for (int j = 0; j < ctx_.n_links(); ++j) {
+         auto uj = static_cast<std::size_t>(j);

@@ -1,0 +1,33 @@
+IO-53: list the worst link or node even when it is the first one
+
+report_writeMaxFlowTurns() and report_writeNonconvergedStats() printed
+"All links are stable." / "Convergence obtained at all time steps." when
+the top entry of their ranking had index <= 0. An empty ranking has index
+-1 (stats_findMaxStats); index 0 is the first link or node of the model.
+Test for index < 0, as report_writeMaxStats() already does.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-53_swmm530.patch
+
+diff --git a/src/legacy/engine/report.c b/src/legacy/engine/report.c
+index 604507d..70f7d8d 100644
+--- a/src/legacy/engine/report.c
++++ b/src/legacy/engine/report.c
+@@ -991,7 +991,7 @@ void report_writeMaxFlowTurns(TMaxStats flowTurns[], int nMaxStats)
+     WRITE("********************************");
+     WRITE("Highest Flow Instability Indexes");
+     WRITE("********************************");
+-    if ( nMaxStats <= 0 || flowTurns[0].index <= 0 )
++    if ( nMaxStats <= 0 || flowTurns[0].index < 0 )
+         fprintf(Frpt.file, "\n  All links are stable.");
+     else
+     {
+@@ -1016,7 +1016,7 @@ void report_writeNonconvergedStats(TMaxStats maxNonconverged[], int nMaxStats)
+     WRITE("*********************************");
+     WRITE("Most Frequent Nonconverging Nodes");
+     WRITE("*********************************");
+-    if (nMaxStats <= 0 || maxNonconverged[0].index <= 0 ||
++    if (nMaxStats <= 0 || maxNonconverged[0].index < 0 ||
+         maxNonconverged[0].value < 0.00005)
+         fprintf(Frpt.file, "\n  Convergence obtained at all time steps.");
+     else

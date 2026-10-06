@@ -1,0 +1,59 @@
+[TITLE]
+IO-09: outfall with a flap gate and no RouteTo subcatchment
+
+[OPTIONS]
+FLOW_UNITS           CFS
+INFILTRATION         HORTON
+FLOW_ROUTING         DYNWAVE
+START_DATE           01/01/2020
+START_TIME           00:00:00
+END_DATE             01/01/2020
+END_TIME             01:00:00
+REPORT_STEP          00:15:00
+WET_STEP             00:05:00
+DRY_STEP             00:05:00
+ROUTING_STEP         10
+
+[RAINGAGES]
+;;Name  Format     Interval  SCF  Source
+G1      INTENSITY  0:15      1.0  TIMESERIES  TS1
+
+[SUBCATCHMENTS]
+;;Name  Gage  Outlet  Area  %Imperv  Width  Slope  CurbLen
+S1      G1    O2      1     50       100    0.5    0
+
+[SUBAREAS]
+;;Subcatch  N-Imperv  N-Perv  S-Imperv  S-Perv  PctZero  RouteTo
+S1          0.01      0.1     0.05      0.05    25       OUTLET
+
+[INFILTRATION]
+;;Subcatch  MaxRate  MinRate  Decay  DryTime  MaxInfil
+S1          3.0      0.5      4      7        0
+
+[JUNCTIONS]
+;;Name  Elev  MaxDepth  InitDepth  SurDepth  Aponded
+J1      100   10        0          0         0
+
+[OUTFALLS]
+;; The outfall stage is 2 ft above J1's invert. With the flap gate
+;; nothing flows back: J1 stays dry and C1 carries no flow.
+;;Name  Elev  Type   Stage  Gated
+O1      99    FIXED  102    YES
+O2      90    FREE
+
+[CONDUITS]
+;;Name  From  To  Length  Roughness  InOffset  OutOffset  InitFlow
+C1      J1    O1  400     0.013      0         0         0
+
+[XSECTIONS]
+;;Link  Shape     Geom1  Geom2  Geom3  Geom4  Barrels
+C1      CIRCULAR  1.5    0      0      0      1
+
+[TIMESERIES]
+;;Name  Time  Value
+TS1     0:00  0.0
+TS1     1:00  0.0
+
+[REPORT]
+NODES ALL
+LINKS ALL

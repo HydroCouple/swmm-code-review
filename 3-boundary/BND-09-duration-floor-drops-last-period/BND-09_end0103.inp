@@ -1,0 +1,39 @@
+[TITLE]
+BND-09: a 63-minute run with 1-minute reports should write 63 periods
+
+[OPTIONS]
+;; The test rewrites START_TIME and END_TIME for each case of its sweep.
+FLOW_UNITS           CFS
+FLOW_ROUTING         KINWAVE
+START_DATE           01/01/2020
+START_TIME           00:00:00
+REPORT_START_DATE    01/01/2020
+REPORT_START_TIME    00:00:00
+END_DATE             01/01/2020
+END_TIME             01:03:00
+REPORT_STEP          00:01:00
+ROUTING_STEP         60
+
+[JUNCTIONS]
+;;Name  Elev  MaxDepth  InitDepth  SurDepth  Aponded
+J1      10    5         0          0         0
+
+[OUTFALLS]
+;;Name  Elev  Type
+O1      9     FREE
+
+[CONDUITS]
+;;Name  From  To  Length  Roughness  InOffset  OutOffset  InitFlow
+C1      J1    O1  400     0.013      0         0          0
+
+[XSECTIONS]
+;;Link  Shape     Geom1  Geom2  Geom3  Geom4  Barrels
+C1      CIRCULAR  2      0      0      0      1
+
+[DWF]
+;;Node  Constituent  Baseline
+J1      FLOW         1.0
+
+[REPORT]
+NODES ALL
+LINKS ALL

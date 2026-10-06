@@ -1,0 +1,42 @@
+CON-06: scale snow plowed to another subcatchment by both subcatchments' areas
+
+SnowSolver::plowSnow() copied legacy snow_plowSnow(): the depth added to the
+receiving subcatchment's pervious pack was sfrac[4] * exc * fArea_j / fArea_m,
+a ratio of area fractions only, so the plowed volume was multiplied by
+A_m / A_j. Include the ratio of the two non-LID areas. Same change as
+CON-06_swmm530.patch.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply CON-06_swmm600.patch
+
+diff --git a/src/engine/hydrology/Snow.cpp b/src/engine/hydrology/Snow.cpp
+index 5f27b5c..4c27d8a 100644
+--- a/src/engine/hydrology/Snow.cpp
++++ b/src/engine/hydrology/Snow.cpp
+@@ -542,8 +542,24 @@ void SnowSolver::plowSnow(SimulationContext& ctx, double dt, const double* snowf
+             int m = soa_.to_subcatch[uj];
+             if (m < n) {
+                 auto target_perv = static_cast<std::size_t>(m * N_SUBAREAS + SNOW_PERV);
+-                if (soa_.fArea[target_perv] > 0.0) {
+-                    double f = soa_.fArea[plow_idx] / soa_.fArea[target_perv];
++                // fArea are fractions of each subcatchment's own non-LID
++                // area, so the transfer must also scale by the ratio of
++                // those areas (legacy snow_getSnowCover's area basis).
++                // The ratio is 1 when the context holds no subcatchment
++                // areas (the solver driven on its own, as in unit tests).
++                auto um = static_cast<std::size_t>(m);
++                const auto& area = ctx.subcatches.area;
++                const auto& lid  = ctx.subcatches.total_lid_area_ft2;
++                double a_j = 1.0;
++                double a_m = 1.0;
++                if (uj < area.size() && um < area.size()) {
++                    const double ucf_a = ucf::UCF(ucf::LANDAREA, ctx.options);
++                    a_j = area[uj] / ucf_a - (uj < lid.size() ? lid[uj] : 0.0);
++                    a_m = area[um] / ucf_a - (um < lid.size() ? lid[um] : 0.0);
++                }
++                if (soa_.fArea[target_perv] > 0.0 && a_m > 0.0) {
++                    double f = soa_.fArea[plow_idx] * a_j /
++                               (soa_.fArea[target_perv] * a_m);
+                     const double moved = soa_.sfrac[sf + 4] * exc * f;
+                     // S2b — the CROSS-SUBCATCHMENT transfer, and the reason
+                     // the age has to live in this solver. An update running

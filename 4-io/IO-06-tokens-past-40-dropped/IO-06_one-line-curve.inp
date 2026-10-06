@@ -1,0 +1,44 @@
+[TITLE]
+IO-06: storage curve SC1 written as one line of 84 tokens
+;; SC1: area 100 ft2 from 0 to 9 ft, 1000 ft2 from 9.5 to 20 ft (41 points).
+;; 1 cfs flows into SU1 for 1 hour and nothing leaves (weir crest at 25 ft),
+;; so SU1 holds 3600 ft3 at 1:00: 900 ft3 below 9 ft, 275 ft3 from 9 to 9.5 ft,
+;; and 2425 ft3 above 9.5 ft, i.e. a depth of 9.5 + 2.425 = 11.925 ft.
+
+[OPTIONS]
+FLOW_UNITS           CFS
+FLOW_ROUTING         DYNWAVE
+START_DATE           01/01/2020
+START_TIME           00:00:00
+REPORT_START_DATE    01/01/2020
+REPORT_START_TIME    00:00:00
+END_DATE             01/01/2020
+END_TIME             01:00:00
+REPORT_STEP          00:05:00
+ROUTING_STEP         10
+
+[STORAGE]
+;;Name Elev MaxDepth InitDepth Shape Curve
+SU1   100   30   0   TABULAR   SC1
+
+[OUTFALLS]
+O1    90   FREE   NO
+
+[WEIRS]
+;;Name From To Type CrestHt Cd
+W1   SU1   O1   TRANSVERSE   25   3.33
+
+[XSECTIONS]
+W1   RECT_OPEN   1   5   0   0
+
+[INFLOWS]
+;;Node Constituent Series Type Mfactor Sfactor Baseline
+SU1  FLOW   ""   FLOW   1.0   1.0   1.0
+
+[CURVES]
+;;Name Type Depth Area ...
+SC1 STORAGE 0 100 0.5 100 1 100 1.5 100 2 100 2.5 100 3 100 3.5 100 4 100 4.5 100 5 100 5.5 100 6 100 6.5 100 7 100 7.5 100 8 100 8.5 100 9 100 9.5 1000 10 1000 10.5 1000 11 1000 11.5 1000 12 1000 12.5 1000 13 1000 13.5 1000 14 1000 14.5 1000 15 1000 15.5 1000 16 1000 16.5 1000 17 1000 17.5 1000 18 1000 18.5 1000 19 1000 19.5 1000 20 1000
+
+[REPORT]
+NODES ALL
+LINKS ALL

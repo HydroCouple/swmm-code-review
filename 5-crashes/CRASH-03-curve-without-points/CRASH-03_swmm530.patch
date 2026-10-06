@@ -1,0 +1,28 @@
+CRASH-03: reject a curve or time series without data instead of crashing
+
+table_validate() reads the first entry and then loops over
+table_getNextEntry(), which dereferences table->thisEntry. For an in-memory
+table with no entries (a [CURVES] line with only the name and type, or a
+time series whose only line has no value) table_getFirstEntry() returns FALSE
+without setting thisEntry, which is still NULL, and the loop crashes. Return
+an error for such a table. project_validate() reports it as ERROR 171 for a
+curve and ERROR 173 for a time series, as it does for out-of-sequence data.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply CRASH-03_swmm530.patch
+
+diff --git a/src/legacy/engine/table.c b/src/legacy/engine/table.c
+index c7564d2..61614c3 100644
+--- a/src/legacy/engine/table.c
++++ b/src/legacy/engine/table.c
+@@ -311,6 +311,10 @@ int table_validate(TTable *table)
+     if ( !result && table->file.mode == USE_FILE )
+         return ERR_TABLE_FILE_READ;
+ 
++    // --- return error condition if table has no data at all
++    //     (project_validate reports ERROR 171 for a curve, 173 for a series)
++    if ( !result ) return ERR_TIMESERIES_SEQUENCE;
++
+     // --- retrieve successive table entries and check for non-increasing x-values
+     while ( table_getNextEntry(table, &x2, &y2) )
+     {

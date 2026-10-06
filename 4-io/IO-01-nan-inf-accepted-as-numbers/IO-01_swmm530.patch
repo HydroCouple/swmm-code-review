@@ -1,0 +1,39 @@
+IO-01: reject "nan" and "inf" as numeric input
+
+getDouble() and the decimal-hours branch of datetime_strToTime() accept any
+token that strtod() consumes, and C99 strtod() also reads "nan", "inf",
+"infinity" and overflowing values such as 1e400. The range checks that follow
+(x <= 0, x < 0) are false for NaN, so a NaN roughness, depth, series value or
+routing step reached the simulation and gave NaN results, or a continuity
+error printed as 0.000. Both functions now return 0 for a non-finite result,
+so every caller reports ERROR 211 (or ERROR 213 for a date/time) for the
+line, as for any other unreadable number. getInt() goes through getDouble()
+and is covered too. Finite values are read exactly as before.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-01_swmm530.patch
+
+diff --git a/src/legacy/engine/datetime.c b/src/legacy/engine/datetime.c
+index 31eb5bc..8118bce 100644
+--- a/src/legacy/engine/datetime.c
++++ b/src/legacy/engine/datetime.c
+@@ -351,6 +351,7 @@ int datetime_strToTime(char* s, DateTime* t)
+     *t = strtod(s, &endptr);
+     if ( *endptr == 0 )
+     {
++        if ( !isfinite(*t) ) return 0;     // strtod also reads "nan", "inf"
+         *t /= 24.0;
+         return 1;
+     }
+diff --git a/src/legacy/engine/input.c b/src/legacy/engine/input.c
+index 5a58319..a8c13bf 100644
+--- a/src/legacy/engine/input.c
++++ b/src/legacy/engine/input.c
+@@ -859,6 +859,7 @@ int getDouble(char *s, double *y)
+     char *endptr;
+     *y = strtod(s, &endptr);
+     if (*endptr > 0) return(0);
++    if (!isfinite(*y)) return(0);       // strtod also reads "nan" and "inf"
+     return(1);
+ }
+ 

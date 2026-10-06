@@ -1,0 +1,47 @@
+CON-16: book a subarea's runoff as the water that left it during the step
+
+getSubareaRunoff() integrates the ponded depth over the step with the
+nonlinear-reservoir ODE, so the depth change already contains the outflow,
+but it then takes the runoff rate at the END of the step,
+Alpha*(d - Ds)^5/3, and books it over the whole step. On a rising
+hydrograph that overstates the outflow, on a falling one it understates it,
+and the two do not cancel: the volume sent to the outlet differs from the
+water that left the ponded depth. For a subarea with routing (N > 0 and
+Alpha > 0), use the depth the ODE removed divided by the step instead. Every
+step without outflow is unchanged.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply CON-16_swmm530.patch
+
+diff --git a/src/legacy/engine/subcatch.c b/src/legacy/engine/subcatch.c
+index 7c1d97c..cf7655f 100644
+--- a/src/legacy/engine/subcatch.c
++++ b/src/legacy/engine/subcatch.c
+@@ -956,6 +956,7 @@ double getSubareaRunoff(int j, int i, double area, double precip, double evap,
+     double    surfEvap;                // evap. used for surface water (ft/sec)
+     double    infil = 0.0;             // infiltration rate (ft/sec)
+     double    runoff = 0.0;            // runoff rate (ft/sec)
++    double    dNoRunoff = 0.0;         // ponded depth if nothing ran off (ft)
+     TSubarea* subarea;                 // pointer to subarea being analyzed
+ 
+     // --- no runoff if no area
+@@ -1000,6 +1001,7 @@ double getSubareaRunoff(int j, int i, double area, double precip, double evap,
+     else
+     {
+         subarea->inflow -= surfEvap + infil;
++        dNoRunoff = subarea->depth + subarea->inflow * tStep;
+         updatePondedDepth(subarea, &tRunoff);
+     }
+ 
+@@ -1009,6 +1011,11 @@ double getSubareaRunoff(int j, int i, double area, double precip, double evap,
+     // --- compute runoff volume leaving subcatchment for mass balance purposes
+     //     (fOutlet is the fraction of this subarea's runoff that goes to the
+     //     subcatchment outlet as opposed to another subarea of the subcatchment)
++    //     (with routing, the runoff over the step is the depth that left the
++    //     subarea while its ponded depth was integrated, not the end-of-step
++    //     rate times the step)
++    if ( subarea->N > 0.0 && Alpha > 0.0 )
++        runoff = MAX(0.0, dNoRunoff - subarea->depth) / tStep;
+     Voutflow += subarea->fOutlet * runoff * area * tStep;
+     return runoff;
+ }

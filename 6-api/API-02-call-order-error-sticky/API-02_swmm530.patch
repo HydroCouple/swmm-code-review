@@ -1,0 +1,62 @@
+API-02: return call-order errors without storing them in ErrorCode
+
+swmm_start, swmm_step, swmm_stride, swmm_useHotStart and swmm_saveHotStart
+refused a call made in the wrong order (ERR_API_NOT_STARTED,
+ERR_API_NOT_ENDED) by assigning the code to the global ErrorCode. swmm_start
+and swmm_step return ErrorCode before doing anything else, so the refused
+call blocked the project until it was closed and reopened, or aborted the
+run in progress. Return the code without storing it, as the getters and
+setters already do; ErrorCode keeps meaning "the simulation failed".
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply API-02_swmm530.patch
+
+diff --git a/src/legacy/engine/swmm5.c b/src/legacy/engine/swmm5.c
+index 4096c9a..dd4874e 100644
+--- a/src/legacy/engine/swmm5.c
++++ b/src/legacy/engine/swmm5.c
+@@ -692,7 +692,7 @@ int EXPORT_OPENSWMMCORE_SOLVER_API swmm_start(int saveFlag)
+     if (!IsOpenFlag)
+         return (ErrorCode = ERR_API_NOT_OPEN);
+     if (IsStartedFlag)
+-        return (ErrorCode = ERR_API_NOT_ENDED);
++        return ERR_API_NOT_ENDED;
+ 
+     // --- write input summary & project options to report file if requested
+     if (!RptFlags.disabled)
+@@ -802,7 +802,7 @@ int EXPORT_OPENSWMMCORE_SOLVER_API swmm_step(double *elapsedTime)
+     if (!IsOpenFlag)
+         return (ErrorCode = ERR_API_NOT_OPEN);
+     if (!IsStartedFlag)
+-        return (ErrorCode = ERR_API_NOT_STARTED);
++        return ERR_API_NOT_STARTED;
+ 
+ #ifdef EXH
+     // --- begin exception handling loop here
+@@ -862,7 +862,7 @@ int EXPORT_OPENSWMMCORE_SOLVER_API swmm_stride(int strideStep, double *elapsedTi
+     if (!IsOpenFlag)
+         return (ErrorCode = ERR_API_NOT_OPEN);
+     if (!IsStartedFlag)
+-        return (ErrorCode = ERR_API_NOT_STARTED);
++        return ERR_API_NOT_STARTED;
+ 
+     // --- modify total duration to be strideStep seconds after current time
+     RoutingDuration = NewRoutingTime + 1000.0 * strideStep;
+@@ -907,7 +907,7 @@ int EXPORT_OPENSWMMCORE_SOLVER_API swmm_useHotStart(const char *hotStartFile)
+     else if (!IsOpenFlag)
+         return (ErrorCode = ERR_API_NOT_OPEN);
+     else if (IsStartedFlag)
+-        return (ErrorCode = ERR_API_NOT_ENDED);
++        return ERR_API_NOT_ENDED;
+ 
+     sstrncpy(fname, hotStartFile, MAXFNAME);
+ 
+@@ -938,7 +938,7 @@ int EXPORT_OPENSWMMCORE_SOLVER_API swmm_saveHotStart(const char *hotStartFile)
+     else if (!IsOpenFlag)
+         return (ErrorCode = ERR_API_NOT_OPEN);
+     else if (!IsStartedFlag)
+-        return (ErrorCode = ERR_API_NOT_STARTED);
++        return ERR_API_NOT_STARTED;
+ 
+     errorCode = hotstart_save_to_file(hotStartFile);
+ 

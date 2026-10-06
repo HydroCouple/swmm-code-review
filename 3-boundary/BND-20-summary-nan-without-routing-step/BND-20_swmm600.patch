@@ -1,0 +1,28 @@
+BND-20: print 0 instead of NaN in the Flow Classification table when no routing step falls in the reporting period
+
+DefaultReportPlugin divides the flow-class, normal-flow-limited and
+inlet-control times by routing_stats.report_time, which is 0 when no routing
+step falls after REPORT_START ([EVENTS] outside the reporting window, or a
+client that ends the run before the first step). The node and storage
+averages are already guarded with max(report_steps, 1); use 1 s here as
+well, so the zero times print as 0.00. Results with at least one step are
+unchanged.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply BND-20_swmm600.patch
+
+diff --git a/src/engine/plugins/DefaultReportPlugin.cpp b/src/engine/plugins/DefaultReportPlugin.cpp
+index 36a8dbb..6fdb3d4 100644
+--- a/src/engine/plugins/DefaultReportPlugin.cpp
++++ b/src/engine/plugins/DefaultReportPlugin.cpp
+@@ -2953,7 +2953,9 @@ void DefaultReportPlugin::write_results(std::FILE* f,
+ "\n  Conduit               Length    Dry  Dry   Dry   Crit  Crit  Crit  Crit  Ltd   Ctrl  "
+ "\n  -------------------------------------------------------------------------------------");
+ 
+-        const double total_secs = ctx.routing_stats.report_time;
++        // No routing step in the reporting period: every time below is 0.
++        const double total_secs = (ctx.routing_stats.report_time > 0.0)
++            ? ctx.routing_stats.report_time : 1.0;
+ 
+         for (int j = 0; j < ctx.n_links(); ++j) {
+             auto uj = static_cast<std::size_t>(j);

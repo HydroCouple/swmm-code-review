@@ -1,0 +1,46 @@
+[TITLE]
+NUM-48: closed storage pond SU1 (4000 ft3) with P1 = 100 mg/L and first-order
+decay K1 = 24/day (1/h). No flow. KINWAVE, routing step 10 s, 6 h.
+Exact answer: 100*exp(-K1*t) = 100*exp(-6) = 0.247875 mg/L at 6 h, whatever
+the step (reference manual eq. 5-6 applies exp(-K1*dt) at each step).
+
+[OPTIONS]
+FLOW_UNITS           CFS
+INFILTRATION         HORTON
+FLOW_ROUTING         KINWAVE
+START_DATE           01/01/2020
+START_TIME           00:00:00
+REPORT_START_DATE    01/01/2020
+REPORT_START_TIME    00:00:00
+END_DATE             01/01/2020
+END_TIME             06:00:00
+DRY_STEP             00:05:00
+WET_STEP             00:05:00
+ROUTING_STEP         10
+REPORT_STEP          01:00:00
+
+[JUNCTIONS]
+J2   0   5   0   0   0
+
+[OUTFALLS]
+O1   0   FREE
+
+[STORAGE]
+;;Name Elev MaxDepth InitDepth Shape a b c SurDepth Fevap
+SU1  0  10  4  FUNCTIONAL  0  0  1000  0  0
+
+[CONDUITS]
+C1  SU1  J2  400  0.013  6  0  0
+C2  J2   O1  400  0.013  0  0  0
+
+[XSECTIONS]
+C1  CIRCULAR  1  0  0  0  1
+C2  CIRCULAR  1  0  0  0  1
+
+[POLLUTANTS]
+;;Name Units Crain Cgw Crdii Kdecay SnowOnly CoPollut CoFrac Cdwf Cinit
+P1  MG/L  0  0  0  24  NO  *  0  0  100
+
+[REPORT]
+NODES ALL
+LINKS ALL

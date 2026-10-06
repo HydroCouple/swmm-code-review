@@ -1,0 +1,35 @@
+CON-04: return only the rain on the covered barrel's own footprint
+
+SWMMEngine::stepRunoff() ported the 5.3.0 covered-barrel branch, which adds
+rain * total_lid_area_ft2 (all LID units of the subcatchment) to the return
+flow for every covered barrel unit; the rain on the other units is then
+counted twice. Use the unit's own area (lid_area). The branch only runs
+once the Covrd token is read (IO-24).
+
+Requires: IO-24
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply CON-04_swmm600.patch
+
+diff --git a/src/engine/core/SWMMEngine.cpp b/src/engine/core/SWMMEngine.cpp
+index 839529d..ec2f5ef 100644
+--- a/src/engine/core/SWMMEngine.cpp
++++ b/src/engine/core/SWMMEngine.cpp
+@@ -2486,15 +2486,13 @@ void SWMMEngine::stepRunoff(double dt_routing) noexcept {
+                 // the outlet runoff it is removed from.
+                 lid_vlidin_vol_[usc] += q_from_sc * lid_area * dt_runoff;
+                 // legacy lid_getRunoff: a COVERED rain barrel takes no rain
+-                // — the rain on the subcatchment's LID footprint goes back to
++                // — the rain on the barrel's own footprint goes back to
+                 // the pervious area instead (lid.c: qReturn += rainfall *
+                 // lidArea); every other unit adds the rain onto its inflow
+                 // (lid.c:1712 `lidInflow = lidInflow + rainfall`).
+                 if (g.type == lid::LIDType::RAIN_BARREL && g.stor_covered[uu]) {
+                     g.inflow[uu] = q_from_sc;
+-                    if (usc < ctx_.subcatches.total_lid_area_ft2.size())
+-                        ctx_.subcatches.lid_return_to_perv_cfs[usc] +=
+-                            rain * ctx_.subcatches.total_lid_area_ft2[usc];
++                    ctx_.subcatches.lid_return_to_perv_cfs[usc] += rain * lid_area;
+                 } else {
+                     g.inflow[uu] = q_from_sc + rain;
+                 }

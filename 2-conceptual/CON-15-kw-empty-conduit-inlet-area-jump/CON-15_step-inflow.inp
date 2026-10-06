@@ -1,0 +1,42 @@
+[TITLE]
+CON-15: a constant 15 cfs inflow starts at t = 0 into an empty KINWAVE
+conduit (2 ft circular, 2000 ft, full flow 16 cfs)
+
+[OPTIONS]
+;; The test rewrites ROUTING_STEP for each case of its sweep.
+FLOW_UNITS           CFS
+FLOW_ROUTING         KINWAVE
+START_DATE           01/01/2020
+START_TIME           00:00:00
+REPORT_START_DATE    01/01/2020
+REPORT_START_TIME    00:00:00
+END_DATE             01/01/2020
+END_TIME             03:00:00
+REPORT_STEP          00:05:00
+WET_STEP             00:05:00
+DRY_STEP             01:00:00
+ROUTING_STEP         5
+
+[JUNCTIONS]
+;;Name  Elev  MaxDepth  InitDepth  SurDepth  Aponded
+J1      110   5         0          0         0
+
+[OUTFALLS]
+;;Name  Elev  Type
+O1      100   FREE
+
+[CONDUITS]
+;;Name  From  To  Length  Roughness  InOffset  OutOffset  InitFlow
+C1      J1    O1  2000    0.013      0         0          0
+
+[XSECTIONS]
+;;Link  Shape     Geom1  Geom2  Geom3  Geom4  Barrels
+C1      CIRCULAR  2      0      0      0      1
+
+[INFLOWS]
+;;Node  Constituent  Series  Type  Mfactor  Sfactor  Baseline
+J1      FLOW         ""      FLOW  1.0      1.0      15
+
+[REPORT]
+NODES ALL
+LINKS ALL

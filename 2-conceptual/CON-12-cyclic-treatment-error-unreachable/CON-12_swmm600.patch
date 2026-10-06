@@ -1,0 +1,33 @@
+CON-12: count a reference to a pollutant's own removal as a treatment cycle
+
+initQuality() reports ERROR 161 when the R_<pollutant> references at a node
+form a cycle, but it dropped a pollutant's reference to its own removal
+(TN  R = 0.5*R_TN), so that cycle ran with the removal silently set to 0.
+Keep the self-reference in the dependency graph; the existing depth-first
+search then reports it as a cycle, as legacy getRemoval() treats it.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply CON-12_swmm600.patch
+
+diff --git a/src/engine/core/SWMMEngine.cpp b/src/engine/core/SWMMEngine.cpp
+index 839529d..3413a1e 100644
+--- a/src/engine/core/SWMMEngine.cpp
++++ b/src/engine/core/SWMMEngine.cpp
+@@ -9234,6 +9234,7 @@ void SWMMEngine::initQuality() noexcept {
+     // Gap #85: Cyclic treatment expression detection
+     // A cycle exists when pollutant p's expression references R_POLLUT(q)
+     // and pollutant q's expression references R_POLLUT(p) (directly or transitively).
++    // q may be p itself (R_TN in TN's own expression), as in legacy getRemoval().
+     if (ctx_.n_pollutants() > 0 && ctx_.n_nodes() > 0) {
+         int np = ctx_.n_pollutants();
+         int nn = ctx_.n_nodes();
+@@ -9248,8 +9249,7 @@ void SWMMEngine::initQuality() noexcept {
+                 for (const auto& tok : te.tokens) {
+                     if (tok.type == treatment::TokenType::VARIABLE
+                         && tok.var == treatment::TreatVar::R_POLLUT
+-                        && tok.pollut_ref >= 0 && tok.pollut_ref < np
+-                        && tok.pollut_ref != p) {
++                        && tok.pollut_ref >= 0 && tok.pollut_ref < np) {
+                         dep[static_cast<std::size_t>(p)].push_back(tok.pollut_ref);
+                     }
+                 }

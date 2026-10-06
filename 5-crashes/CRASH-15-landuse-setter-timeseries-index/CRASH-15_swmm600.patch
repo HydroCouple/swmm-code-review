@@ -1,0 +1,30 @@
+CRASH-15: reject an external-buildup time series index that does not exist
+
+For an EXTERNAL buildup function, c3 is the index of the loading time
+series. swmm_buildup_set() stored any c3, and the runoff step converts it
+with static_cast<int>() before its range check, which is undefined for a
+value beyond the range of int; an index in the range of int but past the
+tables was accepted and silently gave no loading. Return SWMM_ERR_BADPARAM
+for an EXTERNAL function unless c3 is the index of a time series.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply CRASH-15_swmm600.patch
+
+diff --git a/src/engine/core/openswmm_quality_impl.cpp b/src/engine/core/openswmm_quality_impl.cpp
+index 2cd63ec..9adbfac 100644
+--- a/src/engine/core/openswmm_quality_impl.cpp
++++ b/src/engine/core/openswmm_quality_impl.cpp
+@@ -196,6 +196,13 @@ SWMM_ENGINE_API int swmm_buildup_set(SWMM_Engine engine, int lu_idx, int pollut_
+     CHECK_HANDLE(engine);
+     auto& ctx = to_engine(engine)->context();
+     CHECK_INDEX(lu_idx >= 0 && lu_idx < ctx.n_landuses());
++    // c3 of an EXTERNAL (4) function is the index of its loading time series
++    if (func_type == 4) {
++        const auto& tables = ctx.tables.tables;
++        if (!(c3 >= 0.0 && c3 < static_cast<double>(tables.size())) ||
++            tables[static_cast<std::size_t>(c3)].type != openswmm::TableType::TIMESERIES)
++            return SWMM_ERR_BADPARAM;
++    }
+     // BW-MSX: indices past the pollutants address the reactions component's
+     // species (surface species index = n_pollutants + m).
+     if (pollut_idx >= ctx.n_pollutants()) {

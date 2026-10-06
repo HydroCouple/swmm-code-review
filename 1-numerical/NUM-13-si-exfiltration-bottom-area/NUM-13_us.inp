@@ -1,0 +1,46 @@
+[TITLE]
+NUM-13: the same 100 m2 (1076.39 ft2) vertical-walled storage unit, 2 m (6.562 ft)
+deep, seeping into soil with Psi 100 mm, Ksat 10 mm/hr, IMD 0.3, described as
+FUNCTIONAL (SU1), TABULAR (SU2) and CYLINDRICAL (SU3). US (CFS) units.
+
+[OPTIONS]
+FLOW_UNITS           CFS
+FLOW_ROUTING         DYNWAVE
+START_DATE           01/01/2020
+START_TIME           00:00:00
+REPORT_START_DATE    01/01/2020
+REPORT_START_TIME    00:00:00
+END_DATE             01/01/2020
+END_TIME             06:00:00
+REPORT_STEP          00:15:00
+WET_STEP             00:05:00
+DRY_STEP             00:05:00
+ROUTING_STEP         10
+
+[STORAGE]
+;;Name Elev  MaxDepth InitDepth Shape       Params                Ysur Fevap Psi   Ksat  IMD
+SU1    328.084  16.4042     6.56168      FUNCTIONAL  0 0 1076.39               0    0     3.93701 0.393701  0.3
+SU2    328.084  16.4042     6.56168      TABULAR     SC1                   0    0     3.93701 0.393701  0.3
+SU3    328.084  16.4042     6.56168      CYLINDRICAL 37.0204 37.0204 0         0    0     3.93701 0.393701  0.3
+
+[OUTFALLS]
+O1     295.276  FREE
+O2     295.276  FREE
+O3     295.276  FREE
+
+[CONDUITS]
+;;Outlets at the top of each unit: never reached
+C1     SU1  O1  100  0.013 16.4042 0
+C2     SU2  O2  100  0.013 16.4042 0
+C3     SU3  O3  100  0.013 16.4042 0
+
+[XSECTIONS]
+C1     CIRCULAR 0.3 0 0 0 1
+C2     CIRCULAR 0.3 0 0 0 1
+C3     CIRCULAR 0.3 0 0 0 1
+
+[CURVES]
+SC1 Storage 0 1076.39 16.4042 1076.39
+
+[REPORT]
+NODES ALL

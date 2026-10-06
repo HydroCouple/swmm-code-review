@@ -1,0 +1,24 @@
+IO-45: read evaporation from a runoff interface file in the units it was written
+
+runoff_saveToFile() writes each subcatchment's evaporation through
+subcatch_getResults() as evapLoss * UCF(EVAPRATE) (in/day or mm/day), but
+runoff_readFromFile() divided it by UCF(RAINFALL) (in/hr or mm/hr). The ratio
+is 24 in both unit systems, so a USE RUNOFF run reported 24 times the
+evaporation of the run that wrote the file. Divide by UCF(EVAPRATE).
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-45_swmm530.patch
+
+diff --git a/src/legacy/engine/runoff.c b/src/legacy/engine/runoff.c
+index bf00bad..f7fe3b2 100644
+--- a/src/legacy/engine/runoff.c
++++ b/src/legacy/engine/runoff.c
+@@ -457,7 +457,7 @@ void  runoff_readFromFile(void)
+         Subcatch[j].newSnowDepth = SubcatchResults[SUBCATCH_SNOWDEPTH] /
+                                    UCF(RAINDEPTH);
+         Subcatch[j].evapLoss     = SubcatchResults[SUBCATCH_EVAP] /
+-                                   UCF(RAINFALL);
++                                   UCF(EVAPRATE);
+         Subcatch[j].infilLoss    = SubcatchResults[SUBCATCH_INFIL] /
+                                    UCF(RAINFALL);
+         Subcatch[j].newRunoff    = SubcatchResults[SUBCATCH_RUNOFF] /

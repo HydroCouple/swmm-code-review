@@ -1,0 +1,142 @@
+API-16: range-check the end period, element index and attribute in the output reader
+
+The series getters accepted an end period past the last period, the series
+and result getters tested "index > count" instead of "index >= count", and no
+series or attribute getter checked the attribute index, so an out-of-range
+argument returned error 0 with values read from the next element, the next
+block of the file, or past its end. Reject endPeriod > Nperiods (422, or 423
+in SMO_getSystemSeries as for its other period errors), index >= count (423)
+and an attribute outside 0 .. Vars-1 (421).
+
+Requires: CRASH-19 (the NULL-handle lines sit next to these checks)
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply API-16_swmm530.patch
+
+diff --git a/src/legacy/output/swmm_output.c b/src/legacy/output/swmm_output.c
+index d02d050..c159aae 100644
+--- a/src/legacy/output/swmm_output.c
++++ b/src/legacy/output/swmm_output.c
+@@ -1148,11 +1148,13 @@ int EXPORT_OPENSWMMCORE_OUTPUT_API SMO_getSubcatchSeries(
+ 
+     if (p_data == NULL)
+         return -1;
+-    else if (subcatchIndex < 0 || subcatchIndex > p_data->Nsubcatch)
++    else if (subcatchIndex < 0 || subcatchIndex >= p_data->Nsubcatch)
+         errorcode = ERR423;
+     else if (startPeriod < 0 || startPeriod >= p_data->Nperiods ||
+-             endPeriod <= startPeriod)
++             endPeriod <= startPeriod || endPeriod > p_data->Nperiods)
+         errorcode = ERR422;
++    else if ((int)attr < 0 || (int)attr >= p_data->SubcatchVars)
++        errorcode = ERR421;
+     // Check memory for outValues
+     else if MEMCHECK (temp = newFloatArray(len = endPeriod - startPeriod))
+         errorcode = ERR411;
+@@ -1332,11 +1334,13 @@ int EXPORT_OPENSWMMCORE_OUTPUT_API SMO_getNodeSeries(SMO_Handle p_handle, int no
+ 
+     if (p_data == NULL)
+         return -1;
+-    else if (nodeIndex < 0 || nodeIndex > p_data->Nnodes)
++    else if (nodeIndex < 0 || nodeIndex >= p_data->Nnodes)
+         errorcode = ERR423;
+     else if (startPeriod < 0 || startPeriod >= p_data->Nperiods ||
+-             endPeriod <= startPeriod)
++             endPeriod <= startPeriod || endPeriod > p_data->Nperiods)
+         errorcode = ERR422;
++    else if ((int)attr < 0 || (int)attr >= p_data->NodeVars)
++        errorcode = ERR421;
+     // Check memory for outValues
+     else if MEMCHECK (temp = newFloatArray(len = endPeriod - startPeriod))
+         errorcode = ERR411;
+@@ -1368,11 +1372,13 @@ int EXPORT_OPENSWMMCORE_OUTPUT_API SMO_getLinkSeries(SMO_Handle p_handle, int li
+ 
+     if (p_data == NULL)
+         return -1;
+-    else if (linkIndex < 0 || linkIndex > p_data->Nlinks)
++    else if (linkIndex < 0 || linkIndex >= p_data->Nlinks)
+         errorcode = ERR423;
+     else if (startPeriod < 0 || startPeriod >= p_data->Nperiods ||
+-             endPeriod <= startPeriod)
++             endPeriod <= startPeriod || endPeriod > p_data->Nperiods)
+         errorcode = ERR422;
++    else if ((int)attr < 0 || (int)attr >= p_data->LinkVars)
++        errorcode = ERR421;
+     // Check memory for outValues
+     else if MEMCHECK (temp = newFloatArray(len = endPeriod - startPeriod))
+         errorcode = ERR411;
+@@ -1404,8 +1410,10 @@ int EXPORT_OPENSWMMCORE_OUTPUT_API SMO_getSystemSeries(SMO_Handle p_handle, SMO_
+     if (p_data == NULL)
+         return -1;
+     else if (startPeriod < 0 || startPeriod >= p_data->Nperiods ||
+-             endPeriod <= startPeriod)
++             endPeriod <= startPeriod || endPeriod > p_data->Nperiods)
+         errorcode = ERR423;
++    else if ((int)attr < 0 || (int)attr >= p_data->SysVars)
++        errorcode = ERR421;
+     // Check memory for outValues
+     else if MEMCHECK (temp = newFloatArray(len = endPeriod - startPeriod))
+         errorcode = ERR411;
+@@ -1438,6 +1446,8 @@ int EXPORT_OPENSWMMCORE_OUTPUT_API SMO_getSubcatchAttribute(SMO_Handle p_handle,
+         return -1;
+     else if (periodIndex < 0 || periodIndex >= p_data->Nperiods)
+         errorcode = ERR422;
++    else if ((int)attr < 0 || (int)attr >= p_data->SubcatchVars)
++        errorcode = ERR421;
+     // Check memory for outValues
+     else if MEMCHECK (temp = newFloatArray(p_data->Nsubcatch))
+         errorcode = ERR411;
+@@ -1470,6 +1480,8 @@ int EXPORT_OPENSWMMCORE_OUTPUT_API SMO_getNodeAttribute(SMO_Handle p_handle, int
+         return -1;
+     else if (periodIndex < 0 || periodIndex >= p_data->Nperiods)
+         errorcode = ERR422;
++    else if ((int)attr < 0 || (int)attr >= p_data->NodeVars)
++        errorcode = ERR421;
+     // Check memory for outValues
+     else if MEMCHECK (temp = newFloatArray(p_data->Nnodes))
+         errorcode = ERR411;
+@@ -1502,6 +1514,8 @@ int EXPORT_OPENSWMMCORE_OUTPUT_API SMO_getLinkAttribute(SMO_Handle p_handle, int
+         return -1;
+     else if (periodIndex < 0 || periodIndex >= p_data->Nperiods)
+         errorcode = ERR422;
++    else if ((int)attr < 0 || (int)attr >= p_data->LinkVars)
++        errorcode = ERR421;
+     // Check memory for outValues
+     else if MEMCHECK (temp = newFloatArray(p_data->Nlinks))
+         errorcode = ERR411;
+@@ -1534,6 +1548,8 @@ int EXPORT_OPENSWMMCORE_OUTPUT_API SMO_getSystemAttribute(SMO_Handle p_handle, i
+         return -1;
+     else if (periodIndex < 0 || periodIndex >= p_data->Nperiods)
+         errorcode = ERR422;
++    else if ((int)attr < 0 || (int)attr >= p_data->SysVars)
++        errorcode = ERR421;
+     else if MEMCHECK (temp = newFloatArray(1))
+         errorcode = ERR411;
+     else
+@@ -1565,7 +1581,7 @@ int EXPORT_OPENSWMMCORE_OUTPUT_API SMO_getSubcatchResult(SMO_Handle p_handle, in
+         return -1;
+     else if (periodIndex < 0 || periodIndex >= p_data->Nperiods)
+         errorcode = ERR422;
+-    else if (subcatchIndex < 0 || subcatchIndex > p_data->Nsubcatch)
++    else if (subcatchIndex < 0 || subcatchIndex >= p_data->Nsubcatch)
+         errorcode = ERR423;
+     else if MEMCHECK (temp = newFloatArray(p_data->SubcatchVars))
+         errorcode = ERR411;
+@@ -1604,7 +1620,7 @@ int EXPORT_OPENSWMMCORE_OUTPUT_API SMO_getNodeResult(SMO_Handle p_handle, int pe
+         return -1;
+     else if (periodIndex < 0 || periodIndex >= p_data->Nperiods)
+         errorcode = ERR422;
+-    else if (nodeIndex < 0 || nodeIndex > p_data->Nnodes)
++    else if (nodeIndex < 0 || nodeIndex >= p_data->Nnodes)
+         errorcode = ERR423;
+     else if MEMCHECK (temp = newFloatArray(p_data->NodeVars))
+         errorcode = ERR411;
+@@ -1645,7 +1661,7 @@ int EXPORT_OPENSWMMCORE_OUTPUT_API SMO_getLinkResult(SMO_Handle p_handle, int pe
+         return -1;
+     else if (periodIndex < 0 || periodIndex >= p_data->Nperiods)
+         errorcode = 422;
+-    else if (linkIndex < 0 || linkIndex > p_data->Nlinks)
++    else if (linkIndex < 0 || linkIndex >= p_data->Nlinks)
+         errorcode = ERR423;
+     else if MEMCHECK (temp = newFloatArray(p_data->LinkVars))
+         errorcode = ERR411;

@@ -1,0 +1,70 @@
+[TITLE]
+IO-24: three identical rain barrels, STORAGE line with YES, with NO and without the Covrd token
+
+[OPTIONS]
+FLOW_UNITS       CFS
+INFILTRATION     HORTON
+FLOW_ROUTING     KINWAVE
+START_DATE       01/01/2020
+START_TIME       00:00:00
+REPORT_START_DATE 01/01/2020
+REPORT_START_TIME 00:00:00
+END_DATE         01/01/2020
+END_TIME         06:00:00
+REPORT_STEP      00:15:00
+WET_STEP         00:01:00
+DRY_STEP         00:01:00
+ROUTING_STEP     60
+
+[EVAPORATION]
+CONSTANT 0.0
+
+[RAINGAGES]
+G1 INTENSITY 1:00 1.0 TIMESERIES TS1
+
+[TIMESERIES]
+;1 in/hr for 2 hours = 2.0 in
+TS1 0 1.0
+TS1 1 1.0
+TS1 2 0.0
+
+[SUBCATCHMENTS]
+;name rg outlet area %imp width slope curb
+S1 G1 O1 10 50 500 1 0
+S2 G1 O1 10 50 500 1 0
+S3 G1 O1 10 50 500 1 0
+
+[SUBAREAS]
+S1 0.01 0.1 0 0 0 OUTLET
+S2 0.01 0.1 0 0 0 OUTLET
+S3 0.01 0.1 0 0 0 OUTLET
+
+[INFILTRATION]
+S1 0 0 4 7 0
+S2 0 0 4 7 0
+S3 0 0 4 7 0
+
+[LID_CONTROLS]
+;48 in barrels with no drain; they only hold what reaches them
+RB_YES RB
+RB_YES STORAGE 48 0.75 0 0 YES
+RB_YES DRAIN 0 0.5 0 6 0 0
+RB_NO RB
+RB_NO STORAGE 48 0.75 0 0 NO
+RB_NO DRAIN 0 0.5 0 6 0 0
+RB_DEF RB
+RB_DEF STORAGE 48 0.75 0 0
+RB_DEF DRAIN 0 0.5 0 6 0 0
+
+[LID_USAGE]
+;subcatch lid number area(ft2) width initsat fromimp toperv
+;FromImp = 0: a barrel's only possible inflow is the rain on its own top
+S1 RB_YES 100 50 0 0 0 0
+S2 RB_NO  100 50 0 0 0 0
+S3 RB_DEF 100 50 0 0 0 0
+
+[OUTFALLS]
+O1 0 FREE
+
+[REPORT]
+SUBCATCHMENTS ALL

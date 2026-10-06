@@ -1,0 +1,80 @@
+[TITLE]
+API-07: S1 (10 ac) covered by three land uses, 20% / 30% / 50%. After 5 dry
+days the EXP buildup of P1 is at its maximum on each: 50 lb/ac on L1, 10 lb/ac
+on L2, none on L3. Total 50 x 2 + 10 x 3 = 130 lb, i.e. 13 lb/ac.
+
+[OPTIONS]
+FLOW_UNITS           CFS
+INFILTRATION         HORTON
+FLOW_ROUTING         KINWAVE
+START_DATE           01/01/2020
+START_TIME           00:00:00
+REPORT_START_DATE    01/01/2020
+REPORT_START_TIME    00:00:00
+END_DATE             01/01/2020
+END_TIME             01:00:00
+DRY_DAYS             5
+DRY_STEP             00:05:00
+WET_STEP             00:05:00
+ROUTING_STEP         60
+REPORT_STEP          00:15:00
+
+[EVAPORATION]
+CONSTANT  0.0
+
+[RAINGAGES]
+;;Name Format    Interval SCF Source
+G1     INTENSITY 0:15     1.0 TIMESERIES TS1
+
+[SUBCATCHMENTS]
+;;Name Gage Outlet Area %Imperv Width %Slope CurbLen
+S1     G1   J1     10   50      500   1.0    0
+
+[SUBAREAS]
+S1  0.015  0.1  0.05  0.05  25  OUTLET
+
+[INFILTRATION]
+S1  3.0  0.5  4  7  0
+
+[JUNCTIONS]
+J1  10  5  0  0  0
+
+[OUTFALLS]
+O1  5  FREE
+
+[CONDUITS]
+C1  J1  O1  400  0.013  0  0  0
+
+[XSECTIONS]
+C1  CIRCULAR  1.0  0  0  0  1
+
+[POLLUTANTS]
+;;Name Units Crain Cgw Crdii Kdecay SnowOnly CoPollut CoFrac Cdwf Cinit
+P1  MG/L  0  0  0  0  NO  *  0  0  0
+
+[LANDUSES]
+L1
+L2
+L3
+
+[COVERAGES]
+S1  L1  20
+S1  L2  30
+S1  L3  50
+
+[BUILDUP]
+;;LandUse Pollutant Function C1 C2 C3 PerUnit
+L1  P1  EXP   50  10  0  AREA
+L2  P1  EXP   10  10  0  AREA
+L3  P1  NONE  0   0   0  AREA
+
+[WASHOFF]
+;;LandUse Pollutant Function C1 C2 SweepRmvl BmpRmvl
+L1  P1  EMC  0  0  0  0
+L2  P1  EMC  0  0  0  0
+L3  P1  EMC  0  0  0  0
+
+[TIMESERIES]
+TS1  0:00   0.0
+TS1  0:15   0.0
+TS1  1:00   0.0

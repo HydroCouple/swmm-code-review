@@ -1,0 +1,26 @@
+IO-35: default REPORT_START_TIME to 00:00:00 instead of NO_DATE
+
+setDefaults() initialised both ReportStartDate and ReportStartTime to NO_DATE
+(-693594 days). With REPORT_START_DATE given and REPORT_START_TIME omitted,
+project_readInput() formed ReportStart = date - 693594 days, which
+MAX(ReportStart, StartDateTime) replaced by the simulation start, so the
+requested report start date was ignored. Default the time to 00:00:00, as the
+input reference documents. When REPORT_START_DATE is omitted the sum is still
+before the simulation start, so reporting still begins with the simulation.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-35_swmm530.patch
+
+diff --git a/src/legacy/engine/project.c b/src/legacy/engine/project.c
+index d24c17f..cc887ba 100644
+--- a/src/legacy/engine/project.c
++++ b/src/legacy/engine/project.c
+@@ -920,7 +920,7 @@ void setDefaults()
+    EndDate         = StartDate;
+    EndTime         = 0.0;
+    ReportStartDate = NO_DATE;
+-   ReportStartTime = NO_DATE;
++   ReportStartTime = 0.0;              // 00:00:00 on REPORT_START_DATE
+    SweepStart      = 1;
+    SweepEnd        = 365;
+ 

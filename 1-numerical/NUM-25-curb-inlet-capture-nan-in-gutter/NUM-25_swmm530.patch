@@ -1,0 +1,26 @@
+NUM-25: use Eo = 1 for a curb inlet when the spread is within the gutter
+
+getCurbInletCapture() computes the gutter flow ratio Eo with getEo(Sr, T-W, W).
+When the flow spread T is narrower than the depressed gutter width W, T-W is
+negative, getEo() raises a negative number to the power 2.67 and returns NaN,
+the "L < Lt" test is false and the inlet captures all of the flow. When the
+spread is within the gutter all flow is gutter flow, so Eo = 1 (HEC-22), as
+getGutterFlowRatio() already does for grates.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-25_swmm530.patch
+
+diff --git a/src/legacy/engine/inlet.c b/src/legacy/engine/inlet.c
+index fa52cb3..1634e25 100644
+--- a/src/legacy/engine/inlet.c
++++ b/src/legacy/engine/inlet.c
+@@ -1494,7 +1494,8 @@ double getCurbInletCapture(double Q, double L)
+     if (a > 0.0)
+     {
+         Sr = Sw / Sx;
+-        Eo = getEo(Sr, T-W, W);
++        if (T <= W) Eo = 1.0;    // spread is within the depressed gutter
++        else        Eo = getEo(Sr, T-W, W);
+         Se = Sx + (a/W) * Eo;                              //HEC-22 Eq(4-24)
+     }
+ 

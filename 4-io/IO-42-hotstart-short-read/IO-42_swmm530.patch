@@ -1,0 +1,58 @@
+IO-42: refuse a hot start file that ends early or has data left over
+
+readFloat() ignored the return value of fread(), so once the file ran out it
+returned the previous value as if it had been read; readDouble() tested feof()
+before reading, which is only set after a read has failed. A truncated file,
+or one saved from a model whose node types differ (a storage unit adds one
+float), was applied without an error, with wrong flows, depths and settings.
+Check the fread() result in both readers (error 335) and, after the routing
+records, check that nothing is left in the file (error 333). Files that match
+the model are read exactly as before.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-42_swmm530.patch
+
+diff --git a/src/legacy/engine/hotstart.c b/src/legacy/engine/hotstart.c
+index c03ca4a..25ba560 100644
+--- a/src/legacy/engine/hotstart.c
++++ b/src/legacy/engine/hotstart.c
+@@ -303,6 +303,10 @@ int initializeFromHotstartFile()
+     // --- read contents of the file and close it
+     if ( fileVersion >= 3 ) readRunoff();
+     readRouting();
++
++    // --- data left over means the file does not match the model's layout
++    if ( !ErrorCode && fgetc(FhotstartInput.file) != EOF )
++        report_writeErrorMsg(ERR_HOTSTART_FILE_FORMAT, "");
+     fclose(FhotstartInput.file);
+     if ( ErrorCode ) return FALSE;
+     else return TRUE;
+@@ -640,7 +644,12 @@ int  readFloat(float *x, FILE* f)
+ //
+ {
+     // --- read a value from the file
+-    fread(x, sizeof(float), 1, f);
++    if ( fread(x, sizeof(float), 1, f) != 1 )
++    {
++        report_writeErrorMsg(ERR_HOTSTART_FILE_READ, "");
++        *(x) = 0.0;
++        return FALSE;
++    }
+ 
+     // --- test if the value is NaN (not a number)
+     if ( *(x) != *(x) )
+@@ -662,13 +671,12 @@ int  readDouble(double* x, FILE* f)
+ //
+ {
+     // --- read a value from the file
+-    if ( feof(f) )
++    if ( fread(x, sizeof(double), 1, f) != 1 )
+     {    
+         *(x) = 0.0;
+         report_writeErrorMsg(ERR_HOTSTART_FILE_READ, "");
+         return FALSE;
+     }
+-    fread(x, sizeof(double), 1, f);
+ 
+     // --- test if the value is NaN (not a number)
+     if ( *(x) != *(x) )

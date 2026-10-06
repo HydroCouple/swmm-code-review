@@ -1,0 +1,27 @@
+CON-24: cap the snow pack's cold content at 0.007 x WSNOW x (Tbase - ATI)
+
+updateColdContent() limited the cold content to wsnow * 0.007 / 12 *
+(tbase - ati). wsnow and the cold content are both in ft of water equivalent
+and 0.007 is a ratio per deg F (Reference Manual Vol. I, Sec. 6.6, step 8:
+"0.007 WSNOW (Tbase - ATI)"), so the /12 is not a unit conversion: it made
+the cap 12 times too small and a cold pack started to melt almost at once
+on warming. Drop the /12.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply CON-24_swmm530.patch
+
+diff --git a/src/legacy/engine/snow.c b/src/legacy/engine/snow.c
+index d415675..4ee09b6 100644
+--- a/src/legacy/engine/snow.c
++++ b/src/legacy/engine/snow.c
+@@ -840,8 +840,8 @@ void updateColdContent(TSnowpack* snowpack, int i, double asc, double snowfall,
+     cc = MAX(cc, 0.0);
+ 
+     // --- maximum cold content based on assumed specific heat of snow
+-    //     of 0.007 in. water equiv. per deg. F
+-    ccMax = snowpack->wsnow[i] * 0.007 / 12.0 * (Snowmelt[k].tbase[i] - ati);
++    //     of 0.007 in. water equiv. per in. of snow per deg. F
++    ccMax = snowpack->wsnow[i] * 0.007 * (Snowmelt[k].tbase[i] - ati);
+     cc = MIN(cc, ccMax);
+ 
+     // --- assign updated values to snowpack

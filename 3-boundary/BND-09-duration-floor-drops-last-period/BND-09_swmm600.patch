@@ -1,0 +1,53 @@
+BND-09: round the total duration to the nearest second instead of truncating it
+
+OptionsHandler copies 5.3.0's floor((EndDate - StartDate)*86400 +
+(EndTime - StartTime)*86400), and SimulationOptions::totalDurationMs() (used
+after the dates are set through the API) floors the combined serials as 5.2.4
+did. Both often come out one second short, so the run stops at END - 1 s and
+the last reporting period is never saved. Add 0.5 before each floor.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply BND-09_swmm600.patch
+
+diff --git a/src/engine/core/SimulationOptions.hpp b/src/engine/core/SimulationOptions.hpp
+index c076ed1..97402cb 100644
+--- a/src/engine/core/SimulationOptions.hpp
++++ b/src/engine/core/SimulationOptions.hpp
+@@ -823,12 +823,12 @@ struct SimulationOptions {
+ 
+     /** @brief Total simulation duration in milliseconds (legacy TotalDuration).
+      *  @details Returns the legacy-exact value stored by the INP options
+-     *  handler when available; otherwise falls back to flooring the combined
++     *  handler when available; otherwise falls back to rounding the combined
+      *  serial difference to whole seconds (mirroring legacy swmm5.c:3198-3200
+      *  as closely as the combined representation allows). */
+     double totalDurationMs() const {
+         if (total_duration_ms >= 0.0) return total_duration_ms;
+-        return std::floor((end_date - start_date) * 86400.0) * 1000.0;
++        return std::floor((end_date - start_date) * 86400.0 + 0.5) * 1000.0;
+     }
+ };
+ 
+diff --git a/src/engine/input/handlers/OptionsHandler.cpp b/src/engine/input/handlers/OptionsHandler.cpp
+index 90d0814..54f7d0f 100644
+--- a/src/engine/input/handlers/OptionsHandler.cpp
++++ b/src/engine/input/handlers/OptionsHandler.cpp
+@@ -713,7 +713,8 @@ void handle_options(SimulationContext& ctx, const std::vector<std::string>& line
+     }
+     // PARITY swmm5.c:3198-3200: legacy forms TotalDuration from the SEPARATE
+     // date and time parts — floor((EndDate-StartDate)*86400 +
+-    // (EndTime-StartTime)*86400) × 1000 — which is exact whole-second ms.
++    // (EndTime-StartTime)*86400 + 0.5) × 1000 — rounded to whole seconds,
++    // since the day fractions are often 1 ulp below them (BND-09).
+     // The combined serials (end_date - start_date)*86400000 round differently
+     // (e.g. 172679999.99999997 vs the legacy-exact 172680000.0), perturbing
+     // the final clipped runoff step near simulation end. Only computable here
+@@ -722,7 +723,7 @@ void handle_options(SimulationContext& ctx, const std::vector<std::string>& line
+     if (got_start_date && got_end_date) {
+         opt.total_duration_ms =
+             std::floor((end_date_part - start_date_part) * 86400.0 +
+-                       (end_time_part - start_time_part) * 86400.0) * 1000.0;
++                       (end_time_part - start_time_part) * 86400.0 + 0.5) * 1000.0;
+     }
+     if (got_rpt_date || got_rpt_time) {
+         opt.report_start = rpt_date_part + rpt_time_part;

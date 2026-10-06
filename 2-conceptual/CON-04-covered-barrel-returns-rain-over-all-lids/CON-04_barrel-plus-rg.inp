@@ -1,0 +1,63 @@
+[TITLE]
+CON-04: covered rain barrels and a rain garden in the same subcatchment
+
+[OPTIONS]
+FLOW_UNITS       CFS
+INFILTRATION     HORTON
+FLOW_ROUTING     KINWAVE
+START_DATE       01/01/2020
+START_TIME       00:00:00
+REPORT_START_DATE 01/01/2020
+REPORT_START_TIME 00:00:00
+END_DATE         01/01/2020
+END_TIME         12:00:00
+REPORT_STEP      00:15:00
+WET_STEP         00:01:00
+DRY_STEP         00:01:00
+ROUTING_STEP     60
+
+[EVAPORATION]
+CONSTANT 0.0
+
+[RAINGAGES]
+G1 INTENSITY 1:00 1.0 TIMESERIES TS1
+
+[TIMESERIES]
+;1 in/hr for 2 hours = 2.0 in
+TS1 0 1.0
+TS1 1 1.0
+TS1 2 0.0
+
+[SUBCATCHMENTS]
+;name rg outlet area %imp width slope curb
+;10 ac, half pervious with no infiltration
+S1 G1 O1 10 50 500 1 0
+
+[SUBAREAS]
+S1 0.01 0.1 0 0 0 OUTLET
+
+[INFILTRATION]
+S1 0 0 4 7 0
+
+[LID_CONTROLS]
+;covered 48 in barrel without a drain
+RB1 RB
+RB1 STORAGE 48 0.75 0 0 YES
+RB1 DRAIN 0 0.5 0 6 0 0
+;rain garden with no seepage into the native soil
+RG1 RG
+RG1 SURFACE 0 0 0.1 1 5
+RG1 SOIL 1 0.5 0.2 0.1 0.5 10 3.5
+RG1 STORAGE 0 0.75 0 0
+
+[LID_USAGE]
+;subcatch lid number area(ft2) width initsat fromimp toperv
+;20 barrels of 50 ft2 = 1,000 ft2; rain garden 100,000 ft2 (2.3 ac)
+S1 RB1 20 50     0   0 0 0
+S1 RG1 1  100000 300 0 0 0
+
+[OUTFALLS]
+O1 0 FREE
+
+[REPORT]
+SUBCATCHMENTS ALL

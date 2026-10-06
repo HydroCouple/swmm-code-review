@@ -1,0 +1,144 @@
+NUM-41: give RDII the rain that fell in each time step, not a point sample
+
+getRainfall() took the gage's intensity at the start of each UH rain interval
+(one gage_setState() call per RDII time step) and multiplied it by the
+interval length. When WET_STEP does not divide the gage's recording interval,
+or a UH limb shorter than WET_STEP makes the interval shorter than the step,
+that is not the depth that fell, and RDII gets 0.67 to 1.20 times the right
+rain. The new getGageRainfall() walks the gage's rainfall changes over each
+RDII time step and returns their time-weighted average. Each rain interval
+gets that average times the part of the step it covers (from the end of the
+previous interval to its own end, at most the current date), so the depths
+of a step add up to the rain that fell in it. Where one rain value covers the
+whole step the result is bit-identical to before.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-41_swmm530.patch
+
+diff --git a/src/legacy/engine/rdii.c b/src/legacy/engine/rdii.c
+index d8835c5..e86b171 100644
+--- a/src/legacy/engine/rdii.c
++++ b/src/legacy/engine/rdii.c
+@@ -82,6 +82,8 @@ static DateTime   RdiiEndDate;         // end date of RDII inflow period
+ static double     TotalRainVol;        // total rainfall volume (ft3)
+ static double     TotalRdiiVol;        // total RDII volume (ft3)
+ static int        RdiiFileType;        // type (binary/text) of RDII file
++static double*    GageRain;            // avg. rainfall at each gage over
++                                       // current RDII time step (in/hr or mm/hr)
+ 
+ //-----------------------------------------------------------------------------
+ // Imported Variables
+@@ -125,6 +127,7 @@ static void   initGageData(void);
+ static void   initUnitHydData(void);
+ static int    openNewRdiiFile(void);
+ static void   getRainfall(DateTime currentDate);
++static double getGageRainfall(int g, DateTime date1, DateTime date2);
+ 
+ static double applyIA(int j, int k, DateTime aDate, double dt,
+               double rainDepth);
+@@ -999,6 +1002,8 @@ int  allocRdiiMemory()
+     if ( !RdiiNodeIndex ) return FALSE;
+     RdiiNodeFlow = (REAL4 *) calloc(NumRdiiNodes, sizeof(REAL4));
+     if ( !RdiiNodeFlow ) return FALSE;
++    GageRain = (double *) calloc(Nobjects[GAGE] + 1, sizeof(double));
++    if ( !GageRain ) return FALSE;
+     return TRUE;
+ }
+ 
+@@ -1214,15 +1219,20 @@ void getRainfall(DateTime currentDate)
+     double   rainDepth;                // rainfall depth (inches or mm)
+     double   excessDepth;              // excess rainfall depth (inches or mm))
+     DateTime gageDate;                 // calendar date for rain gage
++    DateTime prevDate;                 // date of previous RDII time step
++    DateTime date1, date2;             // part of current RDII time step
++                                       // covered by a UH rain interval
+ 
+     // --- examine each UH group
+     month = datetime_monthOfYear(currentDate) - 1;
++    prevDate = datetime_addSeconds(currentDate, -RdiiStep);
+     for (g = 0; g < Nobjects[GAGE]; g++) Gage[g].isCurrent = FALSE;
+     for (j = 0; j < Nobjects[UNITHYD]; j++)
+     {
+         // --- repeat until gage's date reaches or exceeds current date
+         g = UnitHyd[j].rainGage;
+         rainInterval = UHGroup[j].rainInterval;
++        date1 = prevDate;
+         while ( UHGroup[j].gageDate < currentDate )
+         {
+             // --- get rainfall volume over gage's recording interval
+@@ -1231,10 +1241,17 @@ void getRainfall(DateTime currentDate)
+             Adjust.rainFactor = Adjust.rain[datetime_monthOfYear(gageDate)-1];
+             if (!Gage[g].isCurrent)
+             {
+-                gage_setState(g, gageDate);
++                GageRain[g] = getGageRainfall(g, prevDate, currentDate);
+                 Gage[g].isCurrent = TRUE;
+             }
+-            rainDepth = Gage[g].rainfall * (double)rainInterval / 3600.0;
++
++            // --- rain falling between end of previous UH interval and
++            //     end of this one (but not beyond current date)
++            date2 = MIN(datetime_addSeconds(gageDate, rainInterval),
++                        currentDate);
++            rainDepth = GageRain[g] * (double)datetime_timeDiff(date2, date1)
++                        / 3600.0;
++            date1 = date2;
+ 
+             // --- update amount of total rainfall volume (ft3)
+             TotalRainVol += rainDepth / UCF(RAINDEPTH) * UHGroup[j].area;
+@@ -1265,6 +1282,49 @@ void getRainfall(DateTime currentDate)
+ 
+ //=============================================================================
+ 
++double getGageRainfall(int g, DateTime date1, DateTime date2)
++//
++//  Input:   g = rain gage index
++//           date1 = start of a time period
++//           date2 = end of the time period
++//  Output:  returns average rainfall intensity (in/hr or mm/hr)
++//  Purpose: finds a rain gage's average rainfall intensity over a time period.
++//
++{
++    long     totalSecs = datetime_timeDiff(date2, date1);
++    long     secs = 0;                 // seconds from date1 to t
++    long     nextSecs;                 // seconds from date1 to tNext
++    long     runSecs = 0;              // length of current constant-rain run
++    double   r = 0.0;                  // rainfall intensity of current run
++    double   sum = 0.0;                // rain volume of previous runs
++    DateTime t = date1, tNext;
++
++    // --- step through the dates at which the gage's rainfall changes,
++    //     merging consecutive periods with the same intensity
++    while ( secs < totalSecs )
++    {
++        gage_setState(g, t);
++        tNext = gage_getNextRainDate(g, t);
++        nextSecs = totalSecs;
++        if ( tNext > t && tNext < date2 )
++            nextSecs = MIN(datetime_timeDiff(tNext, date1), totalSecs);
++        else tNext = date2;
++        if ( runSecs > 0 && Gage[g].rainfall != r )
++        {
++            sum += r * (double)runSecs;
++            runSecs = 0;
++        }
++        r = Gage[g].rainfall;
++        runSecs += nextSecs - secs;
++        secs = nextSecs;
++        t = tNext;
++    }
++    if ( runSecs == totalSecs ) return r;
++    return (sum + r * (double)runSecs) / (double)totalSecs;
++}
++
++//=============================================================================
++
+ double  applyIA(int j, int k, DateTime aDate, double dt, double rainDepth)
+ //
+ //  Input:   j = UH group index
+@@ -1573,4 +1633,5 @@ void freeRdiiMemory()
+     }
+     FREE(RdiiNodeIndex);
+     FREE(RdiiNodeFlow);
++    FREE(GageRain);
+ }

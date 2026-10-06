@@ -1,0 +1,25 @@
+IO-14: reject culvert codes above 57
+
+link_readXsectParams() only rejected negative culvert codes. A code above 57
+(the last entry of the culvert table) was stored; culvert_getInflow() then
+ignores it, but dwflow.c has already taken the culvert branch for any code
+> 0 and skipped the normal-flow limitation, so a mistyped code changed the
+hydraulics without a message. Reject codes outside 0 - 57 as invalid input.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-14_swmm530.patch
+
+diff --git a/src/legacy/engine/link.c b/src/legacy/engine/link.c
+index 31925e1..bc14cd4 100644
+--- a/src/legacy/engine/link.c
++++ b/src/legacy/engine/link.c
+@@ -262,7 +262,8 @@ int link_readXsectParams(char* tok[], int ntoks)
+         if ( Link[j].type == CONDUIT && ntoks >= 8 )
+         {
+             i = atoi(tok[7]);
+-            if ( i < 0 ) return error_setInpError(ERR_NUMBER, tok[7]);
++            if ( i < 0 || i > 57 )               // culvert codes are 1 - 57
++                return error_setInpError(ERR_NUMBER, tok[7]);
+             else Link[j].xsect.culvertCode = i;
+         }
+     }

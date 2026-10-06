@@ -1,0 +1,3 @@
+[submodule "swmm"]
+	path = swmm
+	url = https://github.com/HydroCouple/Stormwater-Management-Model.git

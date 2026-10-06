@@ -1,0 +1,24 @@
+BND-12: count TIMEOPEN / TIMECLOSED from the start of the run, not from midnight
+
+link_initState() set every link's timeLastSet to StartDate, the date part
+of the start (midnight), so TIMEOPEN / TIMECLOSED rule premises and the
+toolkit's swmm_LINK_TIMEOPEN / swmm_LINK_TIMECLOSED values included the
+start time of day: in a run starting at 06:00 every link had been open or
+closed for 6 h at the first step. Use StartDateTime.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply BND-12_swmm530.patch
+
+diff --git a/src/legacy/engine/link.c b/src/legacy/engine/link.c
+index 31925e1..43a26ce 100644
+--- a/src/legacy/engine/link.c
++++ b/src/legacy/engine/link.c
+@@ -526,7 +526,7 @@ void link_initState(int j)
+     Link[j].newVolume = 0.0;
+     Link[j].setting   = 1.0;
+     Link[j].targetSetting = 1.0;
+-    Link[j].timeLastSet = StartDate;
++    Link[j].timeLastSet = StartDateTime;
+     Link[j].inletControl  = FALSE;
+     Link[j].normalFlow    = FALSE;
+     if ( Link[j].type == CONDUIT ) conduit_initState(j, Link[j].subIndex);

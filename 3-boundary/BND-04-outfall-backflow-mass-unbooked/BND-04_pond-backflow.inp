@@ -1,0 +1,57 @@
+[TITLE]
+BND-04: storage SU1 drains through C1 to outfall O1. For 2 h SU1 gets 1 cfs at
+10 mg/L, then the inflow stops and the outfall stage rises to 3 ft, so water
+flows back from O1 into SU1, carrying O1's last concentration (10 mg/L).
+
+[OPTIONS]
+FLOW_UNITS           CFS
+INFILTRATION         HORTON
+FLOW_ROUTING         DYNWAVE
+START_DATE           01/01/2020
+START_TIME           00:00:00
+REPORT_START_DATE    01/01/2020
+REPORT_START_TIME    00:00:00
+END_DATE             01/01/2020
+END_TIME             08:00:00
+DRY_STEP             00:05:00
+WET_STEP             00:05:00
+ROUTING_STEP         5
+REPORT_STEP          01:00:00
+
+[STORAGE]
+;;Name Elev MaxDepth InitDepth Shape      Coeff Expon Const SurDepth Fevap
+SU1    0    10       0         FUNCTIONAL 0     0     20000 0        0
+
+[OUTFALLS]
+;;Name Elev Type       Stage
+O1     0    TIMESERIES STAGE
+
+[CONDUITS]
+;;Name From To Length Rough InOff OutOff InitFlow
+C1     SU1  O1 200    0.013 0     0      0
+
+[XSECTIONS]
+C1     CIRCULAR 2 0 0 0 1
+
+[POLLUTANTS]
+;;Name Units Crain Cgw Crdii Kdecay SnowOnly CoPoll CoFrac Cdwf Cinit
+P1     MG/L  0     0   0     0      NO       *      0      0    0
+
+[INFLOWS]
+;;Node Param TSeries Type   Mfactor Sfactor Baseline
+SU1    FLOW  QIN     FLOW   1.0     1.0     0
+SU1    P1    ""      CONCEN 1.0     1.0     10
+
+[TIMESERIES]
+QIN    01/01/2020  00:00  1.0
+QIN    01/01/2020  02:00  1.0
+QIN    01/01/2020  02:01  0.0
+QIN    01/01/2020  08:00  0.0
+STAGE  01/01/2020  00:00  0.0
+STAGE  01/01/2020  02:00  0.0
+STAGE  01/01/2020  02:30  3.0
+STAGE  01/01/2020  08:00  3.0
+
+[REPORT]
+NODES ALL
+LINKS ALL

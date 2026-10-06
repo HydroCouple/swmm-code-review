@@ -1,0 +1,26 @@
+BND-05: seed a conduit's downstream node with its outlet offset, not its inlet offset
+
+The initNodeDepths port in SWMMEngine::initialize() takes each link's water level
+as depth + offset1 at both end nodes. At node2 the level is depth + offset2.
+Use offset2 there, as the 5.3.0 patch does.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply BND-05_swmm600.patch
+
+diff --git a/src/engine/core/SWMMEngine.cpp b/src/engine/core/SWMMEngine.cpp
+index 839529d..a5906c3 100644
+--- a/src/engine/core/SWMMEngine.cpp
++++ b/src/engine/core/SWMMEngine.cpp
+@@ -1023,10 +1023,11 @@ int SWMMEngine::initialize() noexcept {
+             auto uj = static_cast<std::size_t>(j);
+             double ld = ctx_.links.depth[uj];
+             double y  = (ld > constants::FUDGE) ? ld + ctx_.links.offset1[uj] : 0.0;
++            double y2 = (ld > constants::FUDGE) ? ld + ctx_.links.offset2[uj] : 0.0;
+             int n1 = ctx_.links.node1[uj];
+             int n2 = ctx_.links.node2[uj];
+             if (n1 >= 0) { acc[static_cast<std::size_t>(n1)] += y; ++cnt[static_cast<std::size_t>(n1)]; }
+-            if (n2 >= 0) { acc[static_cast<std::size_t>(n2)] += y; ++cnt[static_cast<std::size_t>(n2)]; }
++            if (n2 >= 0) { acc[static_cast<std::size_t>(n2)] += y2; ++cnt[static_cast<std::size_t>(n2)]; }
+         }
+         for (int i = 0; i < nn; ++i) {
+             auto ui = static_cast<std::size_t>(i);

@@ -1,0 +1,49 @@
+NUM-06: use the HDS-5 slope correction +0.7*S for mitered culvert inlets, not +7*S
+
+culvert::getInflow() (dynamic wave) and the finite-volume kernel
+culvertInflow() keep legacy's scf = -7.0*S for mitered inlets (codes 5, 37,
+46). HDS-5 and the SWMM Hydraulics Reference Manual (eq. 7-39/7-46) use
++0.7*S, which in this sign convention is scf = -0.7*S. Same change as the
+5.3.0 patch.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-06_swmm600.patch
+
+diff --git a/src/engine/hydraulics/Culvert.cpp b/src/engine/hydraulics/Culvert.cpp
+index f698173..2082e3a 100644
+--- a/src/engine/hydraulics/Culvert.cpp
++++ b/src/engine/hydraulics/Culvert.cpp
+@@ -234,9 +234,9 @@ double getInflow(double q0, double y, const XSectParams& xs, double slope,
+     culvert.yFull = xs.y_full;
+     culvert.ad    = xs.a_full * std::sqrt(culvert.yFull);
+ 
+-    // slope correction factor (-7 for mitered inlets, 0.5 for others)
++    // slope correction factor (-0.7 for mitered inlets, 0.5 for others)
+     switch (code) {
+-        case 5: case 37: case 46: culvert.scf = -7.0 * slope; break;
++        case 5: case 37: case 46: culvert.scf = -0.7 * slope; break;
+         default:                  culvert.scf =  0.5 * slope;
+     }
+ 
+diff --git a/src/engine/hydraulics/HydClosureKernels.hpp b/src/engine/hydraulics/HydClosureKernels.hpp
+index 45af41d..f921bd4 100644
+--- a/src/engine/hydraulics/HydClosureKernels.hpp
++++ b/src/engine/hydraulics/HydClosureKernels.hpp
+@@ -122,7 +122,7 @@ struct CulvertCurve {
+  *   submerged   (≥ y₂)    Q = A·√D · √((h/D − Y + scf) / C)
+  *   between               linear interpolation of the two
+  *
+- * with the slope correction factor scf = −7·S for a mitered inlet and +0.5·S
++ * with the slope correction factor scf = −0.7·S for a mitered inlet and +0.5·S
+  * otherwise. Returns @p q_proposed unchanged when the inlet does not control.
+  *
+  * @param cc  the type code's coefficients (see culvert::getCoeffs)
+@@ -138,7 +138,7 @@ OPENSWMM_KERNEL_FN double culvertInflow(double q_proposed, double head,
+ 
+     const double AD = a_full * std::sqrt(y_full);
+     const double y_norm = head / y_full;
+-    const double scf = mitered ? (-7.0 * slope) : (0.5 * slope);
++    const double scf = mitered ? (-0.7 * slope) : (0.5 * slope);
+ 
+     const double y1_norm = 0.95;
+     double y2_norm = 16.0 * cc.C + cc.Y - scf;

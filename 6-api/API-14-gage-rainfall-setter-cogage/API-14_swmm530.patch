@@ -1,0 +1,76 @@
+API-14: apply a gage's API rainfall before its co-gage rainfall
+
+gage_setState() and gage_setReportRainfall() gave a gage that shares its
+rain time series with an earlier gage (a co-gage) the earlier gage's
+rainfall before looking at the rainfall set for it with
+swmm_setValue(swmm_GAGE_RAINFALL), so that value was stored but never used.
+Check the API rainfall first in both functions.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply API-14_swmm530.patch
+
+diff --git a/src/legacy/engine/gage.c b/src/legacy/engine/gage.c
+index 69f7ce0..4cdd8a6 100644
+--- a/src/legacy/engine/gage.c
++++ b/src/legacy/engine/gage.c
+@@ -352,6 +352,16 @@ void gage_setState(int j, DateTime t)
+         return;
+     }
+ 
++    // --- use rainfall supplied by API function call
++    //     (where constant ZERO (1.e-10) is used for 0 rainfall)
++    //     (checked before the co-gage so that it also applies to a gage
++    //     that shares its time series with another gage)
++    if (Gage[j].apiRainfall != MISSING)
++    {
++        Gage[j].rainfall = Gage[j].apiRainfall;
++        return;
++    }
++
+     // --- use rainfall from co-gage (gage with lower index that uses
+     //     same rainfall time series or file) if it exists
+     if ( Gage[j].coGage >= 0)
+@@ -362,14 +372,6 @@ void gage_setState(int j, DateTime t)
+         return;
+     }
+ 
+-    // --- use rainfall supplied by API function call
+-    //     (where constant ZERO (1.e-10) is used for 0 rainfall)
+-    if (Gage[j].apiRainfall != MISSING)
+-    {
+-        Gage[j].rainfall = Gage[j].apiRainfall;
+-        return;
+-    }
+-
+     // --- otherwise march through rainfall record until date t is bracketed
+     t += OneSecond;
+     for (;;)
+@@ -536,6 +538,14 @@ void gage_setReportRainfall(int gageIndex, DateTime reportDate)
+ {
+     double result;
+ 
++    // --- rainfall set by API call (checked before the co-gage, as in
++    //     gage_setState)
++    if (Gage[gageIndex].apiRainfall != MISSING)
++    {
++        Gage[gageIndex].reportRainfall = Gage[gageIndex].apiRainfall;
++        return;
++    }
++
+     // --- use value from co-gage if it exists
+     if ( Gage[gageIndex].coGage >= 0)
+     {   
+@@ -545,13 +555,6 @@ void gage_setReportRainfall(int gageIndex, DateTime reportDate)
+         return;
+     }
+ 
+-    // --- rainfall set by API call
+-    if (Gage[gageIndex].apiRainfall != MISSING)
+-    {
+-        Gage[gageIndex].reportRainfall = Gage[gageIndex].apiRainfall;
+-        return;
+-    }
+-
+     // --- otherwise increase reporting time by 1 second to avoid
+     //     roundoff problems
+     reportDate += OneSecond;

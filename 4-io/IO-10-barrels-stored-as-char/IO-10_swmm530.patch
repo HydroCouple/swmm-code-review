@@ -1,0 +1,37 @@
+IO-10: store the number of barrels as an int
+
+TConduit.barrels was a char and link_readXsectParams() stored the Barrels
+item with (char)atoi(...). Counts above 127 wrapped: 300 barrels became 44,
+and 200 became -56 (rejected as ERROR 114) where char is signed but stayed 200
+where it is unsigned. Declare the field int and drop the cast. Every use of
+the field is arithmetic or a %d format, so nothing else changes.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-10_swmm530.patch
+
+diff --git a/src/legacy/engine/link.c b/src/legacy/engine/link.c
+index 31925e1..4756fdb 100644
+--- a/src/legacy/engine/link.c
++++ b/src/legacy/engine/link.c
+@@ -255,7 +255,7 @@ int link_readXsectParams(char* tok[], int ntoks)
+         {
+             i = atoi(tok[6]);
+             if ( i <= 0 ) return error_setInpError(ERR_NUMBER, tok[6]);
+-            else Conduit[Link[j].subIndex].barrels = (char)i;
++            else Conduit[Link[j].subIndex].barrels = i;
+         }
+ 
+         // --- parse culvert code if present
+diff --git a/src/legacy/engine/objects.h b/src/legacy/engine/objects.h
+index 6b54d76..c9a6d56 100644
+--- a/src/legacy/engine/objects.h
++++ b/src/legacy/engine/objects.h
+@@ -731,7 +731,7 @@ typedef struct
+ {
+    double        length;          // conduit length (ft)
+    double        roughness;       // Manning's n
+-   char          barrels;         // number of barrels
++   int           barrels;         // number of barrels
+    //-----------------------------
+    double        modLength;       // modified conduit length (ft)
+    double        roughFactor;     // roughness factor for DW routing

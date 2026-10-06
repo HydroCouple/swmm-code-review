@@ -1,0 +1,48 @@
+BND-09: round TotalDuration to the nearest second instead of truncating it
+
+TotalDuration was floor((EndDate - StartDate)*86400 + (EndTime - StartTime)*86400).
+The times are day fractions (s/86400), so the product is often one ulp below
+the whole number of seconds (3779.9999999999995 for 01:03) and floor() drops
+a second: the run stops at END - 1 s and the last reporting period is never
+saved. Add 0.5 before the floor, in project_validate() and in the two API
+setters (swmm_STARTDATE, swmm_ENDDATE) that repeat the formula.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply BND-09_swmm530.patch
+
+diff --git a/src/legacy/engine/project.c b/src/legacy/engine/project.c
+index d24c17f..383de4b 100644
+--- a/src/legacy/engine/project.c
++++ b/src/legacy/engine/project.c
+@@ -170,7 +170,8 @@ void project_readInput()
+     else
+     {
+         // --- compute total duration of simulation in seconds
+-        TotalDuration = floor((EndDate - StartDate) * SECperDAY + (EndTime - StartTime) * SECperDAY);
++        //     (rounded, since the day fractions rarely multiply out exactly)
++        TotalDuration = floor((EndDate - StartDate) * SECperDAY + (EndTime - StartTime) * SECperDAY + 0.5);
+ 
+         // --- reporting step must be <= total duration
+         if ( (double)ReportStep > TotalDuration )
+diff --git a/src/legacy/engine/swmm5.c b/src/legacy/engine/swmm5.c
+index 4096c9a..c6f543c 100644
+--- a/src/legacy/engine/swmm5.c
++++ b/src/legacy/engine/swmm5.c
+@@ -3239,7 +3239,7 @@ static int setSystemValue(int property, double value)
+         datetime_decodeTime(value, &h, &mm, &s);
+         StartDate = datetime_encodeDate(y, m, d);
+         StartTime = datetime_encodeTime(h, mm, s);
+-        TotalDuration = floor((EndDate - StartDate) * SECperDAY + (EndTime - StartTime) * SECperDAY);
++        TotalDuration = floor((EndDate - StartDate) * SECperDAY + (EndTime - StartTime) * SECperDAY + 0.5);
+         // convert total duration to milliseconds
+         TotalDuration *= 1000.0;
+         return 0;
+@@ -3267,7 +3267,7 @@ static int setSystemValue(int property, double value)
+         datetime_decodeTime(value, &h, &mm, &s);
+         EndDate = datetime_encodeDate(y, m, d);
+         EndTime = datetime_encodeTime(h, mm, s);
+-        TotalDuration = floor((EndDate - StartDate) * SECperDAY + (EndTime - StartTime) * SECperDAY);
++        TotalDuration = floor((EndDate - StartDate) * SECperDAY + (EndTime - StartTime) * SECperDAY + 0.5);
+         // convert total duration to milliseconds
+         TotalDuration *= 1000.0;
+         return 0;

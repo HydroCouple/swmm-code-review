@@ -1,0 +1,98 @@
+NUM-26: scale an on-sag inlet by its own street's sides
+
+getOnSagCapturedFlow() reproduced legacy's stale Nsides on purpose through
+InletSolver::nsides_prev_, the sides of the previously processed inlet's
+street. Use the inlet's own g.nsides, and remove nsides_prev_, its seeding
+in init() and its updates in computeAll(), which have no other use.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-26_swmm600.patch
+
+diff --git a/src/engine/hydraulics/Inlet.cpp b/src/engine/hydraulics/Inlet.cpp
+index 2738ce5..e96ef4c 100644
+--- a/src/engine/hydraulics/Inlet.cpp
++++ b/src/engine/hydraulics/Inlet.cpp
+@@ -510,12 +510,10 @@ double getOnSagInletCapture(const Design& d, const Geom& g, double depth) {
+ }
+ 
+ double getOnSagCapturedFlow(const Design& d, const UsageParams& u,
+-                            const Geom& g, double depth, int nsides_prev) {
+-    // inlet.c:1574. `totalInlets` is formed from the module-level Nsides as it
+-    // stood on ENTRY — legacy computes it before getConduitGeometry() sets
+-    // Nsides for this inlet, so it carries the previous inlet's street.
++                            const Geom& g, double depth) {
++    // inlet.c:1574
+     if (u.num_inlets == 0) return 0.0;
+-    const int totalInlets = nsides_prev * u.num_inlets;
++    const int totalInlets = g.nsides * u.num_inlets;
+ 
+     double qMax = INLET_BIG;
+     if (u.flow_limit > 0.0) qMax = u.flow_limit;
+@@ -872,15 +870,6 @@ void InletSolver::init(SimulationContext& ctx) {
+         soa_.is_sag[ui] = sag;
+     }
+ 
+-    // Seed legacy's carried-over Nsides. inlet_validate (inlet.c:517-519) calls
+-    // getConduitGeometry once per VALID inlet while computing its Izzard flow
+-    // factor, walking the same reversed list, so when routing starts Nsides
+-    // holds the sides of the LAST inlet that loop touched — the FIRST
+-    // [INLET_USAGE] row. Without this an on-sag inlet captures nothing on its
+-    // first evaluation (totalInlets = 0 * numInlets).
+-    for (int ii = soa_.count - 1; ii >= 0; --ii)
+-        nsides_prev_ = soa_.n_sides[static_cast<std::size_t>(ii)];
+-
+     computeBackflowRatios();
+ }
+ 
+@@ -988,14 +977,11 @@ void InletSolver::computeAll(SimulationContext& ctx, double dt) {
+                         soa_.curve_kind[ui], q, depth, ucf_flow, ucf_len);
+         } else if (soa_.is_sag[ui] == 0) {
+             qc = getOnGradeCapturedFlow(d, u, g, q, depth);
+-            // getConduitGeometry runs past both early returns (inlet.c:1290).
+-            if (u.num_inlets != 0 && q >= MIN_RUNOFF_FLOW) nsides_prev_ = g.nsides;
+         } else {
+             // On-sag capture is depth-driven; the approach flow only caps it
+             // (second pass). Under non-DW routing legacy feeds the node's
+             // accumulated inflow instead of the link flow.
+-            qc = getOnSagCapturedFlow(d, u, g, depth, nsides_prev_);
+-            if (u.num_inlets != 0) nsides_prev_ = g.nsides;
++            qc = getOnSagCapturedFlow(d, u, g, depth);
+         }
+         if (std::fabs(qc) < INLET_FUDGE) qc = 0.0;
+         soa_.flow_capture[ui] = qc;
+diff --git a/src/engine/hydraulics/Inlet.hpp b/src/engine/hydraulics/Inlet.hpp
+index a11039d..0cf108c 100644
+--- a/src/engine/hydraulics/Inlet.hpp
++++ b/src/engine/hydraulics/Inlet.hpp
+@@ -207,12 +207,10 @@ double getOnSagSlottedFlow(const Design& d, double depth);
+ /// Capture of a single on-sag inlet (inlet.c:1610).
+ double getOnSagInletCapture(const Design& d, const Geom& g, double depth);
+ 
+-/// Total capture of an on-sag usage: single inlet × `nsides_prev · num_inlets`
+-/// (inlet.c:1574). `nsides_prev` is legacy's module-level Nsides as it stood on
+-/// entry — the PREVIOUSLY processed inlet's street — because legacy forms
+-/// totalInlets before getConduitGeometry refreshes it.
++/// Total capture of an on-sag usage: single inlet × `nsides · num_inlets`
++/// (inlet.c:1574).
+ double getOnSagCapturedFlow(const Design& d, const UsageParams& u,
+-                            const Geom& g, double depth, int nsides_prev);
++                            const Geom& g, double depth);
+ 
+ /**
+  * @brief Capture of a CUSTOM inlet from its diversion / rating curve (inlet.c:1902).
+@@ -364,15 +362,6 @@ private:
+     std::vector<double> node_inlet_flow_;
+     std::vector<double> node_inflow_;
+ 
+-    /// Legacy inlet.c's file-scope `Nsides`, which OUTLIVES each inlet and each
+-    /// routing step (a static, zero at the first evaluation). getOnSagCaptured-
+-    /// Flow reads it for `totalInlets = Nsides * numInlets` BEFORE
+-    /// getConduitGeometry refreshes it, so an on-sag inlet is scaled by the
+-    /// street sides of the PREVIOUSLY processed inlet — a HalfStreet sag inlet
+-    /// captures double when the inlet before it sat on a FullStreet
+-    /// (example7-inlets' Street5). Reproduced deliberately; see computeAll.
+-    int nsides_prev_ = 0;
+-
+     /// Per-node flag for legacy's `Node[].inlet == CAPTURE` (inlet.c:512),
+     /// set in init() for every valid usage's capture node. Sized to the node
+     /// count; empty when the model has no inlets.

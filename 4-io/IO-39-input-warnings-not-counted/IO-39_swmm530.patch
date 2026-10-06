@@ -1,0 +1,54 @@
+IO-39: count the unknown-section and unknown-option warnings, and write each once
+
+5.3.0 turned unknown [OPTIONS] keywords and unknown sections into warnings
+written with report_writeLine(), which does not increment the Warnings
+counter that swmm_getWarnings() returns and the command-line program checks
+("There are warnings"). The unknown-section warning was also written, and
+sent to the warning callback, by both passes over the input file. Increment
+Warnings where the two warnings are issued, and issue the section warning
+only in the counting pass (input_countObjects).
+
+Requires: IO-28
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-39_swmm530.patch
+
+diff --git a/src/legacy/engine/input.c b/src/legacy/engine/input.c
+index fcda09e..d6c5cb4 100644
+--- a/src/legacy/engine/input.c
++++ b/src/legacy/engine/input.c
+@@ -118,6 +118,7 @@ int input_countObjects()
+                     "\n  WARNING: Unknown section '%s' at line %ld will be skipped.", tok, lineCount);
+                 report_writeLine(warnMsg);
+                 report_invokeWarningCallback(warnMsg);
++                Warnings++;
+                 sect = -1;
+                 continue;
+             }
+@@ -224,12 +225,8 @@ int input_readData()
+             }
+             else
+             {
+-                // --- unknown section: warn and skip until next known section
+-                char warnMsg[MAXLINE+1];
+-                snprintf(warnMsg, MAXLINE,
+-                    "\n  WARNING: Unknown section '%s' at line %ld will be skipped.", Tok[0], lineCount);
+-                report_writeLine(warnMsg);
+-                report_invokeWarningCallback(warnMsg);
++                // --- unknown section: skip until next known section
++                //     (input_countObjects has already warned about it)
+                 if ( sect == s_TRANSECT )
+                     transect_validate(Mobjects[TRANSECT]-1);
+                 sect = -1;
+diff --git a/src/legacy/engine/project.c b/src/legacy/engine/project.c
+index d24c17f..d51dbf9 100644
+--- a/src/legacy/engine/project.c
++++ b/src/legacy/engine/project.c
+@@ -476,6 +476,7 @@ int project_readOption(char* s1, char* s2)
+             "\n  WARNING: Unknown option keyword '%s' in [OPTIONS] section - option will be ignored.", s1);
+         report_writeLine(warnMsg);
+         report_invokeWarningCallback(warnMsg);
++        Warnings++;
+         return 0;
+     }
+     switch ( k )

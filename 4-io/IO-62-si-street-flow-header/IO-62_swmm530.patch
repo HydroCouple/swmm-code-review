@@ -1,0 +1,22 @@
+IO-62: label the inlet count column in the SI Street Flow Summary
+
+writeStreetStatsHeader() writes "Count" over the inlet count column for US
+units but leaves it blank in the SI version of the same header line. Add the
+label; the line keeps its length, so no column moves.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-62_swmm530.patch
+
+diff --git a/src/legacy/engine/inlet.c b/src/legacy/engine/inlet.c
+index fa52cb3..9fcc637 100644
+--- a/src/legacy/engine/inlet.c
++++ b/src/legacy/engine/inlet.c
+@@ -1044,7 +1044,7 @@ void writeStreetStatsHeader()
+ "\n  Street Conduit         %3s        ft        ft  Design            Location  Count     Pcnt     Pcnt     Pcnt     Pcnt      %3s      %3s",
+         FlowUnitWords[FlowUnits], FlowUnitWords[FlowUnits], FlowUnitWords[FlowUnits]);
+     else fprintf(Frpt.file,
+-"\n  Street Conduit         %3s         m         m  Design            Location            Pcnt     Pcnt     Pcnt     Pcnt      %3s      %3s",
++"\n  Street Conduit         %3s         m         m  Design            Location  Count     Pcnt     Pcnt     Pcnt     Pcnt      %3s      %3s",
+         FlowUnitWords[FlowUnits], FlowUnitWords[FlowUnits], FlowUnitWords[FlowUnits]);
+     fprintf(Frpt.file,
+ "\n  ---------------------------------------------------------------------------------------------------------------------------------------");

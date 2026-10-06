@@ -1,0 +1,127 @@
+NUM-41: give RDII the rain that fell in each time step, not a point sample
+
+RDIISolver recorded the gage rate at the start of each UH rain interval and,
+like legacy getRainfall(), used the first one of each RDII time step for all
+intervals of that step. advance() now adds every runoff substep's rain to the
+RDII step it falls in (a substep never crosses a gage entry boundary) and
+queues the step's average rate, merging runs of equal rate as the legacy fix
+does so both give the same numbers. emitTick() gives each rain interval that
+average times the part of the step it covers.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-41_swmm600.patch
+
+diff --git a/src/engine/hydrology/RDII.cpp b/src/engine/hydrology/RDII.cpp
+index 18fb509..f5021ae 100644
+--- a/src/engine/hydrology/RDII.cpp
++++ b/src/engine/hydrology/RDII.cpp
+@@ -48,6 +48,9 @@ void RDIIGroupSoA::resize(int n) {
+     gage_elapsed.assign(un, 0.0);
+     rate_recorded_until.assign(un, 0.0);
+     pending_rates.assign(un, {});
++    run_rate.assign(un, 0.0);
++    run_secs.assign(un, 0.0);
++    run_sum.assign(un, 0.0);
+ }
+ 
+ // ---------------------------------------------------------------------------
+@@ -528,10 +531,10 @@ static void updateDryPeriod(UHResponseData& rd, double rainDepth,
+ void RDIISolver::advance(SimulationContext& ctx, double new_elapsed_sec) {
+     if (groups_.count == 0 || grid_step_ <= 0.0) return;
+ 
+-    // 1. Record the gage rate for every chunk whose start lies inside the
+-    //    just-computed substep (chunk starts advance in rain_interval steps
+-    //    from simulation start; strictly-before keeps the boundary chunk for
+-    //    the substep that owns it).
++    // 1. Add the just-computed substep's rain to the RDII step(s) it falls
++    //    in, and queue each completed step's average rate (legacy
++    //    getGageRainfall: runs of equal rate merged, a single run's rate
++    //    returned as is).
+     for (int g = 0; g < groups_.count; ++g) {
+         auto ug = static_cast<size_t>(g);
+         int ri = groups_.rain_interval[ug];
+@@ -540,9 +543,24 @@ void RDIISolver::advance(SimulationContext& ctx, double new_elapsed_sec) {
+         double rate = 0.0;
+         if (gi >= 0 && gi < static_cast<int>(ctx.gages.rainfall.size()))
+             rate = ctx.gages.rainfall[static_cast<size_t>(gi)];
+-        while (groups_.rate_recorded_until[ug] < new_elapsed_sec) {
+-            groups_.pending_rates[ug].push_back(rate);
+-            groups_.rate_recorded_until[ug] += static_cast<double>(ri);
++        double& t = groups_.rate_recorded_until[ug];
++        while (t < new_elapsed_sec) {
++            double step_end = (std::floor(t / grid_step_) + 1.0) * grid_step_;
++            double t2 = std::min(new_elapsed_sec, step_end);
++            if (groups_.run_secs[ug] > 0.0 && rate != groups_.run_rate[ug]) {
++                groups_.run_sum[ug] += groups_.run_rate[ug] * groups_.run_secs[ug];
++                groups_.run_secs[ug] = 0.0;
++            }
++            groups_.run_rate[ug] = rate;
++            groups_.run_secs[ug] += t2 - t;
++            t = t2;
++            if (t2 == step_end) {
++                groups_.pending_rates[ug].push_back(
++                    groups_.run_secs[ug] == grid_step_ ? rate
++                    : (groups_.run_sum[ug] + rate * groups_.run_secs[ug]) / grid_step_);
++                groups_.run_sum[ug] = 0.0;
++                groups_.run_secs[ug] = 0.0;
++            }
+         }
+     }
+ 
+@@ -575,17 +593,23 @@ void RDIISolver::emitTick(SimulationContext& ctx, double T) {
+         if (ri <= 0) continue;
+ 
+         // --- legacy getRainfall: process rain chunks up to the tick.
+-        // All chunks of one tick use the rate of the FIRST chunk
+-        // (legacy Gage.isCurrent memo — gage_setState runs once per tick).
++        // All chunks of one tick use the gage's average rate over the
++        // RDII step ending at T; each chunk gets the rain from the end of
++        // the previous chunk to its own end, but not beyond T.
+         bool have_tick_rate = false;
+         double tick_rate = 0.0;
++        double lo = T - grid_step_;
+         auto& pend = groups_.pending_rates[ug];
+         while (groups_.gage_elapsed[ug] < T) {
+             double c = groups_.gage_elapsed[ug];
+-            double rate = pend.empty() ? 0.0 : pend.front();
+-            if (!pend.empty()) pend.erase(pend.begin());
+-            if (!have_tick_rate) { tick_rate = rate; have_tick_rate = true; }
+-            double rainDepth = tick_rate * static_cast<double>(ri) / 3600.0;
++            if (!have_tick_rate) {
++                tick_rate = pend.empty() ? 0.0 : pend.front();
++                if (!pend.empty()) pend.erase(pend.begin());
++                have_tick_rate = true;
++            }
++            double hi = std::min(c + static_cast<double>(ri), T);
++            double rainDepth = tick_rate * (hi - lo) / 3600.0;
++            lo = hi;
+ 
+             // IA month is the month of the CHUNK date (legacy applyIA uses
+             // gageDate); the buffer month is the tick's.
+diff --git a/src/engine/hydrology/RDII.hpp b/src/engine/hydrology/RDII.hpp
+index bf993b9..42b2d06 100644
+--- a/src/engine/hydrology/RDII.hpp
++++ b/src/engine/hydrology/RDII.hpp
+@@ -136,13 +136,16 @@ struct RDIIGroupSoA {
+     std::vector<int>    rain_interval;  ///< Rain processing interval (sec) per group
+ 
+     // Strict-grid driver state (legacy createRdiiFile embedded at runtime).
+-    // Chunk starts advance in rain_interval steps from simulation start;
+-    // rates are recorded per chunk while the runoff substep containing the
+-    // chunk's start is current (the substep never crosses a gage entry
+-    // boundary, so the current gage rate IS the rate at the chunk start).
++    // Chunk starts advance in rain_interval steps from simulation start.
++    // The gage's average rate over each RDII step (wet_step) is accumulated
++    // from the runoff substeps (a substep never crosses a gage entry
++    // boundary, so the current gage rate holds over the whole substep).
+     std::vector<double> gage_elapsed;         ///< Chunk cursor (sec, legacy UHGroup.gageDate)
+-    std::vector<double> rate_recorded_until;  ///< Chunk starts with recorded rates (sec)
+-    std::vector<std::vector<double>> pending_rates;  ///< FIFO of recorded chunk rates
++    std::vector<double> rate_recorded_until;  ///< Rain accumulated up to (sec)
++    std::vector<std::vector<double>> pending_rates;  ///< FIFO of RDII-step average rates
++    std::vector<double> run_rate;   ///< Rate of the current constant-rate run
++    std::vector<double> run_secs;   ///< Length of that run within the RDII step (sec)
++    std::vector<double> run_sum;    ///< Rain (rate x sec) of earlier runs in the step
+ 
+     void resize(int n);
+ };

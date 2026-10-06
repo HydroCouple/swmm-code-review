@@ -1,0 +1,27 @@
+NUM-08: book only the excess over full volume as overflow when a node first floods
+
+getFloodedDepth() set a non-ponding node's overflow to the whole net inflow
+of the step (dV/dt) and its volume to fullVolume. On the step the node first
+floods it started below full, so the volume that filled it was counted as
+storage and again as overflow. Set the overflow to what is left after the
+node fills: (oldVolume + dV - fullVolume)/dt, not below zero. Steps that start
+full, and plain junctions (fullVolume = 0), are unchanged.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-08_swmm530.patch
+
+diff --git a/src/legacy/engine/dynwave.c b/src/legacy/engine/dynwave.c
+index 972da8c..1f1feec 100644
+--- a/src/legacy/engine/dynwave.c
++++ b/src/legacy/engine/dynwave.c
+@@ -814,7 +814,9 @@ double getFloodedDepth(int i, int canPond, double dV, double yNew,
+ {
+     if ( canPond == FALSE )
+     {
+-        Node[i].overflow = dV / dt;
++        // --- overflow is what is left after the node fills to fullVolume
++        Node[i].overflow = MAX(0.0, Node[i].oldVolume + dV -
++                                    Node[i].fullVolume) / dt;
+         Node[i].newVolume = Node[i].fullVolume;
+         yNew = yMax;
+     }

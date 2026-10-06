@@ -1,0 +1,29 @@
+NUM-09: update a surcharged node with no head-dependent links from its surface area
+
+An outlet's DUMMY cross-section has yFull = TINY, so a junction whose only
+links are outlets gets a crown 1e-6 ft above its invert and is EXTRAN-
+surcharged at any depth. setNodeDepth() then computes dy = dQ / sumdqdh, and
+outlets leave dqdh = 0, so the depth never changes and the difference
+between inflow and outflow is lost. 5.3.0 already sends a surcharged storage
+unit with sumdqdh = 0 to the surface-area update (#149); apply that rule to
+every node. Nodes with at least one conduit, orifice, weir or curve pump that
+responds to head (sumdqdh > 0) are unchanged.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-09_swmm530.patch
+
+diff --git a/src/legacy/engine/dynwave.c b/src/legacy/engine/dynwave.c
+index 972da8c..491f27c 100644
+--- a/src/legacy/engine/dynwave.c
++++ b/src/legacy/engine/dynwave.c
+@@ -690,7 +690,9 @@ void setNodeDepth(int i, double dt)
+     // or storage node is surcharged but there is not a flow change with response to head
+     // An example is a storage node that has external inflows and outflows
+     // but not connecting links.    
+-    if (!isSurcharged || (Node[i].type == STORAGE && Xnode[i].sumdqdh == 0.0))
++    // The same holds for any node whose links all have dqdh = 0, such as a
++    // junction drained only by outlets (whose DUMMY section sets its crown).
++    if (!isSurcharged || Xnode[i].sumdqdh == 0.0)
+     {
+         dy = dV / surfArea;
+         yNew = yOld + dy;

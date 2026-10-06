@@ -1,0 +1,26 @@
+BND-10: apply the rule-step clamp to the fixed step taken between events
+
+Between [EVENTS], routing_getRoutingStep() returned the fixed routing step
+before reaching the clamp that ends each step on the next control-rule time.
+When RULE_STEP is not a multiple of ROUTING_STEP the clock then misses the
+rule grid, NewRuleTime is never advanced, rules stop being evaluated, and
+the clamp, once applied again near the next event, yields a negative step
+(ERROR 107). Set routingStep to the fixed step instead of returning, so the
+clamp that follows applies to it.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply BND-10_swmm530.patch
+
+diff --git a/src/legacy/engine/routing.c b/src/legacy/engine/routing.c
+index 9a47f4b..edb9e5e 100644
+--- a/src/legacy/engine/routing.c
++++ b/src/legacy/engine/routing.c
+@@ -182,7 +182,7 @@ double routing_getRoutingStep(int routingModel, double fixedStep)
+         else
+         {
+             date1 = getDateTime(NewRoutingTime + 1000.0 * fixedStep);
+-            if ( date1 < Event[NextEvent].start ) return fixedStep;
++            if ( date1 < Event[NextEvent].start ) routingStep = fixedStep;
+         }
+     }
+ 

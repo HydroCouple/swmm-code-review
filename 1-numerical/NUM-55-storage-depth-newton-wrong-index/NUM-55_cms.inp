@@ -1,0 +1,43 @@
+[TITLE]
+NUM-55: two storage units (FUNCTIONAL 10 2 50 and PYRAMIDAL 20 x 10 m, side slope 2) filled at
+0.01 cms for 1 hour, metric units, storage units are the first nodes.
+
+[OPTIONS]
+FLOW_UNITS           CMS
+FLOW_ROUTING         KINWAVE
+START_DATE           01/01/2020
+START_TIME           00:00:00
+REPORT_START_DATE    01/01/2020
+REPORT_START_TIME    00:00:00
+END_DATE             01/01/2020
+END_TIME             01:00:00
+REPORT_STEP          00:15:00
+WET_STEP             00:05:00
+DRY_STEP             00:05:00
+ROUTING_STEP         10
+
+[STORAGE]
+;;Name Elev MaxDepth InitDepth Shape      p1  p2  p3
+SF     100  5        0         FUNCTIONAL 10  2   50
+SP     100  5        0         PYRAMIDAL  20  10  2
+
+[OUTFALLS]
+O1     90   FREE
+O2     90   FREE
+
+[CONDUITS]
+;;Outlets 4.5 above the bottom: never reached
+C1     SF   O1  100  0.013 4.5 0
+C2     SP   O2  100  0.013 4.5 0
+
+[XSECTIONS]
+C1     CIRCULAR 0.3 0 0 0 1
+C2     CIRCULAR 0.3 0 0 0 1
+
+[INFLOWS]
+;;Node Param TSeries Type Mfactor Sfactor Baseline
+SF     FLOW  ""      FLOW 1.0     1.0     0.01
+SP     FLOW  ""      FLOW 1.0     1.0     0.01
+
+[REPORT]
+NODES ALL

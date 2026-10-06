@@ -1,0 +1,105 @@
+API-01: refuse forcing values set before swmm_start instead of discarding them
+
+swmm_setValue and swmm_setValueExpanded accepted a gage rainfall, a node
+lateral inflow, a link setting and a subcatchment's API rainfall, snowfall
+and PET before swmm_start and returned 0, but swmm_start resets all of them
+(gage_initState, node_initState, link_initState, subcatch_initState), so the
+run never used the value. Return ERR_API_NOT_STARTED for these properties
+until the simulation has started, as 6.0.0 does (SWMM_ERR_LIFECYCLE). A value
+set after swmm_start and before the first swmm_step is used from the first
+step, exactly as before. The node and link pollutant mass fluxes have the
+same problem but are left to CRASH-13, which fixes their pre-start branch.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply API-01_swmm530.patch
+
+diff --git a/src/legacy/engine/swmm5.c b/src/legacy/engine/swmm5.c
+index 4096c9a..94aaa58 100644
+--- a/src/legacy/engine/swmm5.c
++++ b/src/legacy/engine/swmm5.c
+@@ -1394,6 +1394,8 @@ int EXPORT_OPENSWMMCORE_SOLVER_API swmm_setValue(int property, int index, double
+     switch (property)
+     {
+     case swmm_GAGE_RAINFALL:
++        if (!IsStartedFlag)
++            return ERR_API_NOT_STARTED;
+         if (index < 0 || index >= Nobjects[GAGE])
+             return 0;
+         if (value >= 0.0)
+@@ -1410,6 +1412,8 @@ int EXPORT_OPENSWMMCORE_SOLVER_API swmm_setValue(int property, int index, double
+             Subcatch[index].rptFlag = (value > 0.0);
+         return 0;
+     case swmm_NODE_LATFLOW:
++        if (!IsStartedFlag)
++            return ERR_API_NOT_STARTED;
+         setNodeLatFlow(index, value);
+         return 0;
+     case swmm_NODE_HEAD:
+@@ -1420,6 +1424,8 @@ int EXPORT_OPENSWMMCORE_SOLVER_API swmm_setValue(int property, int index, double
+             Node[index].rptFlag = (value > 0.0);
+         return 0;
+     case swmm_LINK_SETTING:
++        if (!IsStartedFlag)
++            return ERR_API_NOT_STARTED;
+         setLinkSetting(index, value);
+         return 0;
+     case swmm_LINK_RPTFLAG:
+@@ -1989,6 +1995,8 @@ int setGageValue(int property, int index, int subIndex, double value)
+     switch (property)
+     {
+     case swmm_GAGE_RAINFALL:
++        if (!IsStartedFlag)
++            return ERR_API_NOT_STARTED;
+         if (value >= 0.0)
+         {
+             Gage[index].apiRainfall = value;
+@@ -2200,26 +2208,10 @@ int setSubcatchValue(int property, int index, int subIndex, int pollutantIndex,
+             else
+                 return ERR_API_PROPERTY_VALUE;
+         case swmm_SUBCATCH_API_RAINFALL:
+-            if (value >= 0.0)
+-            {
+-                Subcatch[index].apiRainfall = value / UCF(RAINFALL);
+-                return 0;
+-            }
+-            else
+-                return ERR_API_PROPERTY_VALUE;
+         case swmm_SUBCATCH_API_SNOWFALL:
+-            if (value >= 0.0)
+-            {
+-                Subcatch[index].apiSnowfall = value / UCF(RAINFALL);
+-                return 0;
+-            }
+-            else
+-                return ERR_API_PROPERTY_VALUE;
+         case swmm_SUBCATCH_API_PET:
+-            // negative value clears the prescription (reverts to climate evap)
+-            if (value < 0.0) Subcatch[index].apiEvapRate = MISSING;
+-            else             Subcatch[index].apiEvapRate = value / UCF(EVAPRATE);
+-            return 0;
++            // --- swmm_start resets these (subcatch_initState)
++            return ERR_API_NOT_STARTED;
+         case swmm_SUBCATCH_RPTFLAG:
+             if (value >= 0.0)
+             {
+@@ -2326,8 +2318,8 @@ int setNodeValue(int property, int index, int subIndex, int pollutantIndex, doub
+             else
+                 return ERR_API_PROPERTY_VALUE;
+         case swmm_NODE_LATFLOW:
+-            Node[index].apiExtInflow = value / UCF(FLOW);
+-            return 0;
++            // --- swmm_start resets this (node_initState)
++            return ERR_API_NOT_STARTED;
+         case swmm_NODE_HEAD:
+             node = &Node[index];
+ 
+@@ -2405,7 +2397,8 @@ int setLinkValue(int property, int index, int subIndex, int pollutantIndex, doub
+         switch (property)
+         {
+         case swmm_LINK_SETTING:
+-            return setLinkSetting(index, value);
++            // --- swmm_start resets this (link_initState)
++            return ERR_API_NOT_STARTED;
+         case swmm_LINK_OFFSET1:
+             Link[index].offset1 = value / UCF(LENGTH);
+             return 0;

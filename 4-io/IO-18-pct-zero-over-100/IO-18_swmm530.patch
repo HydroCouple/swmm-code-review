@@ -1,0 +1,26 @@
+IO-18: reject a [SUBAREAS] PctZero above 100
+
+subcatch_readSubareaParams() only checks that PctZero is not negative. A
+value above 100 gives the impervious sub-area with depression storage
+(IMPERV1) a negative area fraction, fracImperv * (1 - PctZero/100), and the
+run continues with negative storage and more runoff than the losses allow.
+Reject it with ERROR 211 (invalid number), as is already done for a
+PctRouted above 100.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-18_swmm530.patch
+
+diff --git a/src/legacy/engine/subcatch.c b/src/legacy/engine/subcatch.c
+index 7c1d97c..5338bd1 100644
+--- a/src/legacy/engine/subcatch.c
++++ b/src/legacy/engine/subcatch.c
+@@ -256,6 +256,9 @@ int subcatch_readSubareaParams(char* tok[], int ntoks)
+         x[6] /= 100.0;
+     }
+ 
++    // --- PctZero is a percent of the impervious area
++    if ( x[4] > 100.0 ) return error_setInpError(ERR_NUMBER, tok[5]);
++
+     // --- assign input values to each type of subarea
+     Subcatch[j].subArea[IMPERV0].N = x[0];
+     Subcatch[j].subArea[IMPERV1].N = x[0];

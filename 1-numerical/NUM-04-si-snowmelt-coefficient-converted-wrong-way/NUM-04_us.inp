@@ -1,0 +1,57 @@
+[TITLE]
+NUM-04: degree-day melt of a 1 in pack in US units (C = 0.01 in/hr/degF)
+
+;; The same model as NUM-04_si.inp in US units: 1 in pack, air at 50 degF,
+;; base temperature 32 degF, no rain, 1 hour:
+;;   melt = C x (Ta - Tbase) x 1 h = 0.01 x (50 - 32) x 1 = 0.180 in = 4.572 mm
+
+[OPTIONS]
+FLOW_UNITS       CFS
+INFILTRATION     HORTON
+FLOW_ROUTING     KINWAVE
+START_DATE       01/01/2020
+START_TIME       00:00:00
+END_DATE         01/01/2020
+END_TIME         01:00:00
+REPORT_STEP      00:30:00
+WET_STEP         00:05:00
+DRY_STEP         00:05:00
+ROUTING_STEP     60
+
+[EVAPORATION]
+CONSTANT 0.0
+
+[TEMPERATURE]
+TIMESERIES TEMP1
+;;        Stemp  ATIwt RNM Elev Lat DTLong
+SNOWMELT  34     0.5   0.6 0    40  0
+
+[RAINGAGES]
+G1 INTENSITY 1:00 1.0 TIMESERIES RAIN1
+
+[TIMESERIES]
+RAIN1 01/01/2020 00:00 0.0
+TEMP1 01/01/2020 00:00 50
+TEMP1 01/02/2020 00:00 50
+
+[SNOWPACKS]
+;;Name  Surface     Cmin   Cmax   Tbase FWF SD0  FW0 SNN0/SD100
+SP1     PLOWABLE    0.01   0.01   32    0   0    0   0
+SP1     IMPERVIOUS  0.01   0.01   32    0   0    0   0
+SP1     PERVIOUS    0.01   0.01   32    0   1.0  0   0
+
+[SUBCATCHMENTS]
+;;Name Gage Outlet Area   %Imperv Width %Slope CurbLen SnowPack
+S1     G1   O1     10     0       500   1      0       SP1
+
+[SUBAREAS]
+S1 0.01 0.1 0 0 0 OUTLET
+
+[INFILTRATION]
+S1 0 0 4 7 0
+
+[OUTFALLS]
+O1 0 FREE
+
+[REPORT]
+SUBCATCHMENTS ALL

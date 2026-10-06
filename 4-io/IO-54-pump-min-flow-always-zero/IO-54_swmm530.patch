@@ -1,0 +1,23 @@
+IO-54: start the pump's minimum flow at its first running flow
+
+stats_open() sets PumpStats[].minFlow to 0 and stats_updateLinkStats()
+lowers it with MIN(minFlow, q) for every step the pump runs, so it can
+never rise above 0 and the Pumping Summary's Min Flow column (and
+swmm_getPumpStats().minFlow) is always 0. Take the first running flow as
+the starting value; a pump that never runs still reports 0.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-54_swmm530.patch
+
+diff --git a/src/legacy/engine/stats.c b/src/legacy/engine/stats.c
+index 6d38f70..d8ee636 100644
+--- a/src/legacy/engine/stats.c
++++ b/src/legacy/engine/stats.c
+@@ -669,6 +669,7 @@ void stats_updateLinkStats(int j, double tStep, DateTime aDate)
+         if ( q > MIN_RUNOFF_FLOW )
+         {
+             k = Link[j].subIndex;
++            if ( PumpStats[k].totalPeriods == 0 ) PumpStats[k].minFlow = q;
+             PumpStats[k].minFlow = MIN(PumpStats[k].minFlow, q);
+             PumpStats[k].maxFlow = LinkStats[j].maxFlow;
+             PumpStats[k].avgFlow += q;

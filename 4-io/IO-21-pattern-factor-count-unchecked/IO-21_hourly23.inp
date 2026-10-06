@@ -1,0 +1,44 @@
+[TITLE]
+IO-21: an HOURLY pattern with 23 factors instead of 24 (the last is missing)
+
+[OPTIONS]
+FLOW_UNITS           CFS
+FLOW_ROUTING         KINWAVE
+START_DATE           01/01/2020
+START_TIME           00:00:00
+REPORT_START_DATE    01/01/2020
+REPORT_START_TIME    00:00:00
+END_DATE             01/02/2020
+END_TIME             00:00:00
+REPORT_STEP          01:00:00
+WET_STEP             00:05:00
+DRY_STEP             01:00:00
+ROUTING_STEP         60
+
+[JUNCTIONS]
+;;Name  Elev  MaxDepth  InitDepth  SurDepth  Aponded
+J1      110   5         0          0         0
+
+[OUTFALLS]
+;;Name  Elev  Type
+O1      100   FREE
+
+[CONDUITS]
+;;Name  From  To  Length  Roughness  InOffset  OutOffset  InitFlow
+C1      J1    O1  400     0.013      0         0          0
+
+[XSECTIONS]
+;;Link  Shape     Geom1  Geom2  Geom3  Geom4  Barrels
+C1      CIRCULAR  2      0      0      0      1
+
+[DWF]
+;;Node  Constituent  Baseline  Patterns
+J1      FLOW         10        "" "" P1
+
+[PATTERNS]
+;;Name  Type    Factors
+P1      HOURLY  0.5 0.5 0.5 0.5 0.5 0.5 0.5 0.5 0.5 0.5 0.5 0.5
+P1              0.5 0.5 0.5 0.5 0.5 0.5 0.5 0.5 0.5 0.5 0.5
+
+[REPORT]
+NODES ALL

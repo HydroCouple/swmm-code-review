@@ -1,0 +1,28 @@
+BND-15: do not let the evaporation adjustment make the rate negative
+
+The engine added the monthly [ADJUSTMENTS] EVAPORATION value to the source
+rate with no lower bound (climate::updateDailyClimate for constant, monthly
+and temperature-based evaporation; SWMMEngine::stepRunoff for time series and
+pan evaporation). An adjustment more negative than the source rate gave a
+negative rate that added water to subcatchment storage. Stop the rate at zero
+once all sources and adjustments are applied, before any API forcing, as the
+legacy patch does in setEvap(). Non-negative rates are unchanged.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply BND-15_swmm600.patch
+
+diff --git a/src/engine/core/SWMMEngine.cpp b/src/engine/core/SWMMEngine.cpp
+index 839529d..18a629e 100644
+--- a/src/engine/core/SWMMEngine.cpp
++++ b/src/engine/core/SWMMEngine.cpp
+@@ -2031,6 +2031,10 @@ void SWMMEngine::stepRunoff(double dt_routing) noexcept {
+                 ctx_.climate_state.evap_rate += ctx_.climate_state.adjust_evap[mon];
+             }
+         }
++        // A negative [ADJUSTMENTS] EVAPORATION value larger than the source
++        // rate stops the rate at zero (legacy setEvap).
++        ctx_.climate_state.evap_rate = std::max(0.0, ctx_.climate_state.evap_rate);
++
+         // legacy climate_setState ends by advancing NextEvapDate past the
+         // current date (every evaporation type); runoff_getTimeStep then
+         // clamps the runoff step so it never crosses it.

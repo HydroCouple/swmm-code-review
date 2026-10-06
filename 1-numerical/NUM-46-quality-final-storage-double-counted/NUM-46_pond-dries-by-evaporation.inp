@@ -1,0 +1,50 @@
+[TITLE]
+NUM-46: closed storage pond (10000 ft2, initial depth 0.02 ft = 200 ft3,
+P1 100 mg/L = 1.248 lb) dries out by evaporation (1 in/day, about 5.8 h).
+The outlet sits 6 ft above the bottom, so nothing leaves: all of the
+pollutant must end up in Final Stored Mass, once.
+
+[OPTIONS]
+FLOW_UNITS           CFS
+INFILTRATION         HORTON
+FLOW_ROUTING         DYNWAVE
+START_DATE           01/01/2020
+START_TIME           00:00:00
+REPORT_START_DATE    01/01/2020
+REPORT_START_TIME    00:00:00
+END_DATE             01/01/2020
+END_TIME             12:00:00
+DRY_STEP             00:05:00
+WET_STEP             00:05:00
+ROUTING_STEP         10
+VARIABLE_STEP        0
+REPORT_STEP          01:00:00
+
+[EVAPORATION]
+CONSTANT  1.0
+DRY_ONLY  NO
+
+[JUNCTIONS]
+J2   0   5   0   0   0
+
+[OUTFALLS]
+O1   0   FREE
+
+[STORAGE]
+;;Name Elev MaxDepth InitDepth Shape a b c SurDepth Fevap
+SU1  0  10  0.02  FUNCTIONAL  0  0  10000  0  1
+
+[CONDUITS]
+C1  SU1  J2  400  0.013  6  0  0
+C2  J2   O1  400  0.013  0  0  0
+
+[XSECTIONS]
+C1  CIRCULAR  1  0  0  0  1
+C2  CIRCULAR  1  0  0  0  1
+
+[POLLUTANTS]
+P1  MG/L  0  0  0  0  NO  *  0  0  100
+
+[REPORT]
+NODES ALL
+LINKS ALL

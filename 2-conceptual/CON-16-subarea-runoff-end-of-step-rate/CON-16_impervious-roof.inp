@@ -1,0 +1,52 @@
+[TITLE]
+CON-16: 1 acre impervious area with no depression storage, 2 in/hr for 1 hour
+
+[OPTIONS]
+;; No depression storage, infiltration or evaporation: every drop of rain
+;; leaves as runoff or is still ponded at the end. The test runs this deck
+;; with WET_STEP 1, 5, 15 and 30 min (it rewrites the WET_STEP line).
+FLOW_UNITS           CFS
+INFILTRATION         HORTON
+FLOW_ROUTING         KINWAVE
+START_DATE           06/01/2020
+START_TIME           00:00:00
+REPORT_START_DATE    06/01/2020
+REPORT_START_TIME    00:00:00
+END_DATE             06/02/2020
+END_TIME             00:00:00
+WET_STEP             00:15:00
+DRY_STEP             01:00:00
+REPORT_STEP          00:15:00
+ROUTING_STEP         0:00:30
+IGNORE_ROUTING       YES
+
+[EVAPORATION]
+CONSTANT         0.0
+
+[RAINGAGES]
+;;Name  Format     Interval  SCF  Source
+G1      INTENSITY  1:00      1.0  TIMESERIES  R1
+
+[SUBCATCHMENTS]
+;;Name  Gage  Outlet  Area  %Imperv  Width  %Slope  CurbLen
+S1      G1    O1      1.0   100      100    1.0     0
+
+[SUBAREAS]
+;;Subcatch  N-Imperv  N-Perv  S-Imperv  S-Perv  PctZero  RouteTo
+S1          0.015     0.1     0.0       0.0     0        OUTLET
+
+[INFILTRATION]
+;;Subcatch  MaxRate  MinRate  Decay  DryTime  MaxInfil
+S1          0.0      0.0      4      7        0
+
+[OUTFALLS]
+;;Name  Elev  Type
+O1      0     FREE
+
+[TIMESERIES]
+;; 2 in/hr for one hour: 2.0 in of rain
+R1   0:00   2.0
+R1   1:00   0.0
+
+[REPORT]
+SUBCATCHMENTS ALL

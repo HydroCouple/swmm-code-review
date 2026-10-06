@@ -1,0 +1,53 @@
+BND-03: let an outfall's CONCEN inflow set the quality of its reverse flow
+
+The input reference allows a CONCEN inflow without a FLOW inflow at an
+outfall, so that a pollutant enters with reverse flow. addExternalInflows()
+tried to do this by adding -oldNetInflow to the outfall's flow, but
+node_getSystemOutflow() sets a supplying outfall's inflow to its outflow,
+so oldNetInflow is 0 and nothing was added. When the outfall also had a FLOW
+inflow the term did fire, but it replaced the FLOW inflow q by the reverse
+flow b, and that mass was then mixed into q alone: the outfall's
+concentration was b/q times the CONCEN value. Remove that term, and
+instead make the outfall hold the CONCEN value as its quality: a supplying
+outfall receives no flow, so findNodeQual() keeps that held value and the
+reverse flow carries it into the network.
+
+The reverse flow's mass is booked by BND-04, not here.
+
+Requires: BND-04
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply BND-03_swmm530.patch
+
+diff --git a/src/legacy/engine/routing.c b/src/legacy/engine/routing.c
+index 1aef3c1..587be63 100644
+--- a/src/legacy/engine/routing.c
++++ b/src/legacy/engine/routing.c
+@@ -573,12 +573,6 @@ void addExternalInflows(DateTime currentDate)
+             continue;
+         }
+ 
+-        // --- add on any inflow (i.e., reverse flow) through an outfall
+-        if ( Node[j].type == OUTFALL && Node[j].oldNetInflow < 0.0 ) 
+-        {
+-            q = q - Node[j].oldNetInflow;
+-        }
+-
+         // --- get pollutant mass inflows
+         inflow = Node[j].extInflow;
+         while ( inflow )
+@@ -587,7 +581,13 @@ void addExternalInflows(DateTime currentDate)
+             {
+                 p = inflow->param;
+                 w = inflow_getExtInflow(inflow, currentDate);
+-                if ( inflow->type == CONCEN_INFLOW ) w *= q;
++                if ( inflow->type == CONCEN_INFLOW )
++                {
++                    // --- an outfall holds this concentration, so that any
++                    //     reverse flow into the network carries it
++                    if ( Node[j].type == OUTFALL ) Node[j].oldQual[p] = w;
++                    w *= q;
++                }
+                 Node[j].newQual[p] += w;
+                 massbal_addInflowQual(EXTERNAL_INFLOW, p, w);
+             }

@@ -1,0 +1,38 @@
+CON-19: divide the swale and pavement surface flux by the vegetation void fraction
+
+The surface layer's water fills only the fraction 1 - VegFrac of the space
+above the surface. LIDSolver::swaleFluxRates() and
+LIDSolver::pavementFluxRates() book the stored surface volume with that
+void fraction but advanced the surface depth with the net inflow rate
+alone, so with VegFrac > 0 only part of the net inflow showed up as storage
+and the rest was lost from the water balance (or created when the surface
+drained). Divide the surface depth rate by the
+void fraction, as biocellFluxRates(), trenchFluxRates() and the reference
+manual's surface layer equation already do. Nothing changes when VegFrac = 0.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply CON-19_swmm600.patch
+
+diff --git a/src/engine/hydrology/LID.cpp b/src/engine/hydrology/LID.cpp
+index 9aa0c73..e7c7510 100644
+--- a/src/engine/hydrology/LID.cpp
++++ b/src/engine/hydrology/LID.cpp
+@@ -1082,7 +1082,8 @@ public:
+             SurfaceInfil = std::min(SurfaceInfil, maxRate);
+         }
+         SurfaceOutflow = getSurfaceOutflowRate(surfaceDepth);
+-        f[L_SURF] = SurfaceInflow - SurfaceEvap - SurfaceInfil - SurfaceOutflow;
++        f[L_SURF] = (SurfaceInflow - SurfaceEvap - SurfaceInfil - SurfaceOutflow) /
++                    P->surf_void;
+         f[L_PAVE] = (SurfaceInfil - PaveEvap - PavePerc) / paveVoidFrac;
+         if (P->soil_thick > 0.0) {
+             f[L_SOIL] = (PavePerc - SoilEvap - SoilPerc) / soilThickness;
+@@ -1140,7 +1141,7 @@ public:
+         SurfaceEvap /= lidArea;
+         StorageExfil /= lidArea;
+         SurfaceOutflow /= lidArea;
+-        f[L_SURF] = dVdT / surfArea;
++        f[L_SURF] = dVdT / (surfArea * P->surf_void);
+         f[L_SOIL] = 0.0;
+         f[L_STOR] = 0.0;
+         SurfaceVolume = volume / lidArea;

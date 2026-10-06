@@ -1,0 +1,80 @@
+CON-11: read a pollutant in a treatment equation by that equation's type
+
+applyNodeTreatment() built one array of what each bare pollutant name reads,
+choosing the inflow concentration when the REFERENCED pollutant had a
+removal-type equation and the node concentration otherwise, and used it for
+every equation at the node. The manual (section 5.4.2) defines it by the
+equation being evaluated. Fill the array with node concentrations and pass
+the inflow concentrations instead when the evaluated equation is R =.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply CON-11_swmm600.patch
+
+diff --git a/src/engine/quality/QualityRouting.cpp b/src/engine/quality/QualityRouting.cpp
+index 917fc1d..50c4aec 100644
+--- a/src/engine/quality/QualityRouting.cpp
++++ b/src/engine/quality/QualityRouting.cpp
+@@ -1539,22 +1539,17 @@ void applyNodeTreatment(SimulationContext& ctx, int j, double dt,
+         for (int p = 0; p < np; ++p)
+             treat.removal[static_cast<std::size_t>(p)] = -1.0;
+ 
+-        // 4b. What a BARE pollutant name reads. legacy getVariableValue
+-        // (treatmnt.c:344-351) gives Cin[p] when THAT pollutant's treatment
+-        // at this node is a removal equation, and the node's current
+-        // concentration otherwise — so the choice depends on the OTHER
+-        // pollutant's equation type, not this one's. Resolved here, where the
+-        // per-pollutant compiled expressions are in hand, and handed to the
+-        // evaluator as a plain array.
++        // 4b. What a BARE pollutant name reads: the inflow concentration in a
++        // removal-type equation and the node's concentration before
++        // treatment in a concentration-type one (manual, section 5.4.2) —
++        // chosen by the type of the equation being evaluated, not by the
++        // referenced pollutant's. cpollut holds the node concentrations; the
++        // evaluate() call below passes treat.cin instead for an R = equation.
+         std::vector<double> cpollut(static_cast<std::size_t>(np), 0.0);
+         for (int p = 0; p < np; ++p) {
+             const auto up2 = static_cast<std::size_t>(p);
+             const auto ci = uj * static_cast<std::size_t>(np) + up2;
+-            const bool p_is_removal =
+-                ci < treat.compiled.size() && treat.compiled[ci].is_removal;
+-            cpollut[up2] = p_is_removal
+-                ? treat.cin[up2]
+-                : ((ci < nodes.conc.size()) ? nodes.conc[ci] : 0.0);
++            cpollut[up2] = (ci < nodes.conc.size()) ? nodes.conc[ci] : 0.0;
+         }
+ 
+         // 5. Evaluate treatment for each pollutant (with co-treatment + cycle detection)
+@@ -1631,7 +1626,7 @@ void applyNodeTreatment(SimulationContext& ctx, int j, double dt,
+             double result = treatment::evaluate(
+                 expr, c_in, dt, hrt_hours, q, v, d,
+                 treat.cin.data(), r_view.data(), np, area,
+-                cpollut.data());
++                expr.is_removal ? treat.cin.data() : cpollut.data());
+             result = std::max(result, 0.0);
+ 
+             if (expr.is_removal) {
+diff --git a/src/engine/quality/Treatment.cpp b/src/engine/quality/Treatment.cpp
+index 9ed6c1d..8ff285d 100644
+--- a/src/engine/quality/Treatment.cpp
++++ b/src/engine/quality/Treatment.cpp
+@@ -784,14 +784,12 @@ double evaluate(const TreatExpr& expr, double c, double dt,
+                     case TreatVar::D:     stk.push(d);    break;
+                     case TreatVar::AREA:  stk.push(area); break;  // Gap #16
+                     case TreatVar::C_POLLUT:
+-                        // legacy getVariableValue (treatmnt.c:344-351): a
+-                        // pollutant reference reads Cin[p] when THAT
+-                        // pollutant's treatment here is a removal equation,
+-                        // and the node's current concentration otherwise.
+-                        // `cpollut` is that choice already made by the caller,
+-                        // which is where the per-pollutant treatment types
+-                        // are known; without it we keep the old Cin-only
+-                        // reading.
++                        // a pollutant reference reads Cin[p] in a removal
++                        // equation and the node's concentration before
++                        // treatment in a concentration equation (manual,
++                        // section 5.4.2). `cpollut` is that choice already
++                        // made by the caller for this equation; without it
++                        // we keep the old Cin-only reading.
+                         if (tok.pollut_ref >= 0 && tok.pollut_ref < n_pollut) {
+                             if (cpollut)   stk.push(cpollut[tok.pollut_ref]);
+                             else if (cin)  stk.push(cin[tok.pollut_ref]);

@@ -1,0 +1,27 @@
+[TITLE]
+CRASH-06: a SWEEP_START value of 24 or more characters
+
+;; project_readOption() copies the value into char strDate[25] (at most 24
+;; characters) and then appends "/1947" with sstrcat(strDate, "/1947", 25).
+;; A 24-character copy fills the buffer, and sstrcat writes the suffix past
+;; its end. The value below has 25 characters; it is not a valid month/day,
+;; so the input should be rejected with ERROR 213 (invalid date/time).
+
+[OPTIONS]
+FLOW_UNITS       CFS
+START_DATE       01/01/2020
+END_DATE         01/01/2020
+END_TIME         01:00:00
+SWEEP_START      01/01/0000000000000000000
+
+[JUNCTIONS]
+J1 0 5 0 0 0
+
+[OUTFALLS]
+O1 0 FREE NO
+
+[CONDUITS]
+C1 J1 O1 100 0.01 0 0 0 0
+
+[XSECTIONS]
+C1 CIRCULAR 1 0 0 0

@@ -1,0 +1,61 @@
+[TITLE]
+CON-21: a 40-cfs pulse on a 0.2-cfs base flow under a variable routing step
+
+[OPTIONS]
+FLOW_UNITS           CFS
+FLOW_ROUTING         DYNWAVE
+START_DATE           01/01/2020
+START_TIME           00:00:00
+END_DATE             01/01/2020
+END_TIME             06:00:00
+REPORT_STEP          00:15:00
+ROUTING_STEP         30
+VARIABLE_STEP        0.75
+MINIMUM_STEP         0.5
+ALLOW_PONDING        NO
+
+[JUNCTIONS]
+;;Name  Elev  MaxDepth  InitDepth  SurDepth  Aponded
+J1      10    6         0          0         0
+;; wet well of the pump branch
+W1      10    6         0          0         0
+
+[STORAGE]
+;;Name  Elev  MaxDepth  InitDepth  Shape       Coeff  Expon  Const
+SU1     9     10        0          FUNCTIONAL  0      0      20000
+
+[OUTFALLS]
+O1      7     FREE
+O2      7     FREE
+
+[CONDUITS]
+;;Name  From  To   Length  Roughness  InOffset  OutOffset  InitFlow
+C1      J1    SU1  400     0.013      0         0          0
+C2      SU1   O1   400     0.013      0         0          0
+
+[XSECTIONS]
+;;Link  Shape     Geom1  Geom2  Geom3  Geom4  Barrels
+C1      CIRCULAR  3.0    0      0      0      1
+C2      CIRCULAR  2.0    0      0      0      1
+
+[PUMPS]
+;;Name  From  To  Curve  Status  Startup  Shutoff
+P1      W1    O2  *      ON      0        0
+
+[INFLOWS]
+;;Node  Constituent  TimeSeries  Type  Mfactor  Sfactor
+J1      FLOW         TS1         FLOW  1.0      1.0
+W1      FLOW         TS1         FLOW  1.0      1.0
+
+[TIMESERIES]
+;; 0.2 cfs base flow with a 40-cfs pulse from 0:45 to 1:15
+TS1     0:00   0.2
+TS1     0:30   0.2
+TS1     0:45   40
+TS1     1:15   40
+TS1     1:30   0.2
+TS1     6:00   0.2
+
+[REPORT]
+INPUT     NO
+CONTROLS  NO

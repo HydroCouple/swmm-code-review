@@ -1,0 +1,51 @@
+BND-11: start the groundwater solver from the hot-started flow
+
+HotStartManager::apply() copies a native hot start's groundwater flow into
+subcatches.gw_flow (cfs) and the aquifer state through the set_gw_state
+accessor, but not into the GW solver's flow rate. The first runoff step
+takes its starting rate for the routing interpolation from that solver rate,
+which is still 0, so the groundwater inflow after a hot start ramps up from 0
+and about half of the first runoff step's volume never reaches the node.
+Set the solver rate from the restored flow in the set_gw_state accessor (the
+flow is applied just before it), and size the engine's array of old GW rates
+before the first runoff step copies into it (until now the copy was skipped
+on that step, so the old rate was 0 whatever the solver held). This matches
+BND-11_swmm530.patch for 5.3.0; a cold start is unchanged (the solver rate
+is 0 there).
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply BND-11_swmm600.patch
+
+diff --git a/src/engine/core/SWMMEngine.cpp b/src/engine/core/SWMMEngine.cpp
+index 839529d..bbd3b52 100644
+--- a/src/engine/core/SWMMEngine.cpp
++++ b/src/engine/core/SWMMEngine.cpp
+@@ -717,12 +717,18 @@ int SWMMEngine::open(const char* inp_path,
+                 return true;
+             };
+         ctx_.state_accessors.set_gw_state =
+-            [gw_ptr](int i, double theta, double lower_depth) -> bool {
++            [gw_ptr, this](int i, double theta, double lower_depth) -> bool {
+                 auto& gwa = gw_ptr->state();
+                 const auto ui = static_cast<std::size_t>(i);
+                 if (ui >= gwa.theta.size()) return false;
+                 gwa.theta[ui] = theta;
+                 if (ui < gwa.lower_depth.size()) gwa.lower_depth[ui] = lower_depth;
++                // the hot start's GW flow (cfs, already in subcatches.gw_flow)
++                // is also the rate the first runoff step interpolates from
++                const double a_ft2 = ctx_.subcatches.area[ui]
++                                   / ucf::UCF(ucf::LANDAREA, ctx_.options);
++                if (ui < gwa.gw_flow.size() && a_ft2 > 0.0)
++                    gwa.gw_flow[ui] = ctx_.subcatches.gw_flow[ui] / a_ft2;
+                 return true;
+             };
+     }
+@@ -1842,6 +1848,8 @@ void SWMMEngine::stepRunoff(double dt_routing) noexcept {
+             auto ui = static_cast<std::size_t>(i);
+             ctx_.subcatches.old_gw_flow[ui] = ctx_.subcatches.gw_flow[ui];
+             // legacy gw->oldFlow = gw->newFlow: the RATE, not the cfs product.
++            if (old_gw_rate_.size() <= ui)   // not yet sized on the first runoff step
++                old_gw_rate_.resize(static_cast<std::size_t>(ctx_.n_subcatches()), 0.0);
+             if (ui < old_gw_rate_.size())
+                 old_gw_rate_[ui] = (ui < groundwater_.state().gw_flow.size())
+                                  ? groundwater_.state().gw_flow[ui] : 0.0;

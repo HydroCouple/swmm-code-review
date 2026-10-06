@@ -1,0 +1,31 @@
+CON-05: send a covered barrel's rain to LID runoff when it cannot be returned
+
+SWMMEngine::stepRunoff() adds the rain falling on a covered rain barrel to
+lid_return_to_perv_cfs, which RunoffSolver only applies when the
+subcatchment has a pervious non-LID area; otherwise it is reset and lost.
+In that case add it to the LID surface runoff (lid_qsurf_cfs_) instead,
+as the 5.3.0 patch does.
+
+Requires: CON-04
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply CON-05_swmm600.patch
+
+diff --git a/src/engine/core/SWMMEngine.cpp b/src/engine/core/SWMMEngine.cpp
+index ec2f5ef..0e5d985 100644
+--- a/src/engine/core/SWMMEngine.cpp
++++ b/src/engine/core/SWMMEngine.cpp
+@@ -2492,7 +2492,12 @@ void SWMMEngine::stepRunoff(double dt_routing) noexcept {
+                 // (lid.c:1712 `lidInflow = lidInflow + rainfall`).
+                 if (g.type == lid::LIDType::RAIN_BARREL && g.stor_covered[uu]) {
+                     g.inflow[uu] = q_from_sc;
+-                    ctx_.subcatches.lid_return_to_perv_cfs[usc] += rain * lid_area;
++                    // ... or to the LID surface runoff when there is no
++                    // pervious area to return it to (legacy subcatch_getRunon)
++                    if (rsoa.area[usc] > 0.0 && ctx_.subcatches.frac_imperv[usc] < 1.0)
++                        ctx_.subcatches.lid_return_to_perv_cfs[usc] += rain * lid_area;
++                    else
++                        lid_qsurf_cfs_[usc] += rain * lid_area;
+                 } else {
+                     g.inflow[uu] = q_from_sc + rain;
+                 }

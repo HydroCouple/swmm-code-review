@@ -1,0 +1,81 @@
+IO-54: report the smallest flow a pump delivered in the Pumping Summary
+
+DefaultReportPlugin printed a literal 0.0 in the Min Flow column of the
+Pumping Summary. Keep the smallest flow of the steps in which the pump ran
+(flow above 0.001 cfs, the legacy MIN_RUNOFF_FLOW test) in a new
+LinkData::stat_pump_min_flow and print it; a pump that never runs still
+reports 0.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-54_swmm600.patch
+
+diff --git a/src/engine/core/SWMMEngine.cpp b/src/engine/core/SWMMEngine.cpp
+index 839529d..4bd96d2 100644
+--- a/src/engine/core/SWMMEngine.cpp
++++ b/src/engine/core/SWMMEngine.cpp
+@@ -5443,6 +5443,10 @@ void SWMMEngine::updateStatistics(double dt_routing) noexcept {
+             if (is_on) {
+                 ctx_.links.stat_pump_on_time[uj] += dt_routing;
+                 ctx_.links.stat_pump_volume[uj] += q * dt_routing;
++                // smallest running flow, over the steps legacy counts as on
++                // (q > MIN_RUNOFF_FLOW, stats.c)
++                double& qmin = ctx_.links.stat_pump_min_flow[uj];
++                if (q > 0.001 && (qmin == 0.0 || q < qmin)) qmin = q;
+ 
+                 // Pump energy (kWh), matching legacy link_getPower:
+                 //   power_kW = |dh| * |q| / 8.814 * KWperHP ; energy += power_kW * dt/3600
+diff --git a/src/engine/data/LinkData.hpp b/src/engine/data/LinkData.hpp
+index eb78d42..9d37b05 100644
+--- a/src/engine/data/LinkData.hpp
++++ b/src/engine/data/LinkData.hpp
+@@ -540,6 +540,9 @@ struct LinkData {
+     /** @brief Total volume pumped (ft³). */
+     std::vector<double>     stat_pump_volume;
+ 
++    /** @brief Smallest flow while the pump ran (cfs; 0 if it never ran). */
++    std::vector<double>     stat_pump_min_flow;
++
+     /**
+      * @brief Total pump energy consumed (kWh).
+      * @see Legacy PumpStats[].energy, computed as link_getPower(j) * dt / 3600
+@@ -692,6 +695,7 @@ struct LinkData {
+         stat_pump_cycles.assign(un, 0);
+         stat_pump_on_time.assign(un, 0.0);
+         stat_pump_volume.assign(un, 0.0);
++        stat_pump_min_flow.assign(un, 0.0);
+         stat_pump_energy.assign(un, 0.0);
+         stat_pump_was_on.assign(un, false);
+         stat_flow_turns.assign(un, 0L);
+@@ -744,6 +748,7 @@ struct LinkData {
+         g(stat_time_full_both, 0.0); g(stat_time_capacity_limited, 0.0);
+         g(stat_pump_cycles, 0); g(stat_pump_on_time, 0.0);
+         g(stat_pump_volume, 0.0); g(stat_pump_energy, 0.0);
++        g(stat_pump_min_flow, 0.0);
+         g(stat_pump_was_on, false);
+         g(stat_flow_turns, 0L); g(stat_flow_turn_sign, 0);
+         g(stat_time_courant_critical, 0.0);
+@@ -838,6 +843,7 @@ struct LinkData {
+         e(stat_max_flow_date); e(stat_time_full_upstream); e(stat_time_full_dnstream);
+         e(stat_time_full_both); e(stat_time_capacity_limited);
+         e(stat_pump_cycles); e(stat_pump_on_time); e(stat_pump_volume); e(stat_pump_energy);
++        e(stat_pump_min_flow);
+         e(stat_pump_was_on); e(stat_flow_turns); e(stat_flow_turn_sign);
+         e(stat_time_courant_critical);
+         e(stat_lstep_min); e(stat_lstep_max); e(stat_lstep_dt_time); e(stat_lstep_time);
+diff --git a/src/engine/plugins/DefaultReportPlugin.cpp b/src/engine/plugins/DefaultReportPlugin.cpp
+index 36a8dbb..26b48b9 100644
+--- a/src/engine/plugins/DefaultReportPlugin.cpp
++++ b/src/engine/plugins/DefaultReportPlugin.cpp
+@@ -3063,10 +3063,11 @@ void DefaultReportPlugin::write_results(std::FILE* f,
+                 int    startUps   = ctx.links.stat_pump_cycles[uj];
+                 double avgFlow    = (on_time > 0.0) ? (ctx.links.stat_pump_volume[uj] / on_time) * Qcf : 0.0;
+                 double energyKwh  = ctx.links.stat_pump_energy[uj];
++                double minFlow    = ctx.links.stat_pump_min_flow[uj] * Qcf;
+ 
+                 std::fprintf(f, "\n  %-20s %8.2f  %10d %9.2f %9.2f %9.2f %9.3f %9.2f",
+                     ctx.link_names.name_of(j).c_str(),
+-                    pctUtilized, startUps, 0.0, avgFlow, max_flow, vol, energyKwh);
++                    pctUtilized, startUps, minFlow, avgFlow, max_flow, vol, energyKwh);
+                 std::fprintf(f, " %6.1f %6.1f", 0.0, 0.0);
+             }
+             WRITE(f, "");

@@ -1,0 +1,28 @@
+IO-08: skip a UTF-8 byte order mark at the start of the input file
+
+InputReader::read_stream() recognises a section header only when the line
+starts with '['. With a UTF-8 byte order mark the first line starts with
+EF BB BF, so the first section header was not seen and its lines, which
+then came before any header, were dropped. The BOM is now removed from the
+first line before it is looked at. Files without a BOM are read exactly as
+before.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-08_swmm600.patch
+
+diff --git a/src/engine/input/InputReader.cpp b/src/engine/input/InputReader.cpp
+index b74750b..018a812 100644
+--- a/src/engine/input/InputReader.cpp
++++ b/src/engine/input/InputReader.cpp
+@@ -118,6 +118,11 @@ bool InputReader::read_stream(std::istream& stream, SimulationContext& ctx) {
+     while (std::getline(stream, raw_line)) {
+         ++lines_read_;
+ 
++        // A UTF-8 byte order mark (files saved as "UTF-8 with BOM") is not
++        // text; left in place it hides the first section header.
++        if (lines_read_ == 1 && raw_line.compare(0, 3, "\xEF\xBB\xBF") == 0)
++            raw_line.erase(0, 3);
++
+         // Strip \r (Windows CRLF)
+         if (!raw_line.empty() && raw_line.back() == '\r') {
+             raw_line.pop_back();

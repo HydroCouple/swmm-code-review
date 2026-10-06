@@ -1,0 +1,77 @@
+BND-07: apply culvert inlet control at the inlet of a conduit reversed for an adverse slope
+
+Under dynamic wave, conduit_validate() reverses a conduit whose slope is
+adverse, so its inlet becomes node2 and its forward flow is negative.
+dwflow_findConduitFlow() applies culvert inlet control only to positive flow,
+at node1. For a reversed culvert, forward flow was never inlet controlled and
+reverse flow was controlled at the barrel outlet instead. Apply inlet control
+to negative flow, with the head at node2, when the conduit is reversed;
+culvert_getInflow() takes the inlet end and the sign of the slope from
+Link.direction and leaves flow that does not enter the inlet unchanged.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply BND-07_swmm530.patch
+
+diff --git a/src/legacy/engine/culvert.c b/src/legacy/engine/culvert.c
+index 5f62877..18ca090 100644
+--- a/src/legacy/engine/culvert.c
++++ b/src/legacy/engine/culvert.c
+@@ -196,6 +196,10 @@ double culvert_getInflow(int j, double q0, double h)
+     code = culvert.xsect->culvertCode;
+     if ( code <= 0 || code > MAX_CULVERT_CODE ) return q0;
+ 
++    // --- only flow entering the inlet is inlet controlled (a conduit reversed
++    //     for an adverse slope has direction -1 and its inlet at node2)
++    if ( q0 * Link[j].direction <= 0.0 ) return q0;
++
+     // --- compute often-used variables
+     k = Link[j].subIndex;
+     culvert.yFull = culvert.xsect->yFull;
+@@ -212,7 +216,13 @@ double culvert_getInflow(int j, double q0, double h)
+ 
+     // --- find head relative to culvert's upstream invert
+     //     (can be greater than yFull when inlet is submerged)
+-    y = h - (Node[Link[j].node1].invertElev + Link[j].offset1);
++    if ( Link[j].direction > 0 )
++        y = h - (Node[Link[j].node1].invertElev + Link[j].offset1);
++    else
++    {
++        y = h - (Node[Link[j].node2].invertElev + Link[j].offset2);
++        culvert.scf = -culvert.scf;
++    }
+ 
+     // --- check for submerged flow (based on FHWA criteria of Q/AD > 4)
+     y2 = culvert.yFull * (16.0 * Params[code][C] + Params[code][Y] - culvert.scf);
+@@ -239,7 +249,7 @@ double culvert_getInflow(int j, double q0, double h)
+     }
+ 
+     // --- check if inlet controls and replace conduit's value of dq/dh
+-    if ( q < q0 )
++    if ( q < fabs(q0) )
+     {
+         // --- for debugging only
+         //if ( RptFlags.controls ) report_CulvertControl(j, q0, q, condition,
+@@ -247,7 +257,7 @@ double culvert_getInflow(int j, double q0, double h)
+ 
+         Link[j].inletControl = TRUE;
+         Link[j].dqdh = culvert.dQdH;
+-        return q;
++        return q * Link[j].direction;
+     }
+     else return q0;
+ }
+diff --git a/src/legacy/engine/dwflow.c b/src/legacy/engine/dwflow.c
+index 828431b..3e44f4f 100644
+--- a/src/legacy/engine/dwflow.c
++++ b/src/legacy/engine/dwflow.c
+@@ -337,6 +337,10 @@ void  dwflow_findConduitFlow(int linkIndex, int steps, double omega, double dt)
+                   Link[linkIndex].flowClass == SUPCRITICAL ))
+             q = checkNormalFlow(linkIndex, q, y1, y2, a1, r1);
+     }
++    // --- check for inlet control of a culvert reversed for an adverse slope
++    //     (its inlet is now at node2 and its forward flow is negative)
++    else if ( q < 0.0 && xsect->culvertCode > 0 && !isFull )
++        q = culvert_getInflow(linkIndex, q, h2);
+ 
+     // --- apply under-relaxation weighting between new & old flows;
+     // --- do not allow change in flow direction without first being zero

@@ -1,0 +1,25 @@
+NUM-03: put the parenthesis of the RECT_ROUND round-bottom hydraulic radius in the right place
+
+rect_round_getRofY() returned 0.5*r*(1 - sin(t))/t for a depth inside the
+circular bottom. The hydraulic radius of a circular segment is
+A/P = 0.5*r*(1 - sin(t)/t), which rect_round_getRofA() already uses. Dynamic
+wave takes its friction slope from this function, so in RECT_ROUND conduits
+flowing inside the round bottom the hydraulic radius was too large near the
+invert, zero at y = 0.29r and up to 100x too small above that.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-03_swmm530.patch
+
+diff --git a/src/legacy/engine/xsect.c b/src/legacy/engine/xsect.c
+index cf40f97..748f795 100644
+--- a/src/legacy/engine/xsect.c
++++ b/src/legacy/engine/xsect.c
+@@ -2063,7 +2063,7 @@ double rect_round_getRofY(TXsect* xsect, double y)
+ 
+     // --- find hyd. radius of circular section
+     theta1 = 2.0*acos(1.0 - y/xsect->rBot);
+-    return 0.5 * xsect->rBot * (1.0 - sin(theta1)) / theta1;
++    return 0.5 * xsect->rBot * (1.0 - sin(theta1) / theta1);
+ }
+ 
+ double rect_round_getWofY(TXsect* xsect, double y)

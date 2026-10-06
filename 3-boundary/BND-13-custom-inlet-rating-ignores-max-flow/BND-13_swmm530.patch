@@ -1,0 +1,23 @@
+BND-13: apply the Qmax capture limit to custom inlets with a RATING curve
+
+getCustomCapturedFlow() computes the per-inlet limit qMax from the
+[INLET_USAGE] Qmax value and applies it to DIVERSION curves, but the RATING
+(capture vs depth) branch never uses it. Limit the rating capture to
+numInlets * qMax, as the on-grade and on-sag standard inlets do. With no
+limit (qMax = BIG) the result is unchanged.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply BND-13_swmm530.patch
+
+diff --git a/src/legacy/engine/inlet.c b/src/legacy/engine/inlet.c
+index fa52cb3..42a320d 100644
+--- a/src/legacy/engine/inlet.c
++++ b/src/legacy/engine/inlet.c
+@@ -1952,6 +1952,7 @@ double getCustomCapturedFlow(TInlet* inlet, double q, double d)
+         {
+             qCaptured = inlet->numInlets * inlet->clogFactor *
+                 table_lookupEx(&Curve[c], d * UCF(LENGTH)) / UCF(FLOW);
++            qCaptured = MIN(qCaptured, inlet->numInlets * qMax);
+         }
+         qCaptured *= sides;
+     }

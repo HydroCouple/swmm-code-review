@@ -1,0 +1,66 @@
+NUM-10: find dummy conduit and ideal pump flows after all other link flows
+
+findLinkFlows() visits the non-conduit links in link-index order and adds
+each one's flow to its nodes at once. A DUMMY conduit or an ideal pump passes
+on its inlet node's inflow as it stands at that moment, so the flow of a
+weir, orifice, outlet or pump with a higher index that discharges into that
+node is never passed on, and the node floods. Visit DUMMY conduits and ideal
+pumps in a second pass, after every other link has added its flow. Results
+are unchanged for models without them.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-10_swmm530.patch
+
+diff --git a/src/legacy/engine/dynwave.c b/src/legacy/engine/dynwave.c
+index 972da8c..f4755fb 100644
+--- a/src/legacy/engine/dynwave.c
++++ b/src/legacy/engine/dynwave.c
+@@ -99,6 +99,7 @@ static void   findLimitedLinks();
+ 
+ static void   findLinkFlows(double dt);
+ static int    isTrueConduit(int link);
++static int    isPassThruLink(int link);
+ static void   findNonConduitFlow(int link, double dt);
+ static void   findNonConduitSurfArea(int link);
+ static double getModPumpFlow(int link, double q, double dt);
+@@ -398,7 +399,18 @@ void findLinkFlows(double dt)
+     // --- find new flows for all dummy conduits, pumps & regulators
+     for ( i = 0; i < Nobjects[LINK]; i++)
+     {
+-        if ( !isTrueConduit(i) )
++        if ( !isTrueConduit(i) && !isPassThruLink(i) )
++        {
++            if ( !Link[i].bypassed ) findNonConduitFlow(i, dt);
++            updateNodeFlows(i);
++        }
++    }
++
++    // --- dummy conduits & ideal pumps pass on their inlet node's inflow,
++    //     so find their flows after all other links have added to it
++    for ( i = 0; i < Nobjects[LINK]; i++)
++    {
++        if ( isPassThruLink(i) )
+         {
+             if ( !Link[i].bypassed ) findNonConduitFlow(i, dt);
+             updateNodeFlows(i);
+@@ -415,6 +427,20 @@ int isTrueConduit(int j)
+ 
+ //=============================================================================
+ 
++int isPassThruLink(int j)
++//
++//  Input:   j = link index
++//  Output:  returns TRUE if link's flow is its inlet node's inflow
++//  Purpose: identifies dummy conduits and ideal pumps.
++//
++{
++    return ( (Link[j].type == CONDUIT && Link[j].xsect.type == DUMMY) ||
++             (Link[j].type == PUMP &&
++              Pump[Link[j].subIndex].type == IDEAL_PUMP) );
++}
++
++//=============================================================================
++
+ void findNonConduitFlow(int i, double dt)
+ //
+ //  Input:   i = link index

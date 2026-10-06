@@ -1,0 +1,95 @@
+BND-19: report inflow volumes for the reporting period when REPORT_START is late
+
+The Node Inflow "Total Inflow Volume", the Outfall Loading "Total Volume"
+and the denominators of the storage "% Evap/Exfil Loss" printed massbal's
+NodeInflow[], which accumulates from START, next to statistics that
+stats_updateFlowStats() collects only from REPORT_START. On the first
+statistics step of a late reporting period, store each node's NodeInflow in
+the new TNodeStats field inflowBeforeRpt and subtract it in those columns.
+The flow balance error column still uses the whole run. When reporting
+starts with the run the field stays 0 and the report is unchanged.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply BND-19_swmm530.patch
+
+diff --git a/src/legacy/engine/objects.h b/src/legacy/engine/objects.h
+index 6b54d76..64a1952 100644
+--- a/src/legacy/engine/objects.h
++++ b/src/legacy/engine/objects.h
+@@ -1018,6 +1018,7 @@ typedef struct
+    int           nonConvergedCount;
+    DateTime      maxInflowDate;
+    DateTime      maxOverflowDate;
++   double        inflowBeforeRpt;    // inflow volume before reporting began (ft3)
+ }  TNodeStats;
+ 
+ //-------------------
+diff --git a/src/legacy/engine/stats.c b/src/legacy/engine/stats.c
+index 6d38f70..a1ce9d4 100644
+--- a/src/legacy/engine/stats.c
++++ b/src/legacy/engine/stats.c
+@@ -446,6 +446,14 @@ void stats_updateFlowStats(double tStep, DateTime aDate)
+     if ( aDate < ReportStart ) return;
+     SysOutfallFlow = 0.0;
+ 
++    // --- if reporting starts after the simulation does, note the inflow
++    //     volume each node received before it (NodeInflow covers the run)
++    if ( ReportStepCount == 0 && ReportStart > StartDateTime )
++    {
++        for ( j=0; j<Nobjects[NODE]; j++ )
++            NodeStats[j].inflowBeforeRpt = NodeInflow[j];
++    }
++
+     // --- update node & link stats
+ //#pragma omp parallel num_threads(NumThreads)
+ {
+diff --git a/src/legacy/engine/statsrpt.c b/src/legacy/engine/statsrpt.c
+index 8050f24..1df8eb9 100644
+--- a/src/legacy/engine/statsrpt.c
++++ b/src/legacy/engine/statsrpt.c
+@@ -389,7 +389,8 @@ void writeNodeFlows()
+         fprintf(Frpt.file, FlowFmt, NodeStats[j].maxInflow * UCF(FLOW));
+         fprintf(Frpt.file, "  %4d  %02d:%02d", days1, hrs1, mins1);
+         fprintf(Frpt.file, "%12.3g", NodeStats[j].totLatFlow * Vcf);
+-        fprintf(Frpt.file, "%12.3g", NodeInflow[j] * Vcf);
++        fprintf(Frpt.file, "%12.3g",
++            (NodeInflow[j] - NodeStats[j].inflowBeforeRpt) * Vcf);
+         if ( fabs(NodeOutflow[j]) < 1.0 )
+             fprintf(Frpt.file, "%12.3f %s",
+                 (NodeInflow[j]-NodeOutflow[j])*Vcf*1.0e6,
+@@ -517,7 +518,7 @@ void writeStorageVolumes()
+ {
+     int    j, k, days, hrs, mins;
+     double avgVol, maxVol, pctAvgVol, pctMaxVol;
+-    double pctEvapLoss, pctSeepLoss;
++    double pctEvapLoss, pctSeepLoss, inflow;
+ 
+     if ( Nnodes[STORAGE] > 0 )
+     {
+@@ -555,10 +556,11 @@ void writeStorageVolumes()
+             }
+             pctEvapLoss = 0.0;
+             pctSeepLoss = 0.0;
+-            if ( NodeInflow[j] > 0.0 )
++            inflow = NodeInflow[j] - NodeStats[j].inflowBeforeRpt;
++            if ( inflow > 0.0 )
+             {
+-                pctEvapLoss = StorageStats[k].evapLosses / NodeInflow[j] * 100.0;
+-                pctSeepLoss = StorageStats[k].exfilLosses / NodeInflow[j] * 100.0;
++                pctEvapLoss = StorageStats[k].evapLosses / inflow * 100.0;
++                pctSeepLoss = StorageStats[k].exfilLosses / inflow * 100.0;
+             }
+ 
+             fprintf(Frpt.file, "%10.3f  %5.1f  %5.1f  %5.1f  %10.3f  %5.1f",
+@@ -652,8 +654,9 @@ void writeOutfallLoads()
+             fprintf(Frpt.file, FlowFmt, x);
+             fprintf(Frpt.file, " ");
+             fprintf(Frpt.file, FlowFmt, OutfallStats[k].maxFlow*UCF(FLOW));
+-            fprintf(Frpt.file, "%12.3f", NodeInflow[j] * Vcf);
+-            volSum += NodeInflow[j];
++            x = NodeInflow[j] - NodeStats[j].inflowBeforeRpt;
++            fprintf(Frpt.file, "%12.3f", x * Vcf);
++            volSum += x;
+ 
+             // --- print load of each pollutant for outfall
+             for (p=0; p<Nobjects[POLLUT]; p++)

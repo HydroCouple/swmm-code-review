@@ -1,0 +1,91 @@
+NUM-36: send the groundwater volume the aquifer released, not a trapezoid
+
+GWSolver::execute() integrates the aquifer ODE over the runoff step but keeps
+only the end-of-step GW flow rate; routing interpolates between the previous
+and the new end-of-step rate (from 0 on the first step) and the mass balance
+books their trapezoid, which differs from the volume that left the aquifer
+(+13.7 % with a 1-day DRY_STEP). Integrate the outflow volume as a third ODE
+component, store its step-average rate as both the old and the new GW flow,
+and make the engine's interpolation start from the same rate, as
+NUM-36_swmm530.patch does for 5.3.0.
+
+The third variable is the total aquifer depth minus the outflow volume, so
+the solver's relative error test holds it to the accuracy of the zone
+depths; a variable starting at 0 would make the solver give up where GW
+flow begins.
+
+Requires: IO-46
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-36_swmm600.patch
+
+diff --git a/src/engine/core/SWMMEngine.cpp b/src/engine/core/SWMMEngine.cpp
+index c588c88..b0b2286 100644
+--- a/src/engine/core/SWMMEngine.cpp
++++ b/src/engine/core/SWMMEngine.cpp
+@@ -2148,6 +2148,12 @@ void SWMMEngine::stepRunoff(double dt_routing) noexcept {
+                                / ucf::UCF(ucf::LANDAREA, ctx_.options);
+                 groundwater_.state().gw_flow[ui] =
+                     a > 0.0 ? ctx_.subcatches.gw_flow[ui] / a : 0.0;
++                // the saved flow is the step's average rate, held over the
++                // step, as GWSolver::execute() delivers it: both ends of the
++                // routing interpolation get it
++                groundwater_.state().old_flow[ui] = groundwater_.state().gw_flow[ui];
++                if (ui < old_gw_rate_.size())
++                    old_gw_rate_[ui] = groundwater_.state().gw_flow[ui];
+             }
+             if (file_dt <= 0.0) file_dt = 1.0;
+             new_runoff_time_ = old_runoff_time_ + file_dt;
+@@ -4593,6 +4599,9 @@ void SWMMEngine::stepGroundwater(double dt_runoff) noexcept {
+         double gw_rate = groundwater_.state().gw_flow[ui]; // ft/sec
+         double area_ft2 = ctx_.subcatches.area[ui] / ucf::UCF(ucf::LANDAREA, ctx_.options);
+         ctx_.subcatches.gw_flow[ui] = gw_rate * area_ft2; // CFS
++        // the step's GW flow is a constant average rate (NUM-36)
++        if (old_gw_rate_.size() <= ui) old_gw_rate_.resize(static_cast<std::size_t>(ns), 0.0);
++        old_gw_rate_[ui] = gw_rate;
+ 
+         // Gap #40: propagate max infiltration volume to SubcatchData for next
+         // runoff step.  If no GW is active, leave the default (DBL_MAX = no cap).
+diff --git a/src/engine/hydrology/Groundwater.cpp b/src/engine/hydrology/Groundwater.cpp
+index 9611079..5bea135 100644
+--- a/src/engine/hydrology/Groundwater.cpp
++++ b/src/engine/hydrology/Groundwater.cpp
+@@ -247,6 +247,9 @@ static void getDxDt(GWContext& c, double /*t*/, const double* x, double* dxdt) {
+     double denom = c.porosity - theta_val;
+     dxdt[1] = (denom > 0.0)
+         ? (c.upper_perc - c.deep_loss - c.lower_evap - c.gw_flow) / denom : 0.0;
++
++    // 3rd variable decreases by the lateral GW outflow
++    dxdt[2] = -c.gw_flow;
+ }
+ 
+ // ============================================================================
+@@ -349,10 +352,13 @@ void GWSolver::execute(SimulationContext& ctx, double dt, double max_evap,
+         c.max_gw_flow_neg = -std::min(gw_capacity_neg, node_flow);
+ 
+         // --- Integrate ODEs via RKF45 ---
+-        double x[2] = { theta_0, lower_d_0 };
++        // 3rd variable: total depth minus the lateral outflow volume (counted
++        // down from total_depth so that the solver's relative error test
++        // holds it to the same accuracy as the zone depths)
++        double x[3] = { theta_0, lower_d_0, c.total_depth };
+ 
+         // Legacy ignores ODE return code; match that behavior
+-        ode::integrate(x, 2, 0.0, dt, GWTOL, dt,
++        ode::integrate(x, 3, 0.0, dt, GWTOL, dt,
+             [&c](double t, const double* y, double* dydx) {
+                 getDxDt(c, t, y, dydx);
+             });
+@@ -385,8 +391,10 @@ void GWSolver::execute(SimulationContext& ctx, double dt, double max_evap,
+ 
+         // --- Compute final fluxes at new state ---
+         getFluxes(c, x[0], x[1]);
+-        soa_.old_flow[ui]    = soa_.gw_flow[ui]; // save previous
+-        soa_.gw_flow[ui]     = c.gw_flow;
++        // GW flow sent to the node over the step: average rate of the
++        // outflow volume integrated by the ODE solver
++        soa_.gw_flow[ui]     = (c.total_depth - x[2]) / dt;
++        soa_.old_flow[ui]    = soa_.gw_flow[ui];
+         soa_.upper_evap[ui]  = c.upper_evap;
+         soa_.lower_evap[ui]  = c.lower_evap;
+         soa_.deep_loss[ui]   = c.deep_loss;

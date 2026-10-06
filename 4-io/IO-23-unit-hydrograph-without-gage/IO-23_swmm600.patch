@@ -1,0 +1,59 @@
+IO-23: report a unit hydrograph group that has no rain gage
+
+A [HYDROGRAPHS] group without a "Name Gage" line ran with no rainfall and
+so produced no RDII, without a message. The [HYDROGRAPHS] validation now
+reports the new ERROR 152 (as in the 5.3.0 patch) for a group that has no
+gage line naming an existing gage, when the model has [RDII] inflows (legacy
+validates unit hydrographs only then).
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-23_swmm600.patch
+
+diff --git a/src/engine/core/ErrorCodes.cpp b/src/engine/core/ErrorCodes.cpp
+index 41a0f4b..32bc8ce 100644
+--- a/src/engine/core/ErrorCodes.cpp
++++ b/src/engine/core/ErrorCodes.cpp
+@@ -78,6 +78,7 @@ static const std::unordered_map<int, const char*>& error_table() {
+ 
+         // Hydrology
+         {151, "a Unit Hydrograph in set %s has invalid time base."},
++        {152, "no rain gage assigned to Unit Hydrograph set %s."},
+         {153, "a Unit Hydrograph in set %s has invalid response ratios."},
+         {155, "invalid sewer area for RDII at node %s."},
+         {156, "ambiguous station ID for Rain Gage %s."},
+diff --git a/src/engine/core/ErrorCodes.hpp b/src/engine/core/ErrorCodes.hpp
+index 58441c6..fb759e2 100644
+--- a/src/engine/core/ErrorCodes.hpp
++++ b/src/engine/core/ErrorCodes.hpp
+@@ -86,6 +86,7 @@ enum ErrorCode : int {
+ 
+     // --- Hydrology errors (151–159) ---
+     ERR_UNITHYD_TIMES           = 151,  ///< a Unit Hydrograph in set %s has invalid time base
++    ERR_UNITHYD_GAGE            = 152,  ///< no rain gage assigned to Unit Hydrograph set %s
+     ERR_UNITHYD_RATIOS          = 153,  ///< a Unit Hydrograph in set %s has invalid response ratios
+     ERR_RDII_AREA               = 155,  ///< invalid sewer area for RDII at node %s
+     ERR_RAIN_FILE_CONFLICT      = 156,  ///< ambiguous station ID for Rain Gage %s
+diff --git a/src/engine/core/SWMMEngine.cpp b/src/engine/core/SWMMEngine.cpp
+index 839529d..3c5df74 100644
+--- a/src/engine/core/SWMMEngine.cpp
++++ b/src/engine/core/SWMMEngine.cpp
+@@ -8340,6 +8340,19 @@ void SWMMEngine::initHydraulics() noexcept {
+             if (uh_i < 0 || uh_i >= static_cast<int>(rdii_.uh_params.size())) continue;
+             const auto& uh = rdii_.uh_params[static_cast<std::size_t>(uh_i)];
+             bool time_err = false, ratio_err = false;
++            // Legacy validateRdii: every UH group needs a rain gage line
++            // naming an existing gage (otherwise it would get no rainfall).
++            bool has_gage = false;
++            const auto& uhs = ctx_.unit_hyds;
++            for (std::size_t gi = 0; gi < uhs.gage_assignments.size(); ++gi) {
++                if (CiEqual{}(uhs.gage_assignments[gi], uh_name)
++                    && ctx_.gage_names.find(uhs.gage_names[gi]) >= 0)
++                    has_gage = true;
++            }
++            if (!has_gage && ctx_.rdii_assigns.count() > 0) {
++                ctx_.errors.push_back(format_error(ERR_UNITHYD_GAGE, uh_name));
++                set_error(SWMM_ERR_PARSE, ctx_.errors.back().c_str());
++            }
+             for (int m = 0; m < 12 && (!time_err || !ratio_err); ++m) {
+                 double rsum = 0.0;
+                 for (int k = 0; k < 3; ++k) {

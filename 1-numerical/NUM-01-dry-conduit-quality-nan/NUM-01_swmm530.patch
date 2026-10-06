@@ -1,0 +1,57 @@
+NUM-01: skip the link API pollutant flux when the link holds and receives no water
+
+findLinkQual() and findSFLinkQual() convert the API link mass flux to a
+concentration with flux * tStep / (v1 + qIn * tStep). For a dry conduit with
+no inflow (v1 = 0, qIn = 0) the default zero flux gives 0/0 = NaN, which is
+stored as the link's concentration and added to its load total and to the
+External Inflow, Exfiltration Loss and Final Stored Mass terms of the quality
+mass balance. Apply the flux only when it is non-zero and there is water to
+carry it. A zero flux added nothing before, so wet links are unchanged.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-01_swmm530.patch
+
+diff --git a/src/legacy/engine/qualrout.c b/src/legacy/engine/qualrout.c
+index 1cf5ae1..3e47df1 100644
+--- a/src/legacy/engine/qualrout.c
++++ b/src/legacy/engine/qualrout.c
+@@ -374,7 +374,9 @@ void findLinkQual(int i, double tStep)
+         // --- Calculate bounded externally provided api pollutant flux and update mass balance
+         cOut = Link[i].apiExtQualMassFlux[p];
+ 
+-        if (cOut < 0.0)
++        // --- a link with no water (v1 + qIn*tStep = 0) takes no flux
++        //     (the division below would give 0/0 = NaN)
++        if (cOut < 0.0 && v1 + qIn * tStep > 0.0)
+         {
+             cOut = -cOut * tStep / (v1 + qIn * tStep);
+             cOut = MIN(c2, MAX(0.0, cOut));
+@@ -386,7 +388,7 @@ void findLinkQual(int i, double tStep)
+             cOut = cOut/ tStep;
+             massbal_addOutflowQual(p, cOut, FALSE);
+         }
+-        else
++        else if (cOut > 0.0 && v1 + qIn * tStep > 0.0)
+         {
+             cOut = cOut * tStep / (v1 + qIn * tStep);
+             c2 += cOut;
+@@ -450,7 +452,9 @@ void findSFLinkQual(int i, double qSeep, double fEvap, double tStep)
+ 
+         cOut = Link[j].apiExtQualMassFlux[p];
+ 
+-        if (cOut < 0.0)
++        // --- a link with no water (v1 + qIn*tStep = 0) takes no flux
++        //     (the division below would give 0/0 = NaN)
++        if (cOut < 0.0 && v1 + qIn * tStep > 0.0)
+         {
+             cOut = -cOut * tStep / (v1 + qIn * tStep);
+             cOut = MIN(c2, MAX(0.0, cOut));
+@@ -462,7 +466,7 @@ void findSFLinkQual(int i, double qSeep, double fEvap, double tStep)
+             cOut = cOut/ tStep;
+             massbal_addOutflowQual(p, cOut, FALSE);
+         }
+-        else
++        else if (cOut > 0.0 && v1 + qIn * tStep > 0.0)
+         {
+             cOut = cOut * tStep / (v1 + qIn * tStep);
+             c2 += cOut;

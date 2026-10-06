@@ -1,0 +1,37 @@
+IO-22: reject an RDII unit hydrograph with a negative recession limb ratio K
+
+The [HYDROGRAPHS] validation copied legacy validateRdii(), which only
+rejected a negative time to peak, so K < 0 ran with a hydrograph cut off on
+its rising limb (volume (1+K)*R) and K <= -1 with no RDII at all. A base time
+shorter than the time to peak is now ERROR 151 (invalid time base), and a
+zero base time only means "no UH" when the time to peak is zero too. Same
+rule as the 5.3.0 patch.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-22_swmm600.patch
+
+diff --git a/src/engine/core/SWMMEngine.cpp b/src/engine/core/SWMMEngine.cpp
+index 839529d..a11f9c4 100644
+--- a/src/engine/core/SWMMEngine.cpp
++++ b/src/engine/core/SWMMEngine.cpp
+@@ -8343,13 +8343,13 @@ void SWMMEngine::initHydraulics() noexcept {
+             for (int m = 0; m < 12 && (!time_err || !ratio_err); ++m) {
+                 double rsum = 0.0;
+                 for (int k = 0; k < 3; ++k) {
+-                    // Legacy rdii.c:873: a zero base time means the UH does
+-                    // not exist for this month/term — skipped entirely, no
+-                    // rsum contribution. Legacy checks ONLY tPeak < 0; a
+-                    // recession constant K < 0 (tBase < tPeak) is accepted
+-                    // (e.g. simple-two-pump-model CHES_47_SEP Short K=-0.42).
+-                    if (uh.tBase[m][k] == 0.0) continue;
+-                    if (!time_err && uh.tPeak[m][k] < 0.0) {
++                    // Legacy rdii.c:873: a zero base time (and time to
++                    // peak) means the UH does not exist for this month/term
++                    // — skipped entirely, no rsum contribution. A recession
++                    // constant K < 0 (tBase < tPeak) is an invalid time base.
++                    if (uh.tBase[m][k] == 0.0 && uh.tPeak[m][k] == 0.0) continue;
++                    if (!time_err && (uh.tPeak[m][k] < 0.0
++                                      || uh.tBase[m][k] < uh.tPeak[m][k])) {
+                         ctx_.errors.push_back(format_error(ERR_UNITHYD_TIMES, uh_name));
+                         set_error(SWMM_ERR_PARSE, ctx_.errors.back().c_str());
+                         time_err = true;

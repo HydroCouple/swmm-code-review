@@ -1,0 +1,50 @@
+IO-48: interpolate the routing interface file to the report time
+
+InterfaceManager::writeOutfallResults() wrote nodes.inflow and nodes.conc, the
+values at the end of the routing step, under the report date, while the .out
+snapshot interpolates to the report time. Compute the same weight
+f = (next_report_ms - old_elapsed_ms) / (elapsed_ms - old_elapsed_ms) and
+write (1-f)*old + f*new for flow and quality.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-48_swmm600.patch
+
+diff --git a/src/engine/core/InterfaceFile.cpp b/src/engine/core/InterfaceFile.cpp
+index 74eb879..c55488e 100644
+--- a/src/engine/core/InterfaceFile.cpp
++++ b/src/engine/core/InterfaceFile.cpp
+@@ -367,6 +367,13 @@ void InterfaceManager::writeOutfallResults(const SimulationContext& ctx,
+     datetime::decodeDate(current_time, yr, mon, day);
+     datetime::decodeTime(current_time, hr, mn, sec);
+ 
++    // IO-48: the row is stamped with the report time, so interpolate between
++    // the old and new routing states as the .out snapshot does (legacy
++    // output.c: f = (reportTime - OldRoutingTime) / (New - Old))
++    const double span = ctx.elapsed_ms - ctx.old_elapsed_ms;
++    const double f = (span > 0.0)
++        ? (ctx.next_report_ms - ctx.old_elapsed_ms) / span : 1.0;
++
+     for (int i = 0; i < ctx.n_nodes(); ++i) {
+         auto ui = static_cast<std::size_t>(i);
+         if (!isOutletNode(ctx, i)) continue;
+@@ -383,14 +390,17 @@ void InterfaceManager::writeOutfallResults(const SimulationContext& ctx,
+         // (legacy: Node[j].inflow * UCF(FLOW), with UCF(FLOW) = Qcf[FlowUnits])
+         int fu = static_cast<int>(ctx.options.flow_units);
+         if (fu < 0 || fu > 5) fu = 0;
+-        std::fprintf(outfile_, " %-10f", ctx.nodes.inflow[ui] * ucf::Qcf[fu]);
++        std::fprintf(outfile_, " %-10f",
++                     ((1.0 - f) * ctx.nodes.old_inflow[ui] + f * ctx.nodes.inflow[ui])
++                     * ucf::Qcf[fu]);
+ 
+         // Write pollutant concentrations
+         int np = ctx.n_pollutants();
+         for (int p = 0; p < np; ++p) {
+             auto qi = ui * static_cast<std::size_t>(np) + static_cast<std::size_t>(p);
+-            double conc = (qi < ctx.nodes.conc.size())
+-                          ? ctx.nodes.conc[qi] : 0.0;
++            double conc = (qi < ctx.nodes.conc.size() && qi < ctx.nodes.conc_old.size())
++                          ? (1.0 - f) * ctx.nodes.conc_old[qi] + f * ctx.nodes.conc[qi]
++                          : 0.0;
+             std::fprintf(outfile_, " %-10f", conc);
+         }
+     }

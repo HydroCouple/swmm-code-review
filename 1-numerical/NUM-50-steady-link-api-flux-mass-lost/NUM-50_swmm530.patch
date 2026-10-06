@@ -1,0 +1,72 @@
+NUM-50: apply a link API mass flux under STEADY routing as flux / flow
+
+Under STEADY routing a conduit stores no pollutant: findSFLinkQual() gives it
+the upstream node's concentration and the conduit passes on c * q per second.
+The API mass-flux block used the dynamic-wave mixing formula instead,
+dc = F * dt / (V + q * dt), and booked all of F as external inflow, so only
+the fraction q * dt / (V + q * dt) of the booked mass ever left the conduit.
+Change the concentration by F / q and book exactly what that carries; with no
+flow through the conduit the flux is not applied (and not booked).
+
+Requires: CRASH-12
+
+Requires: NUM-01
+Requires: NUM-45
+Requires: NUM-48
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b,
+after CRASH-12_swmm530.patch:
+    git apply NUM-50_swmm530.patch
+
+diff --git a/src/legacy/engine/qualrout.c b/src/legacy/engine/qualrout.c
+index bae9f4c..54255ab 100644
+--- a/src/legacy/engine/qualrout.c
++++ b/src/legacy/engine/qualrout.c
+@@ -421,7 +421,7 @@ void findSFLinkQual(int i, double qSeep, double fEvap, double tStep)
+     int j = Link[i].node1;
+     int p, k;
+     double c1, c2;
+-    double lossRate, cOut, barrels, qIn, v1;
++    double lossRate, cOut, barrels, qIn;
+ 
+     // --- examine each pollutant
+     for (p = 0; p < Nobjects[POLLUT]; p++)
+@@ -450,30 +450,29 @@ void findSFLinkQual(int i, double qSeep, double fEvap, double tStep)
+         k = Link[i].subIndex;
+         barrels = Conduit[k].barrels;
+         qIn = fabs(Conduit[k].q1) * barrels;
+-        v1 = Link[i].oldVolume;
+ 
++        // --- under Steady Flow a conduit stores no pollutant: it passes on
++        //     c2 * qIn, so the flux changes c2 by flux / qIn (no flow, no flux)
+         cOut = Link[i].apiExtQualMassFlux[p];
+ 
+-        // --- a link with no water (v1 + qIn*tStep = 0) takes no flux
+-        //     (the division below would give 0/0 = NaN)
+-        if (cOut < 0.0 && v1 + qIn * tStep > 0.0)
++        if (cOut < 0.0 && qIn > ZERO)
+         {
+-            cOut = -cOut * tStep / (v1 + qIn * tStep);
++            cOut = -cOut / qIn;
+             cOut = MIN(c2, MAX(0.0, cOut));
+             c2 -= cOut;
+             
+-            cOut = cOut * (v1 + qIn * tStep) ;
++            cOut = cOut * qIn * tStep;
+             Link[i].totalLoad[p] -= cOut;
+ 
+             cOut = cOut/ tStep;
+             massbal_addOutflowQual(p, cOut, FALSE);
+         }
+-        else if (cOut > 0.0 && v1 + qIn * tStep > 0.0)
++        else if (cOut > 0.0 && qIn > ZERO)
+         {
+-            cOut = cOut * tStep / (v1 + qIn * tStep);
++            cOut = cOut / qIn;
+             c2 += cOut;
+ 
+-            cOut = cOut * (v1 + qIn * tStep);
++            cOut = cOut * qIn * tStep;
+             Link[i].totalLoad[p] += cOut;
+ 
+             cOut = cOut/ tStep;

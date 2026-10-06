@@ -1,0 +1,57 @@
+[TITLE]
+NUM-39: rain garden (no storage layer) with an underdrain
+
+[OPTIONS]
+FLOW_UNITS       CFS
+INFILTRATION     HORTON
+FLOW_ROUTING     KINWAVE
+START_DATE       01/01/2020
+START_TIME       00:00:00
+END_DATE         01/01/2020
+END_TIME         12:00:00
+REPORT_STEP      00:15:00
+WET_STEP         00:01:00
+DRY_STEP         00:01:00
+ROUTING_STEP     60
+
+[EVAPORATION]
+CONSTANT 0.0
+
+[RAINGAGES]
+;;Name  Format     Interval  SCF  Source
+G1      INTENSITY  1:00      1.0  TIMESERIES  TS1
+
+[TIMESERIES]
+;; 1 in/hr for 2 hours: 2.0 in of rain
+TS1  0  1.0
+TS1  1  1.0
+TS1  2  0.0
+
+[SUBCATCHMENTS]
+;;Name  Gage  Outlet  Area  %Imperv  Width  %Slope  CurbLen
+S1      G1    O1      1     0        100    1       0
+
+[SUBAREAS]
+;;Subcatch  N-Imperv  N-Perv  S-Imperv  S-Perv  PctZero  RouteTo
+S1          0.01      0.1     0         0       0        OUTLET
+
+[INFILTRATION]
+S1  0  0  4  7  0
+
+[LID_CONTROLS]
+;; 6 in of ponding over 12 in of soil (Ksat 0.5 in/hr) and an underdrain
+;; (C = 1, n = 0.5); a rain garden has no storage layer
+RG1  RG
+RG1  SURFACE  6   0    0    0    0
+RG1  SOIL     12  0.5  0.2  0.1  0.5  10  3.5
+RG1  DRAIN    1   0.5  0    0
+
+[LID_USAGE]
+;;Subcat  LID  Number  Area   Width  InitSat  FromImp  ToPerv
+S1        RG1  1       43560  0      0        0        0
+
+[OUTFALLS]
+O1  0  FREE
+
+[REPORT]
+SUBCATCHMENTS ALL

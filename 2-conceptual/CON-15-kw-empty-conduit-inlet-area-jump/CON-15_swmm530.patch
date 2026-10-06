@@ -1,0 +1,31 @@
+CON-15: KINWAVE: raise the inlet area only by what the inflow fills
+
+kinwave_execute() sets the inlet area to the normal-flow area of the new
+inflow at once. When that rise needs more water than the step supplies (an
+abrupt inflow into an empty or nearly empty conduit), the continuity
+equation has no root with aout >= 0, solveContinuity() clamps aout = 0
+(return code -3) and the conduit is booked with water that never entered.
+In that case, lower the inlet area to the value for which the equation holds
+with aout = 0 (f(0) = C2 = 0), never below the previous inlet area. The
+inlet area then grows over the following steps as the inflow fills it.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply CON-15_swmm530.patch
+
+diff --git a/src/legacy/engine/kinwave.c b/src/legacy/engine/kinwave.c
+index abb00e0..a9be382 100644
+--- a/src/legacy/engine/kinwave.c
++++ b/src/legacy/engine/kinwave.c
+@@ -144,6 +144,12 @@ int kinwave_execute(int linkIndex, double* qinflow, double* qoutflow, double tSt
+             report_writeErrorMsg(ERR_KINWAVE, Link[linkIndex].ID);
+             return 1;
+         }
++
++        // --- if the inflow cannot fill a rise in inlet area within this
++        //     step (no outflow solution), raise the inlet area only by what
++        //     the inflow fills, so that continuity still holds
++        if ( result == -3 && ain > a1 )
++            ain = MAX(a1, ain - C2 * WX / ((1.0 - WT) * dxdt));
+         if ( result <= 0 ) result = 1;
+ 
+         // --- compute normalized outlet flow from outlet area

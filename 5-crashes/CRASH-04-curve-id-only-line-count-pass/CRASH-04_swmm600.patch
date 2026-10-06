@@ -1,0 +1,28 @@
+CRASH-04: report a [CURVES] row with only the curve name
+
+6.0.0 does not crash on a [CURVES] row with only the curve name, but it
+ignores the row (or creates an empty curve from it) without a message.
+Legacy table_readCurve() rejects such a row with ERROR 203 (too few
+items), which the fixed 5.3.0 now reaches. Report it the same way.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply CRASH-04_swmm600.patch
+
+diff --git a/src/engine/input/handlers/TablesHandler.cpp b/src/engine/input/handlers/TablesHandler.cpp
+index 63bbe19..dde685b 100644
+--- a/src/engine/input/handlers/TablesHandler.cpp
++++ b/src/engine/input/handlers/TablesHandler.cpp
+@@ -275,6 +275,13 @@ void handle_curves(SimulationContext& ctx, const std::vector<std::string>& lines
+         auto tok = Tokenizer::tokenize(pl.data);
+         if (tok.empty()) continue;
+ 
++        // A row with only the curve name is too few items (legacy
++        // table_readCurve, ERR_ITEMS); v6 formerly ignored it silently.
++        if (tok.size() < 2) {
++            ctx.errors.push_back(format_error(ERR_ITEMS, tok[0]));
++            continue;
++        }
++
+         const std::string& maybe_name = tok[0];
+         bool is_new_table = false;
+         // As in [TIMESERIES]: curve rows repeat the curve name, so skip the

@@ -1,0 +1,35 @@
+NUM-02: group inlet backflow ratios by capture node again
+
+getBackflowRatios() accumulates each inlet's open area and inlet count in
+inletNodes[nodeIndex], but 5.3.0 assigns the capture node's index to the
+file-scope Manning roughness `n` instead of to `nodeIndex`, which stays 0.
+Every inlet lands in slot 0, so a capture node's overflow is split across
+all inlets of the model and only part of it returns to the street; the rest
+is dropped from the flooding total and lost. Assign the index to nodeIndex,
+as 5.2.4 did with its local `n`.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-02_swmm530.patch
+
+diff --git a/src/legacy/engine/inlet.c b/src/legacy/engine/inlet.c
+index fa52cb3..518d215 100644
+--- a/src/legacy/engine/inlet.c
++++ b/src/legacy/engine/inlet.c
+@@ -1833,7 +1833,7 @@ void getBackflowRatios()
+     // --- Finds each inlet's contribution to its capture node
+     for (inlet = FirstInlet; inlet != NULL; inlet = inlet->nextInlet)
+     {
+-        n = inlet->nodeIndex;
++        nodeIndex = inlet->nodeIndex;
+         inletNodes[nodeIndex].numInletLinks++;
+         area = getInletArea(inlet);
+         if (area > 0.0)
+@@ -1850,7 +1850,7 @@ void getBackflowRatios()
+     {
+         // --- f is ratio of links with standard inlets to all inlet links
+         //     connected to receptor node n
+-        n = inlet->nodeIndex;
++        nodeIndex = inlet->nodeIndex;
+         f = (double) inletNodes[nodeIndex].numStdInletLinks /
+             (double) inletNodes[nodeIndex].numInletLinks;
+ 

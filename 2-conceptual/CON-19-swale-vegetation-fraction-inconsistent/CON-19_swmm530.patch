@@ -1,0 +1,37 @@
+CON-19: divide the swale and pavement surface flux by the vegetation void fraction
+
+The surface layer's water fills only the fraction 1 - VegFrac of the space
+above the surface. swaleFluxRates() and pavementFluxRates() book the stored
+surface volume with that void fraction but advanced the surface depth with
+the net inflow rate alone, so with VegFrac > 0 only part of the net inflow
+showed up as storage and the rest was lost from the water balance (or
+created when the surface drained). Divide the surface depth rate by the
+void fraction, as biocellFluxRates(), trenchFluxRates() and the reference
+manual's surface layer equation already do. Nothing changes when VegFrac = 0.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply CON-19_swmm530.patch
+
+diff --git a/src/legacy/engine/lidproc.c b/src/legacy/engine/lidproc.c
+index dbd83e4..cae91ae 100644
+--- a/src/legacy/engine/lidproc.c
++++ b/src/legacy/engine/lidproc.c
+@@ -1039,7 +1039,8 @@ void pavementFluxRates(double x[], double f[])
+     SurfaceOutflow = getSurfaceOutflowRate(surfaceDepth);
+ 
+     //... compute overall layer flux rates
+-    f[SURF] = SurfaceInflow - SurfaceEvap - SurfaceInfil - SurfaceOutflow;
++    f[SURF] = (SurfaceInflow - SurfaceEvap - SurfaceInfil - SurfaceOutflow) /
++              theLidProc->surface.voidFrac;
+     f[PAVE] = (SurfaceInfil - PaveEvap - PavePerc) / paveVoidFrac;
+     if ( theLidProc->soil.thickness > 0.0)
+     {
+@@ -1161,7 +1162,7 @@ void swaleFluxRates(double x[], double f[])
+     SurfaceEvap /= lidArea;
+     StorageExfil /= lidArea;
+     SurfaceOutflow /= lidArea;
+-    f[SURF] = dVdT / surfArea;
++    f[SURF] = dVdT / (surfArea * theLidProc->surface.voidFrac);
+     f[SOIL] = 0.0;
+     f[STOR] = 0.0;
+ 

@@ -1,0 +1,24 @@
+IO-13: report invalid cross-section geometry as ERROR 119 naming the link
+
+When xsect_setParams() refuses a link's geometry (Geom1 <= 0, sediment depth
+not below the diameter, an unknown size code, a missing width, ...),
+link_readXsectParams() reported ERROR 211 "invalid number" with an empty
+token, which does not say which value or which rule is at fault. Report
+ERR_XSECT ("invalid cross section for Link <name>") instead.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-13_swmm530.patch
+
+diff --git a/src/legacy/engine/link.c b/src/legacy/engine/link.c
+index 31925e1..cad7fcf 100644
+--- a/src/legacy/engine/link.c
++++ b/src/legacy/engine/link.c
+@@ -247,7 +247,7 @@ int link_readXsectParams(char* tok[], int ntoks)
+         }
+         if ( !xsect_setParams(&Link[j].xsect, k, x, UCF(LENGTH)) )
+         {
+-            return error_setInpError(ERR_NUMBER, "");
++            return error_setInpError(ERR_XSECT, tok[0]);
+         }
+ 
+         // --- parse number of barrels if present

@@ -1,0 +1,112 @@
+CON-10: let lateral withdrawals take pollutant mass at the node's concentration
+
+A negative lateral inflow component (negative [INFLOWS] or API inflow,
+aquifer-ward groundwater, negative DWF, RDII or interface flow) reduced the
+node's net lateral flow, and quality routing mixed the mass of the positive
+sources with that net flow. The withdrawn water carried no mass, so the node
+concentration rose (to 200 mg/L for 10 cfs at 100 mg/L less 5 cfs), and under
+KINWAVE a net withdrawal booked mass that never existed. Record the
+withdrawals per node (TNode.latWithdrawal), mix the inflow mass with all the
+water that carried it (qualrout_execute), and book the withdrawn mass at the
+mixed concentration in removeOutflows() instead of only a net negative flow.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply CON-10_swmm530.patch
+
+diff --git a/src/legacy/engine/objects.h b/src/legacy/engine/objects.h
+index 6b54d76..4d72c54 100644
+--- a/src/legacy/engine/objects.h
++++ b/src/legacy/engine/objects.h
+@@ -543,6 +543,7 @@ typedef struct
+    double        oldFlowInflow;   // previous flow inflow
+    double        oldNetInflow;    // previous net inflow
+    double        qualInflow;      // inflow seen for quality routing (cfs)
++   double        latWithdrawal;   // negative lateral inflows (cfs, > 0)
+    double        apiExtInflow;    // inflow from swmm_setValue function (cfs)
+ }  TNode;
+ 
+diff --git a/src/legacy/engine/qualrout.c b/src/legacy/engine/qualrout.c
+index 1cf5ae1..136d292 100644
+--- a/src/legacy/engine/qualrout.c
++++ b/src/legacy/engine/qualrout.c
+@@ -117,6 +117,12 @@ void qualrout_execute(double tStep)
+     {
+         // --- get node inflow and average volume
+         Node[j].qualInflow = Node[j].inflow;
++
++        // --- mix the inflow mass with all the lateral water that carried it
++        //     (withdrawals leave at the mixed concen. in removeOutflows;
++        //     dynwave leaves a negative net lateral flow out of Node.inflow)
++        Node[j].qualInflow += Node[j].latWithdrawal;
++        if ( RouteModel == DW ) Node[j].qualInflow += MIN(0.0, Node[j].newLatFlow);
+         qIn = Node[j].qualInflow;
+         vAvg = (Node[j].oldVolume + Node[j].newVolume) / 2.0;
+ 
+diff --git a/src/legacy/engine/routing.c b/src/legacy/engine/routing.c
+index 9a47f4b..ddc0a64 100644
+--- a/src/legacy/engine/routing.c
++++ b/src/legacy/engine/routing.c
+@@ -431,6 +431,7 @@ void  initSystemInflows()
+     {
+         Node[j].oldLatFlow  = Node[j].newLatFlow;
+         Node[j].newLatFlow  = 0.0;
++        Node[j].latWithdrawal = 0.0;
+     }
+ }
+ 
+@@ -570,6 +571,7 @@ void addExternalInflows(DateTime currentDate)
+         else
+         {
+             massbal_addOutflowFlow(-q, FALSE);
++            Node[j].latWithdrawal -= q;
+             continue;
+         }
+ 
+@@ -650,6 +652,7 @@ void addDryWeatherInflows(DateTime currentDate)
+         // --- add flow inflow to node's lateral inflow
+         Node[j].newLatFlow += q;
+         massbal_addInflowFlow(DRY_WEATHER_INFLOW, q);
++        if ( q < 0.0 ) Node[j].latWithdrawal -= q;
+ 
+         // --- stop if inflow is non-positive
+         if ( q <= 0.0 ) continue;
+@@ -768,6 +771,7 @@ void addGroundwaterInflows(double routingTime)
+                 if ( fabs(q) < FLOW_TOL ) continue;
+                 Node[j].newLatFlow += q;
+                 massbal_addInflowFlow(GROUNDWATER_INFLOW, q);
++                if ( q < 0.0 ) Node[j].latWithdrawal -= q;
+ 
+                 // add pollutant load (for positive inflow)
+                 if ( q > 0.0 )
+@@ -832,6 +836,7 @@ void addRdiiInflows(DateTime currentDate)
+         if ( fabs(q) < FLOW_TOL ) continue;
+         Node[j].newLatFlow += q;
+         massbal_addInflowFlow(RDII_INFLOW, q);
++        if ( q < 0.0 ) Node[j].latWithdrawal -= q;
+ 
+         // add pollutant load (for positive inflow)
+         if ( q > 0.0 )
+@@ -872,6 +877,7 @@ void addIfaceInflows(DateTime currentDate)
+         if ( fabs(q) < FLOW_TOL ) continue;
+         Node[j].newLatFlow += q;
+         massbal_addInflowFlow(EXTERNAL_INFLOW, q);
++        if ( q < 0.0 ) Node[j].latWithdrawal -= q;
+ 
+         // add pollutant load (for positive inflow)
+         if ( q > 0.0 )
+@@ -1027,12 +1033,12 @@ void removeOutflows(double tStep)
+ 
+         // --- update mass balance with mass leaving system through negative
+         //     lateral inflows (lateral flow was previously accounted for)
+-        q = Node[i].newLatFlow;
+-        if ( q < 0.0 )
++        q = Node[i].latWithdrawal;
++        if ( q > 0.0 )
+         {
+             for ( p = 0; p < Nobjects[POLLUT]; p++ )
+             {
+-                w = -q * Node[i].newQual[p];
++                w = q * Node[i].newQual[p];
+                 massbal_addOutflowQual(p, w, FALSE);
+             }
+         }

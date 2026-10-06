@@ -1,0 +1,48 @@
+[TITLE]
+CON-08: storage unit SU1 (1000 ft2, 2 ft deep = 2000 ft3) receives a MASS-type
+load of 10 mg/s of P1 for 2 h but no flow. Its outlet is 6 ft above the
+bottom, so the water stays. Expected: 72000 mg in 2000 ft3 = 1.2713 mg/L.
+
+[OPTIONS]
+FLOW_UNITS           CFS
+INFILTRATION         HORTON
+FLOW_ROUTING         DYNWAVE
+START_DATE           01/01/2020
+START_TIME           00:00:00
+REPORT_START_DATE    01/01/2020
+REPORT_START_TIME    00:00:00
+END_DATE             01/01/2020
+END_TIME             02:00:00
+DRY_STEP             00:05:00
+WET_STEP             00:05:00
+ROUTING_STEP         10
+REPORT_STEP          00:30:00
+
+[JUNCTIONS]
+J2   0   5   0   0   0
+
+[OUTFALLS]
+O1   0   FREE
+
+[STORAGE]
+;;Name Elev MaxDepth InitDepth Shape a b c SurDepth Fevap
+SU1  0  10  2  FUNCTIONAL  0  0  1000  0  0
+
+[CONDUITS]
+C1  SU1  J2  400  0.013  6  0  0
+C2  J2   O1  400  0.013  0  0  0
+
+[XSECTIONS]
+C1  CIRCULAR  1  0  0  0  1
+C2  CIRCULAR  1  0  0  0  1
+
+[POLLUTANTS]
+P1  MG/L  0  0  0  0  NO  *  0  0  0
+
+[INFLOWS]
+;;Node Param TimeSeries Type Mfactor Sfactor Baseline
+SU1  P1  ""  MASS  1.0  1.0  10
+
+[REPORT]
+NODES ALL
+LINKS ALL

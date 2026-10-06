@@ -1,0 +1,33 @@
+BND-01: give a FREE/NORMAL outfall below a regulator no offset depth
+
+setAllOutfallDepths() sets a FREE outfall to z + min(yNorm, yCrit) and a
+NORMAL one to z + yNorm. For a weir, orifice or outlet whose downstream node
+is the outfall, legacyOffset() returned the regulator's un-raised crest
+(legacy offset2), which is a height above the UPSTREAM node, so the outfall
+got the crest height as a fake tailwater depth. Return 0 for that case, as
+the 5.3.0 patch does; conduits are unchanged.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply BND-01_swmm600.patch
+
+diff --git a/src/engine/hydraulics/Outfall.cpp b/src/engine/hydraulics/Outfall.cpp
+index 3fd3a23..55ecf16 100644
+--- a/src/engine/hydraulics/Outfall.cpp
++++ b/src/engine/hydraulics/Outfall.cpp
+@@ -126,12 +126,12 @@ static double getYnorm(const XSectParams& xs, double beta, double q_max,
+ // weir/outlet crest in its side table and the orifice offset in offset1;
+ // a pump has none.
+ static double legacyOffset(const SimulationContext& ctx, std::size_t uk, bool downstream) {
+-    // A regulator's downstream offset is legacy's un-raised crest (the
+-    // resolver's WARNING-10 pass keeps it in offset2 before raising offset1
+-    // / the side-table crest to the downstream invert).
++    // A regulator's downstream offset (legacy offset2) is its crest height
++    // above its UPSTREAM node, not a height above the outfall: it gives a
++    // downstream outfall no depth (legacy link_setOutfallDepth).
+     if (downstream && ctx.links.type[uk] != LinkType::CONDUIT &&
+         ctx.links.type[uk] != LinkType::PUMP)
+-        return ctx.links.offset2[uk];
++        return 0.0;
+     switch (ctx.links.type[uk]) {
+         case LinkType::CONDUIT:
+             return downstream ? ctx.links.offset2[uk] : ctx.links.offset1[uk];

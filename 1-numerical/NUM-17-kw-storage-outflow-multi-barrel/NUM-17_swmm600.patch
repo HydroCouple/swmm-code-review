@@ -1,0 +1,33 @@
+NUM-17: count every barrel in the outflow from a storage unit (KW, SF)
+
+storageConduitOutflow() ports legacy storage_getOutflow(): the conduit's
+normal flow at the storage depth, or its full flow once the storage is
+deeper than the conduit. q_full and beta are per barrel, but the result is
+used as the conduit's total inflow and divided by the barrel count, so a
+multi-barrel outlet passed the flow of one barrel. Multiply both results by
+the number of barrels, as the 5.3.0 patch does. Single-barrel conduits are
+unchanged.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-17_swmm600.patch
+
+diff --git a/src/engine/hydraulics/KinematicWave.cpp b/src/engine/hydraulics/KinematicWave.cpp
+index a79bd76..473880e 100644
+--- a/src/engine/hydraulics/KinematicWave.cpp
++++ b/src/engine/hydraulics/KinematicWave.cpp
+@@ -75,11 +75,13 @@ static double storageConduitOutflow(SimulationContext& ctx, int i, int j) {
+ 
+     const auto& CD = ctx.link_subtypes.conduits;
+     const auto ucr = static_cast<std::size_t>(ctx.link_subtypes.conduit_row(j));
+-    if (y >= ctx.links.xsect_y_full[uj]) return CD.q_full[ucr];
++    // q_full and beta are per barrel
++    const double barrels = static_cast<double>(std::max(CD.barrels[ucr], 1));
++    if (y >= ctx.links.xsect_y_full[uj]) return CD.q_full[ucr] * barrels;
+ 
+     const XSectParams xs = buildXSP_KW(ctx, uj);
+     const double a = xsect::getAofY(xs, y);
+-    return CD.beta[ucr] * xsect::getSofA(xs, a);
++    return CD.beta[ucr] * xsect::getSofA(xs, a) * barrels;
+ }
+ 
+ double getLinkInflow(SimulationContext& ctx,

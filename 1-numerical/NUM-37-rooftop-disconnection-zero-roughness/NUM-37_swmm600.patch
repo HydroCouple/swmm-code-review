@@ -1,0 +1,60 @@
+NUM-37: let a rooftop disconnection with Rough or Slope = 0 overflow
+
+LIDSolver::roofFluxRates() called getSurfaceOverflowRate() when the roof has no
+Manning outflow (Rough or Slope = 0) but threw its result away, so the
+surface outflow, and the gutter flow taken from it, stayed 0 and all rain
+piled up on the roof. Assign the overflow rate to SurfaceOutflow, as the
+Manning branch does, so water above the storage depth leaves within the
+step (the documented rule) and the gutters take up to their capacity of it.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-37_swmm600.patch
+
+diff --git a/src/engine/hydrology/LID.cpp b/src/engine/hydrology/LID.cpp
+index 9aa0c73..7fc3b31 100644
+--- a/src/engine/hydrology/LID.cpp
++++ b/src/engine/hydrology/LID.cpp
+@@ -773,7 +773,7 @@ public:
+         SurfaceInfil = 0.0;
+         if (P->surf_alpha > 0.0)
+             SurfaceOutflow = getSurfaceOutflowRate(surfaceDepth);
+-        else getSurfaceOverflowRate(&surfaceDepth);
++        else SurfaceOutflow = getSurfaceOverflowRate(&surfaceDepth);
+         StorageDrain = std::min(P->drain_coeff / P->ucf_rainfall, SurfaceOutflow);
+         SurfaceOutflow -= StorageDrain;
+         f[L_SURF] = (SurfaceInflow - SurfaceEvap - StorageDrain - SurfaceOutflow);
+diff --git a/tests/unit/engine/test_lid.cpp b/tests/unit/engine/test_lid.cpp
+index 27e6594..ba8a976 100644
+--- a/tests/unit/engine/test_lid.cpp
++++ b/tests/unit/engine/test_lid.cpp
+@@ -628,12 +628,13 @@ TEST(LIDPavement, CloggingReducesPermeability) {
+ // ============================================================================
+ 
+ TEST(LIDRoof, SplitsBetweenOverflowAndDrain) {
+-    // Legacy roofFluxRates: with a Manning alpha the surface outflow is the
+-    // Manning rate and the drain takes min(drain.coeff / UCF(RAINFALL), that
+-    // outflow); without one (alpha = 0, canOverflow) the flux function's
+-    // overflow call discards its value (lidproc.c roofFluxRates), so the
+-    // drain sees NO outflow and the excess leaves as the overflow added by
+-    // lidproc_getOutflow after the solve.
++    // roofFluxRates: with a Manning alpha the surface outflow is the Manning
++    // rate and the drain takes min(drain.coeff / UCF(RAINFALL), that
++    // outflow); without one (alpha = 0, canOverflow) the surface outflow is
++    // the overflow rate, i.e. the excess above the storage depth leaves
++    // within the step, and the drain takes up to its capacity of it.
++    // (Legacy discarded that overflow rate, so the drain saw no outflow:
++    // the code review's NUM-37.)
+     auto build = [](double alpha) {
+         LIDGroupSoA g;
+         g.type = LIDType::ROOF_DISCON;
+@@ -657,8 +658,8 @@ TEST(LIDRoof, SplitsBetweenOverflowAndDrain) {
+ 
+     LIDGroupSoA overflow = build(0.0);
+     LIDSolver::batchRoofDisconFlux(overflow, 5e-4, kNoEvap, 300.0);
+-    EXPECT_DOUBLE_EQ(overflow.drain_flow[0], 0.0)
+-        << "legacy: no Manning outflow means nothing for the drain to take";
++    EXPECT_NEAR(overflow.drain_flow[0], 0.001 / 43200.0, 1.0e-18)  // 0.001 in/hr
++        << "the overflow exceeds the drain capacity, so the drain runs full";
+     EXPECT_GT(overflow.surface_runoff[0], 0.0)
+         << "the excess above the storage depth overflows";
+ }

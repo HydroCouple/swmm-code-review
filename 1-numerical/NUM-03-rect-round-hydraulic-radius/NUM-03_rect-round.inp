@@ -1,0 +1,41 @@
+[TITLE]
+NUM-03: steady uniform flow in two RECT_ROUND 3 x 4 ft conduits (round bottom r = 2 ft)
+Q = 6.24 cfs, n = 0.013, S = 0.001; NORMAL outfall, so every depth should be the normal depth
+
+[OPTIONS]
+FLOW_UNITS CFS
+FLOW_ROUTING DYNWAVE
+START_DATE 01/01/2020
+START_TIME 00:00:00
+END_DATE 01/01/2020
+END_TIME 02:00:00
+REPORT_STEP 00:15:00
+WET_STEP 00:05:00
+DRY_STEP 00:05:00
+ROUTING_STEP 5
+
+[JUNCTIONS]
+;Name Elev MaxDepth InitDepth SurDepth Aponded
+J1 101.0 6 0 0 0
+J2 100.5 6 0 0 0
+
+[OUTFALLS]
+O1 100.0 NORMAL
+
+[CONDUITS]
+;Name From To Length N InOffset OutOffset InitFlow MaxFlow
+C1 J1 J2 500 0.013 0 0 0 0
+C2 J2 O1 500 0.013 0 0 0 0
+
+[XSECTIONS]
+;Link Shape Geom1 Geom2 Geom3 Geom4 Barrels
+C1 RECT_ROUND 3 4 0 0 1
+C2 RECT_ROUND 3 4 0 0 1
+
+[INFLOWS]
+;Node Constituent TimeSeries Type Mfactor Sfactor Baseline
+J1 FLOW "" FLOW 1.0 1.0 6.24
+
+[REPORT]
+NODES ALL
+LINKS ALL

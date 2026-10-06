@@ -1,0 +1,41 @@
+CON-14: book LID releases as a negative BMP removal instead of creating mass
+
+surfqual_getWashoff() turns the step's washoff load into a concentration over
+the pre-LID runoff volume vOut1 and exports it over the post-LID volume vOut2
+(surface runoff + LID drains). The difference vOut1 - vOut2 was booked as
+infiltration / BMP removal only when positive. When the LIDs release stored
+water (vOut2 > vOut1, typically an underdrain after the storm), the surplus
+was exported with that concentration and no ledger term paid for it, while
+the same water's mass had been counted as BMP removal when it was captured.
+Book the signed difference: a release reduces the BMP removal. Exported
+loads and concentrations do not change.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply CON-14_swmm530.patch
+
+diff --git a/src/legacy/engine/surfqual.c b/src/legacy/engine/surfqual.c
+index 893b975..69abc65 100644
+--- a/src/legacy/engine/surfqual.c
++++ b/src/legacy/engine/surfqual.c
+@@ -339,16 +339,18 @@ void surfqual_getWashoff(int subcatchIndex, double runoff, double tStep)
+         //     the categories physically distinct and closes the mass balance.
+         if (Subcatch[subcatchIndex].lidArea > 0.0)
+         {
++            //     (vLost < 0 when the LIDs release more water than the
++            //      subcatchment generates; the mass it carries is booked
++            //      as a negative BMP removal, i.e. a return from storage)
+             vLost = vOut1 - vOut2;
+-            if (vLost < 0.0) vLost = 0.0;
+-            vInfil = MIN(vLidInfil, vLost);
++            vInfil = MIN(vLidInfil, MAX(vLost, 0.0));
+ 
+             massLoad = cOut * vInfil * Pollut[p].mcf;
+             if (massLoad > 0.0)
+                 massbal_updateLoadingTotals(INFIL_LOAD, p, massLoad);
+ 
+             massLoad = cOut * (vLost - vInfil) * Pollut[p].mcf;
+-            if (massLoad > 0.0)
++            if (massLoad != 0.0)
+                 massbal_updateLoadingTotals(BMP_REMOVAL_LOAD, p, massLoad);
+         }
+ 

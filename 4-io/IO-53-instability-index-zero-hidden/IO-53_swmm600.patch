@@ -1,0 +1,52 @@
+IO-53: list the worst link or node even when it is the first one
+
+DefaultReportPlugin reproduced the legacy test `index <= 0` for the
+"Highest Flow Instability Indexes" and "Most Frequent Nonconverging Nodes"
+sections, so a model whose first link or node is the worst one reported
+"All links are stable." / "Convergence obtained at all time steps.". An
+unused slot has index -1; test for index < 0.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-53_swmm600.patch
+
+diff --git a/src/engine/plugins/DefaultReportPlugin.cpp b/src/engine/plugins/DefaultReportPlugin.cpp
+index 36a8dbb..68c2d48 100644
+--- a/src/engine/plugins/DefaultReportPlugin.cpp
++++ b/src/engine/plugins/DefaultReportPlugin.cpp
+@@ -1598,13 +1598,13 @@ void DefaultReportPlugin::write_results(std::FILE* f,
+     // =====================================================================
+     // Highest Flow Instability Indexes
+     // =====================================================================
+-    // legacy report_writeMaxFlowTurns; a top entry at index 0 reads as
+-    // "stable" there (index <= 0) and is reproduced.
++    // legacy report_writeMaxFlowTurns; an empty list has index -1
++    // (index 0 is the first link).
+     if (ctx.n_links() > 0) {
+     WRITE(f, "********************************");
+     WRITE(f, "Highest Flow Instability Indexes");
+     WRITE(f, "********************************");
+-    if (ctx.max_flow_turns[0].index <= 0) {
++    if (ctx.max_flow_turns[0].index < 0) {
+         std::fprintf(f, "\n  All links are stable.");
+     } else {
+         for (int i = 0; i < SimulationContext::MAX_STATS; ++i) {
+@@ -1622,8 +1622,8 @@ void DefaultReportPlugin::write_results(std::FILE* f,
+     // =====================================================================
+     // Most Frequent Nonconverging Nodes
+     // =====================================================================
+-    // legacy report_writeNonconvergedStats: dynamic wave only; index <= 0
+-    // reads as converged there, reproduced.
++    // legacy report_writeNonconvergedStats: dynamic wave only; an empty
++    // list has index -1 (index 0 is the first node).
+     // stats_report writes the accuracy tables only with links (stats.c:339)
+     if (ctx.n_nodes() > 0 && ctx.n_links() > 0 &&
+         opt.routing_model == RoutingModel::DYNWAVE) {
+@@ -1631,7 +1631,7 @@ void DefaultReportPlugin::write_results(std::FILE* f,
+     WRITE(f, "Most Frequent Nonconverging Nodes");
+     WRITE(f, "*********************************");
+     {
+-        if (ctx.max_non_converged[0].index <= 0 ||
++        if (ctx.max_non_converged[0].index < 0 ||
+             ctx.max_non_converged[0].value < 0.00005) {
+             WRITE(f, "Convergence obtained at all time steps.");
+         } else {

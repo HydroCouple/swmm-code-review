@@ -1,0 +1,74 @@
+IO-24: read the rain barrel Covrd token on [LID_CONTROLS] STORAGE lines
+
+The STORAGE parser read only the four numbers, so the fifth token (YES/NO)
+was dropped and LIDGroupSoA::stor_covered stayed 0: every rain barrel was
+uncovered, and the covered-barrel branch of stepRunoff() never ran. Store
+the flag next to the four numbers (STORAGE[4], set as legacy readStorageData
+does: covered only for YES, uncovered when the token is absent), copy it to
+stor_covered, and write YES back in the .inp writer.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-24_swmm600.patch
+
+diff --git a/src/engine/core/InpWriter.cpp b/src/engine/core/InpWriter.cpp
+index 8c5f986..14df1a9 100644
+--- a/src/engine/core/InpWriter.cpp
++++ b/src/engine/core/InpWriter.cpp
+@@ -2143,6 +2143,8 @@ int writeInpFile(const SimulationContext&  ctx_internal,
+                 if (has) {
+                     std::fprintf(f,"%-16s STORAGE    ", name);
+                     for (int k=0;k<4;++k) std::fprintf(f," %10.4f",p[k]);
++                    if (uj < ctx.lid_controls.storage_covered.size() &&
++                        ctx.lid_controls.storage_covered[uj]) std::fprintf(f," YES");
+                     std::fprintf(f,"\n");
+                 }
+             }
+diff --git a/src/engine/data/HydrologyData.hpp b/src/engine/data/HydrologyData.hpp
+index fde73ba..5cc2ff8 100644
+--- a/src/engine/data/HydrologyData.hpp
++++ b/src/engine/data/HydrologyData.hpp
+@@ -136,6 +136,9 @@ struct LidControlStore {
+     /** @brief STORAGE layer params (up to 4 values). */
+     std::vector<std::array<double, 4>> storage;
+ 
++    /** @brief 1 if a rain barrel's storage is covered (STORAGE ... Covrd = YES). */
++    std::vector<int> storage_covered;
++
+     /** @brief DRAIN layer params (up to 6 values). */
+     std::vector<std::array<double, 6>> drain;
+ 
+diff --git a/src/engine/hydrology/LID.cpp b/src/engine/hydrology/LID.cpp
+index 9aa0c73..573b911 100644
+--- a/src/engine/hydrology/LID.cpp
++++ b/src/engine/hydrology/LID.cpp
+@@ -331,6 +331,8 @@ void LIDSolver::init(SimulationContext& ctx) {
+             g.stor_void[us]  = (p[1] > 0.0) ? p[1] / (p[1] + 1.0) : 0.0; // ratio → fraction
+             g.stor_ksat[us]  = p[2] / ucfRainfall;              // in/hr|mm/hr → ft/sec
+             g.stor_clog[us]  = p[3];
++            g.stor_covered[us] = (uli < ctx.lid_controls.storage_covered.size() &&
++                                  ctx.lid_controls.storage_covered[uli]) ? 1 : 0;   // Covrd
+         }
+ 
+         // DRAIN layer: [0]=Coeff, [1]=Expon, [2]=Offset, [3]=Delay, [4]=hOpen, [5]=hClose
+diff --git a/src/engine/input/handlers/HydrologyHandler.cpp b/src/engine/input/handlers/HydrologyHandler.cpp
+index 5035f36..667ed8f 100644
+--- a/src/engine/input/handlers/HydrologyHandler.cpp
++++ b/src/engine/input/handlers/HydrologyHandler.cpp
+@@ -139,6 +139,7 @@ static void ensure_lid_capacity(LidControlStore& lc, int idx) {
+     if (lc.soil.size() < n)     lc.soil.resize(n, {0,0,0,0,0,0,0});
+     if (lc.pavement.size() < n) lc.pavement.resize(n, {0,0,0,0,0,0});
+     if (lc.storage.size() < n)  lc.storage.resize(n, {0,0,0,0});
++    if (lc.storage_covered.size() < n) lc.storage_covered.resize(n, 0);
+     if (lc.drain.size() < n)    lc.drain.resize(n, {0,0,0,0,0,0});
+     if (lc.drainmat.size() < n) lc.drainmat.resize(n, {0,0,0});
+ }
+@@ -614,6 +615,9 @@ void handle_lid_controls(SimulationContext& ctx, const std::vector<std::string>&
+         else if (layer == "STORAGE") {
+             for (std::size_t i = 0; i < 4 && (i + 2) < tok.size(); ++i)
+                 ctx.lid_controls.storage[idx][i] = to_double(tok[2 + i]);
++            // Covrd (rain barrels): legacy readStorageData, match(tok, "YES")
++            ctx.lid_controls.storage_covered[idx] =
++                (tok.size() > 6 && Tokenizer::to_upper(tok[6]).rfind("YES", 0) == 0) ? 1 : 0;
+         }
+         else if (layer == "DRAIN") {
+             for (std::size_t i = 0; i < 6 && (i + 2) < tok.size(); ++i)

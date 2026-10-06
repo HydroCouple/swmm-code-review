@@ -1,0 +1,32 @@
+API-13: take a wet runoff step while API rainfall is set on a subcatchment
+
+runoff_getTimeStep() uses WET_STEP only when IsRaining (a gage reports
+rain), HasSnow, HasRunoff or HasWetLids is set. Rainfall or snowfall set on
+a subcatchment with swmm_SUBCATCH_API_RAINFALL / _API_SNOWFALL is added to
+the subcatchment in getNetPrecip() but did not set IsRaining, so with a dry
+gage the runoff step was DRY_STEP (limited only by the gage's next value):
+one long step computed with the rate in force at its start. Set IsRaining
+when any subcatchment has a positive API rainfall or snowfall.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply API-13_swmm530.patch
+
+diff --git a/src/legacy/engine/runoff.c b/src/legacy/engine/runoff.c
+index bf00bad..3c43116 100644
+--- a/src/legacy/engine/runoff.c
++++ b/src/legacy/engine/runoff.c
+@@ -201,6 +201,14 @@ void runoff_execute()
+         if ( Gage[j].rainfall > 0.0 ) IsRaining = TRUE;
+     }
+ 
++    // --- precipitation set on a subcatchment through the API also
++    //     requires a wet time step
++    for (j = 0; j < Nobjects[SUBCATCH]; j++)
++    {
++        if ( Subcatch[j].apiRainfall > 0.0 || Subcatch[j].apiSnowfall > 0.0 )
++            IsRaining = TRUE;
++    }
++
+     // --- read runoff results from interface file if applicable
+     if ( Frunoff.mode == USE_FILE )
+     {

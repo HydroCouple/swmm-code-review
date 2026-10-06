@@ -1,0 +1,75 @@
+[TITLE]
+IO-25: HEC-22 Example 4-9 (curb opening inlet in a depressed gutter) on two
+identical streets. Street A enters the 1-inch gutter depression as 0.0833
+(feet, as the engine reads it and as EPA's street_curb_inlet_9a-CFS.inp does);
+street B enters it as 1 (inches, as the input reference says).
+HEC-22 answer for the depressed gutter: 1.55 cfs captured of 1.77 cfs.
+
+[OPTIONS]
+FLOW_UNITS CFS
+FLOW_ROUTING DYNWAVE
+LINK_OFFSETS DEPTH
+START_DATE 07/27/2020
+START_TIME 00:00:00
+END_DATE 07/27/2020
+END_TIME 03:00:00
+REPORT_STEP 00:15:00
+WET_STEP 00:05:00
+DRY_STEP 01:00:00
+ROUTING_STEP 0:00:10
+
+[JUNCTIONS]
+;;Name  Elev  MaxDepth  InitDepth  SurDepth  Aponded
+UA      100   0         0          0         0
+BA       96   0         0          0         0
+CA        2   0         0          0         0
+UB      100   0         0          0         0
+BB       96   0         0          0         0
+CB        2   0         0          0         0
+
+[OUTFALLS]
+OA  92  FREE NO
+XA   0  FREE NO
+OB  92  FREE NO
+XB   0  FREE NO
+
+[CONDUITS]
+;;Name  From  To  Length  N      InOff  OutOff  InitQ  MaxQ
+SA1     UA    BA  400     0.016  0      0       0      0
+SA2     BA    OA  400     0.016  0      0       0      0
+PA      CA    XA  400     0.01   0      0       0      0
+SB1     UB    BB  400     0.016  0      0       0      0
+SB2     BB    OB  400     0.016  0      0       0      0
+PB      CB    XB  400     0.01   0      0       0      0
+
+[XSECTIONS]
+SA1  STREET    StreetFt  0  0  0  1
+SA2  STREET    StreetFt  0  0  0  1
+PA   CIRCULAR  2         0  0  0  1
+SB1  STREET    StreetIn  0  0  0  1
+SB2  STREET    StreetIn  0  0  0  1
+PB   CIRCULAR  2         0  0  0  1
+
+[STREETS]
+;;Name    Tcrown  Hcurb  Sx  nRoad  a       W  Sides
+StreetFt  20      0.5    2   0.016  0.0833  2  1
+StreetIn  20      0.5    2   0.016  1       2  1
+
+[INLETS]
+;;Name       Type  Length  Height  Throat
+CurbOpening  CURB  9.84    0.4     HORIZONTAL
+
+[INLET_USAGE]
+;;Link  Inlet        CaptureNode
+SA1     CurbOpening  CA
+SB1     CurbOpening  CB
+
+[INFLOWS]
+;;Node  Param  TSeries  Type  Mfactor  Sfactor  Baseline
+UA      FLOW   ""       FLOW  1.0      1.0      1.77
+UB      FLOW   ""       FLOW  1.0      1.0      1.77
+
+[REPORT]
+INPUT NO
+NODES ALL
+LINKS ALL

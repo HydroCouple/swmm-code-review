@@ -1,0 +1,44 @@
+IO-25: document the gutter depression heights in ft or m
+
+The input reference gives the [STREETS] gutter depression 'a' and the
+[INLET_USAGE] / [INLET_JUNCTIONS] local depression 'aLocal' in "in or mm".
+Both 5.3.0 and 6.0.0 read them in ft or m, like every other street length,
+and EPA's HEC-22 verification decks enter them that way (0.0833 ft and
+0.025 m for a 1-inch / 25-mm depression). Correct the three lines of the
+manual. This is a documentation fix; it does not touch the engines, so it
+is not named _swmm530/_swmm600 and tools/run-test.sh does not apply it.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-25_docs.patch
+
+diff --git a/docs/manuals/engine/sections/Chapter2-InputFileReference.md b/docs/manuals/engine/sections/Chapter2-InputFileReference.md
+index 6958126..b12d16e 100644
+--- a/docs/manuals/engine/sections/Chapter2-InputFileReference.md
++++ b/docs/manuals/engine/sections/Chapter2-InputFileReference.md
+@@ -1221,7 +1221,7 @@ Tcrown     distance from street’s curb to its crown (ft or m)
+ Hcurb     curb height (ft or m)
+ Sx     street cross slope (%)
+ nRoad     Manning’s roughness coefficient (n) of the road surface
+-a     gutter depression height (in or mm) (default = 0)
++a     gutter depression height (ft or m) (default = 0)
+ W     depressed gutter width (ft or m) (default = 0)
+ Sides     1 for single sided street or 2 for two-sided street (default = 2)
+ Tback     street backing width (ft or m) (default = 0)
+@@ -1299,7 +1299,7 @@ Node     name of the sewer node receiving flow captured by the inlet.
+ Number     number of replicate inlets placed on each side of the street.
+ %Clogged     degree to which inlet capacity is reduced due to clogging (%).
+ Qmax     maximum flow that the inlet can capture (flow units).
+-aLocal     height of local gutter depression (in or mm).
++aLocal     height of local gutter depression (ft or m).
+ wLocal     width of local gutter depression (ft or m).
+ Placement     AUTOMATIC, ON_GRADE, or ON_SAG.
+ 
+@@ -1842,7 +1842,7 @@ CaptureNode    name of the node that receives the captured flow.
+ Number    number of inlets placed (default 1).
+ %Clogged    degree of clogging as a percent (default 0).
+ Qmax    maximum flow the inlet can capture (flow units; 0 or blank = no limit).
+-aLocal    height of a local gutter depression (in or mm).
++aLocal    height of a local gutter depression (ft or m).
+ wLocal    width of a local gutter depression (ft or m).
+ Placement    ON_GRADE, ON_SAG or AUTOMATIC (default AUTOMATIC).
+ 

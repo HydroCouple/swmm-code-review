@@ -1,0 +1,65 @@
+[TITLE]
+IO-46: the same model routed from the runoff interface file
+
+[OPTIONS]
+FLOW_UNITS           CFS
+INFILTRATION         HORTON
+FLOW_ROUTING         KINWAVE
+START_DATE           06/01/2020
+START_TIME           00:00:00
+REPORT_START_DATE    06/01/2020
+REPORT_START_TIME    00:00:00
+END_DATE             06/03/2020
+END_TIME             00:00:00
+WET_STEP             00:05:00
+DRY_STEP             06:00:00
+REPORT_STEP          01:00:00
+ROUTING_STEP         0:00:30
+
+[EVAPORATION]
+CONSTANT         0.0
+
+[RAINGAGES]
+G1   INTENSITY 1:00 1.0 TIMESERIES R1
+
+[SUBCATCHMENTS]
+;;Name  Gage  Outlet  Area  %Imperv  Width  %Slope  CurbLen
+S1      G1    J1      10    0        500    1.0     0
+
+[SUBAREAS]
+S1      0.01  0.1     0.05  0.05     0      OUTLET
+
+[INFILTRATION]
+S1      3.0   0.5     4     7        0
+
+[AQUIFERS]
+;;Name  Por  WP    FC    Ksat  Kslope  Tslope  ETu   ETs  Seep  Ebot  Egw  Umc
+AQ      0.5  0.15  0.30  1.0   10      15      0.35  14   0     0     8    0.30
+
+[GROUNDWATER]
+;; groundwater recession: the water table starts at 8 ft and drains to J1
+;;Sub   Aquifer  Node  Esurf  A1    B1   A2  B2  A3  Dsw  Egwt
+S1      AQ       J1    10     0.05  1.5  0   0   0   0    *
+
+[JUNCTIONS]
+J1      2     5     0     0     0
+
+[OUTFALLS]
+O1      0     FREE
+
+[CONDUITS]
+C1      J1    O1    400   0.013  0  0  0  0
+
+[XSECTIONS]
+C1      CIRCULAR  2  0  0  0  1
+
+[TIMESERIES]
+;; no rain
+R1   06/01/2020 00:00   0.0
+
+[REPORT]
+SUBCATCHMENTS ALL
+NODES ALL
+
+[FILES]
+USE RUNOFF   IO-46.rof

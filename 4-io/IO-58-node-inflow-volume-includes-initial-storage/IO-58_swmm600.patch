@@ -1,0 +1,62 @@
+IO-58: leave the initial stored volume out of "Total Inflow Volume"
+
+SWMMEngine::start() seeds stat_total_inflow_vol with each node's initial
+volume (legacy massbal_open), and DefaultReportPlugin printed it as the
+Node Inflow Summary's "Total Inflow Volume", which the manual defines as
+lateral inflow plus inflow from connecting links. Record the node volumes
+when the plugin is prepared and subtract them from the printed column. The
+flow balance error and the other uses of stat_total_inflow_vol do not
+change.
+
+Requires: BND-19
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-58_swmm600.patch
+
+diff --git a/src/engine/plugins/DefaultReportPlugin.cpp b/src/engine/plugins/DefaultReportPlugin.cpp
+index 7255cfb..44e70e7 100644
+--- a/src/engine/plugins/DefaultReportPlugin.cpp
++++ b/src/engine/plugins/DefaultReportPlugin.cpp
+@@ -202,6 +202,7 @@ int DefaultReportPlugin::prepare(const SimulationContext& ctx) {
+         }
+     }
+ 
++    init_node_volume_ = ctx.nodes.volume;
+     state_ = PluginState::PREPARED;
+     return 0;
+ }
+@@ -2489,9 +2490,13 @@ void DefaultReportPlugin::write_results(std::FILE* f,
+             double max_lat  = ctx.nodes.stat_max_lat_inflow[uj] * Qcf;
+             double max_tot  = ctx.nodes.stat_max_total_inflow[uj] * Qcf;
+             double vol_lat  = ctx.nodes.stat_lat_inflow_vol[uj] * Vcf;
++            // stat_total_inflow_vol starts at the node's initial volume
++            // (for the balance below); Total Inflow Volume excludes it. When
++            // reporting starts late, inflow_before_rpt already includes it.
+             const auto& pre = ctx.routing_stats.inflow_before_rpt;
++            const double v0 = (uj < init_node_volume_.size()) ? init_node_volume_[uj] : 0.0;
+             double vol_tot  = (ctx.nodes.stat_total_inflow_vol[uj] -
+-                               (uj < pre.size() ? pre[uj] : 0.0)) * Vcf;
++                               (uj < pre.size() ? pre[uj] : v0)) * Vcf;
+             int days, hrs, mins;
+             elapsedToParts(ctx.nodes.stat_max_inflow_date[uj], ctx.options.report_start, days, hrs, mins);
+ 
+diff --git a/src/engine/plugins/DefaultReportPlugin.hpp b/src/engine/plugins/DefaultReportPlugin.hpp
+index 374246d..0ccfe93 100644
+--- a/src/engine/plugins/DefaultReportPlugin.hpp
++++ b/src/engine/plugins/DefaultReportPlugin.hpp
+@@ -39,6 +39,7 @@
+ 
+ #include <ctime>
+ #include <string>
++#include <vector>
+ 
+ namespace openswmm {
+ 
+@@ -77,6 +78,7 @@ private:
+     std::FILE*  file_             = nullptr; ///< Persistent file handle (opened in prepare)
+     std::size_t warnings_written_ = 0;      ///< Warnings already written to file
+     std::size_t errors_written_   = 0;      ///< Errors already written to file
++    std::vector<double> init_node_volume_;  ///< Node volumes at the start of the run (ft3)
+ 
+     /** @brief Write title, input summaries, and analysis options. */
+     void write_preamble(std::FILE* f, const SimulationContext& ctx);

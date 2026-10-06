@@ -1,0 +1,52 @@
+[TITLE]
+NUM-29: pervious subarea with N-Perv = 0 whose depression storage fills in mid-step
+
+[OPTIONS]
+;; 0.9 in/hr fills the 0.5 in depression storage after 33.3 min, i.e. 3.3 min
+;; into the 30-35 min runoff step. No infiltration, no evaporation, so the
+;; runoff must be 0.9 - 0.5 = 0.400 in.
+FLOW_UNITS           CFS
+INFILTRATION         HORTON
+FLOW_ROUTING         KINWAVE
+START_DATE           01/01/2020
+START_TIME           00:00:00
+REPORT_START_DATE    01/01/2020
+REPORT_START_TIME    00:00:00
+END_DATE             01/01/2020
+END_TIME             03:00:00
+WET_STEP             00:05:00
+DRY_STEP             01:00:00
+REPORT_STEP          00:05:00
+ROUTING_STEP         0:00:30
+IGNORE_ROUTING       YES
+
+[EVAPORATION]
+CONSTANT         0.0
+
+[RAINGAGES]
+;;Name  Format     Interval  SCF  Source
+G1      INTENSITY  1:00      1.0  TIMESERIES  R1
+
+[SUBCATCHMENTS]
+;;Name  Gage  Outlet  Area  %Imperv  Width  %Slope  CurbLen
+S1      G1    O1      1.0   0        100    1.0     0
+
+[SUBAREAS]
+;;Subcatch  N-Imperv  N-Perv  S-Imperv  S-Perv  PctZero  RouteTo
+S1          0.01      0.0     0.05      0.5     25       OUTLET
+
+[INFILTRATION]
+;;Subcatch  MaxRate  MinRate  Decay  DryTime  MaxInfil
+S1          0.0      0.0      4      7        0
+
+[OUTFALLS]
+;;Name  Elev  Type
+O1      0     FREE
+
+[TIMESERIES]
+;; 0.9 in/hr for one hour: 0.9 in of rain in all
+R1   0:00   0.9
+R1   1:00   0.0
+
+[REPORT]
+SUBCATCHMENTS ALL

@@ -1,0 +1,26 @@
+CON-03: add upstream run-on to LID units only when they fill the subcatchment
+
+lid_getRunoff() added the subcatchment's run-on rate to every LID unit's
+inflow when area >= lidArea, which is always true. subcatch_addRunonFlow()
+already spreads the run-on over the non-LID area and books it there, so a
+LID that covers only part of the subcatchment received the run-on a second
+time, without a source in the water balance. Restore the 5.2.4 test
+(area == lidArea; validateLidGroup() sets lidArea to area within 0.1 %), which
+is what the comment above it says.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply CON-03_swmm530.patch
+
+diff --git a/src/legacy/engine/lid.c b/src/legacy/engine/lid.c
+index e2ac45a..edc8839 100644
+--- a/src/legacy/engine/lid.c
++++ b/src/legacy/engine/lid.c
+@@ -1711,7 +1711,7 @@ void lid_getRunoff(int j, double tStep)
+             }
+ 
+             // ... add upstream runon only if LID occupies full subcatchment
+-            if (subcatch->area >= subcatch->lidArea)
++            if (subcatch->area == subcatch->lidArea)
+             {
+                 lidInflow += subcatch->runon;
+             }

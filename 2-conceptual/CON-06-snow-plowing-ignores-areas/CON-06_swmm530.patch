@@ -1,0 +1,35 @@
+CON-06: scale snow plowed to another subcatchment by both subcatchments' areas
+
+snow_plowSnow() added sfrac[4] * exc * fArea_j / fArea_m to the depth of the
+receiving subcatchment's pervious pack. The fArea are fractions of each
+subcatchment's own area, so the plowed volume was multiplied by A_m / A_j
+whenever the two subcatchments differ in size. Multiply each fraction by its
+subcatchment's non-LID area, as the "plow out of system" branch and
+snow_getSnowCover() do, so the volume is conserved.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply CON-06_swmm530.patch
+
+diff --git a/src/legacy/engine/snow.c b/src/legacy/engine/snow.c
+index d415675..3afc00a 100644
+--- a/src/legacy/engine/snow.c
++++ b/src/legacy/engine/snow.c
+@@ -478,12 +478,16 @@ void snow_plowSnow(int subcatchIndex, double tStep)
+                 m = Snowmelt[k].toSubcatch;
+                 if ( Subcatch[m].snowpack )
+                 {
+-                    f = Subcatch[m].snowpack->fArea[SNOW_PERV];
++                    f = Subcatch[m].snowpack->fArea[SNOW_PERV] *
++                        (Subcatch[m].area - Subcatch[m].lidArea);
+                 } 
+                 else f = 0.0; 
+                 if ( f > 0.0 )
+                 {
+-                    f = snowpack->fArea[SNOW_PLOWABLE] / f;
++                    // --- ratio of plowable area to receiving pervious area
++                    f = snowpack->fArea[SNOW_PLOWABLE] *
++                        (Subcatch[subcatchIndex].area -
++                         Subcatch[subcatchIndex].lidArea) / f;
+                     Subcatch[m].snowpack->wsnow[SNOW_PERV] +=
+                         Snowmelt[k].sfrac[4] * exc * f;
+                     sfracTotal += Snowmelt[k].sfrac[4];

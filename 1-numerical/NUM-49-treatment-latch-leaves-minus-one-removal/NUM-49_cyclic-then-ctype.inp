@@ -1,0 +1,57 @@
+[TITLE]
+NUM-49: junction J1 takes a 1 cfs DWF carrying TN = 10 mg/L and TSS = 10 mg/L.
+Treatment at J1: TN's removal is written in terms of itself (a cycle),
+and TSS has a concentration-type equation that does not involve TN.
+TN is listed before TSS, so TN's removal is evaluated first.
+Treatment can only remove mass: TSS at J1 and at the outfall must not exceed
+the 10 mg/L it arrives with (its equation asks for 9 mg/L).
+
+[OPTIONS]
+FLOW_UNITS           CFS
+FLOW_ROUTING         KINWAVE
+START_DATE           01/01/2020
+START_TIME           00:00:00
+REPORT_START_DATE    01/01/2020
+REPORT_START_TIME    00:00:00
+END_DATE             01/01/2020
+END_TIME             04:00:00
+REPORT_STEP          00:15:00
+WET_STEP             00:05:00
+DRY_STEP             01:00:00
+ROUTING_STEP         30
+
+[POLLUTANTS]
+;;Name  Units  Crain  Cgw  Crdii  Kdecay
+TN      MG/L   0      0    0      0
+TSS     MG/L   0      0    0      0
+
+[JUNCTIONS]
+;;Name  Elev  MaxDepth  InitDepth  SurDepth  Aponded
+J1      110   5         0          0         0
+
+[OUTFALLS]
+;;Name  Elev  Type
+O1      100   FREE
+
+[CONDUITS]
+;;Name  From  To  Length  Roughness  InOffset  OutOffset  InitFlow
+C1      J1    O1  400     0.013      0         0          0
+
+[XSECTIONS]
+;;Link  Shape     Geom1  Geom2  Geom3  Geom4  Barrels
+C1      CIRCULAR  2      0      0      0      1
+
+[DWF]
+;;Node  Constituent  Baseline
+J1      FLOW         1
+J1      TN           10
+J1      TSS          10
+
+[TREATMENT]
+;;Node  Pollutant  Function
+J1      TN         R = 0.5*R_TN
+J1      TSS        C = 0.9*TSS
+
+[REPORT]
+NODES ALL
+LINKS ALL

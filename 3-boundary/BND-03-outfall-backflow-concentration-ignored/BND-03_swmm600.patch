@@ -1,0 +1,41 @@
+BND-03: let an outfall's CONCEN inflow set the quality of its reverse flow
+
+The input reference allows a CONCEN inflow without a FLOW inflow at an
+outfall, so that a pollutant enters with reverse flow. InflowSolver::
+computeAll() multiplied the concentration by the outfall's FLOW inflow
+only, so without one the CONCEN inflow did nothing. Make the outfall hold
+the CONCEN value as its quality (conc_old, already rolled for this step): a
+supplying outfall receives no flow, so mixAtNodes() keeps the held value and
+the reverse flow carries it into the network. Same change as the 5.3.0
+patch.
+
+The reverse flow's mass is booked by BND-04, not here.
+
+Requires: BND-04
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply BND-03_swmm600.patch
+
+diff --git a/src/engine/hydrology/Inflow.cpp b/src/engine/hydrology/Inflow.cpp
+index 2e02958..02d2247 100644
+--- a/src/engine/hydrology/Inflow.cpp
++++ b/src/engine/hydrology/Inflow.cpp
+@@ -516,8 +516,17 @@ void InflowSolver::computeAll(SimulationContext& ctx, double current_date, doubl
+             if (p < 0 || p >= np || ni < 0 || ni >= ctx.n_nodes()) continue;
+ 
+             double w = row_value(ui);
+-            if (kind == static_cast<int>(ExtInflowKind::CONCEN))
++            if (kind == static_cast<int>(ExtInflowKind::CONCEN)) {
++                // An outfall holds this concentration, so that any reverse
++                // flow into the network carries it.
++                const auto c = static_cast<std::size_t>(ni) *
++                               static_cast<std::size_t>(np) +
++                               static_cast<std::size_t>(p);
++                if (ctx.nodes.type[static_cast<std::size_t>(ni)] == NodeType::OUTFALL &&
++                    c < ctx.nodes.conc_old.size())
++                    ctx.nodes.conc_old[c] = w;
+                 w *= ctx.nodes.ext_inflow[static_cast<std::size_t>(ni)];
++            }
+ 
+             const auto idx = static_cast<std::size_t>(ni) *
+                              static_cast<std::size_t>(np) +

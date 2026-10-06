@@ -1,0 +1,28 @@
+NUM-46: book the mass left in a dried-out node or link once, not twice
+
+qualrout.c books the pollutant mass left in a conduit or storage unit when
+it dries with massbal_addToFinalStorage(). It went into
+StepQualTotals[p].finalStorage, which massbal_updateRoutingTotals() adds to
+the run total with no time-step factor; that function runs at the end of
+step n and again at the start of step n+1 before the step totals are
+cleared, so the residue was counted twice. Add it to the run total
+(QualTotals) directly; StepQualTotals.finalStorage then stays zero.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-46_swmm530.patch
+
+diff --git a/src/legacy/engine/massbal.c b/src/legacy/engine/massbal.c
+index 80bb10e..7111e35 100644
+--- a/src/legacy/engine/massbal.c
++++ b/src/legacy/engine/massbal.c
+@@ -517,7 +517,9 @@ void massbal_addSeepageLoss(int pollutIndex, double w)
+ void massbal_addToFinalStorage(int pollutIndex, double w)
+ {
+     if ( pollutIndex < 0 || pollutIndex >= Nobjects[POLLUT] ) return;
+-    StepQualTotals[pollutIndex].finalStorage += w;
++    // --- w is a mass, not a rate: book it once in the run total
++    //     (massbal_updateRoutingTotals runs twice per step's totals)
++    QualTotals[pollutIndex].finalStorage += w;
+ }
+ 
+ /*!

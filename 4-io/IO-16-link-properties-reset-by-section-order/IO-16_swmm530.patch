@@ -1,0 +1,31 @@
+IO-16: keep a flap gate read from [LOSSES] above the link's own section
+
+link_setParams(), called when a link's own row is read, reset hasFlapGate
+to 0. When [LOSSES] comes before [CONDUITS] (the input format allows any
+section order), the flap gate it set is lost and flow passes backwards
+through the conduit. Link[] is zero-filled, pumps set hasFlapGate to FALSE
+and orifices, weirs and outlets set it from their own rows, so the reset is
+not needed. Remove it.
+
+The other half of this issue, a regulator's [XSECTIONS] row read before its
+section resetting the first conduit's barrels, is fixed by CRASH-02.
+
+Requires: CRASH-02
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b,
+after CRASH-02_swmm530.patch:
+    git apply IO-16_swmm530.patch
+
+diff --git a/src/legacy/engine/link.c b/src/legacy/engine/link.c
+index 31925e1..53a8702 100644
+--- a/src/legacy/engine/link.c
++++ b/src/legacy/engine/link.c
+@@ -337,7 +337,7 @@ void  link_setParams(int j, int type, int n1, int n2, int k, double x[])
+     Link[j].qFull       = 0.0;
+     Link[j].setting     = 1.0;
+     Link[j].targetSetting = 1.0;
+-    Link[j].hasFlapGate = 0;
++    // (hasFlapGate is left as is: a [LOSSES] line read earlier may have set it)
+     Link[j].qLimit      = 0.0;         // 0 means that no limit is defined
+     Link[j].direction   = 1;
+ 

@@ -1,0 +1,28 @@
+CON-20: give a swale the pervious area's infiltration rate, not a diluted one
+
+SWMMEngine::stepRunoff() set the native soil infiltration rate that a vegetative
+swale uses (when the subcatchment does not use Green-Ampt) to the
+infiltration volume of the non-LID pervious subarea divided by the whole
+non-LID area. That is the pervious area's rate times its fraction of the
+subcatchment, so a swale in a 90 % impervious subcatchment infiltrated at
+a tenth of the soil's rate. Divide by the pervious subarea's area instead,
+which gives the rate "computed for the pervious area of the subcatchment"
+that the reference manual specifies.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply CON-20_swmm600.patch
+
+diff --git a/src/engine/core/SWMMEngine.cpp b/src/engine/core/SWMMEngine.cpp
+index 839529d..de70286 100644
+--- a/src/engine/core/SWMMEngine.cpp
++++ b/src/engine/core/SWMMEngine.cpp
+@@ -2553,7 +2553,8 @@ void SWMMEngine::stepRunoff(double dt_routing) noexcept {
+                 if (lid_area <= 0.0) continue;
+                 const double non_lid = rs.area[ui];       // max(0, area - lidArea), ft2
+                 if (non_lid > 0.0 && ctx_.subcatches.frac_imperv[ui] < 1.0)
+-                    native[ui] = rs.infil_vol[ui] / non_lid / dt_runoff;
++                    native[ui] = rs.infil_vol[ui] /
++                        (non_lid * (1.0 - ctx_.subcatches.frac_imperv[ui])) / dt_runoff;
+                 else
+                     native[ui] = runoff_.nativeInfilFullLid(ctx_, i, dt_runoff,
+                                      ctx_.climate_state.recovery_factor);

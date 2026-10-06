@@ -1,0 +1,61 @@
+IO-12: keep the Geom3 size code of ellipse and arch pipes; reject non-whole codes
+
+For HORIZ_ELLIPSE, VERT_ELLIPSE and ARCH, xsect_setParams() took Geom1 as the
+size code whenever Geom2 was 0 (the SWMM 5.0 input form), even when Geom3
+held a size code, and truncated any size code to a whole number. A line that
+gives the full height and the size code but leaves the width to the code
+("HORIZ_ELLIPSE 2 0 4") was built as a different standard pipe (code 2), a
+custom height with the width left out ("HORIZ_ELLIPSE 1.2 0 0" in metres)
+became standard size 1, and "ARCH 4.5 7.0 12.5" became code 12. Apply the 5.0
+form only when Geom3 is 0, and reject a size code that is not a whole number.
+5.0-form lines with whole codes ("HORIZ_ELLIPSE 17 0 0") are read as before.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-12_swmm530.patch
+
+diff --git a/src/legacy/engine/xsect.c b/src/legacy/engine/xsect.c
+index cf40f97..4445bfd 100644
+--- a/src/legacy/engine/xsect.c
++++ b/src/legacy/engine/xsect.c
+@@ -554,11 +554,11 @@ int xsect_setParams(TXsect *xsect, int type, double p[], double ucf)
+         break;
+ 
+     case HORIZ_ELLIPSE:
+-        if ( p[1] == 0.0 ) p[2] = p[0];
++        if ( p[1] == 0.0 && p[2] == 0.0 ) p[2] = p[0];  // SWMM 5.0 format
+         if ( p[2] > 0.0 )                        // std. ellipse pipe
+         {
+             index = (int)floor(p[2]) - 1;        // size code
+-            if ( index < 0 ||
++            if ( index < 0 || index + 1 != p[2] ||
+                  index >= NumCodesEllipse ) return FALSE;
+             xsect->yFull = MinorAxis_Ellipse[index]/12.;
+             xsect->wMax  = MajorAxis_Ellipse[index]/12.;
+@@ -582,11 +582,11 @@ int xsect_setParams(TXsect *xsect, int type, double p[], double ucf)
+         break;
+ 
+     case VERT_ELLIPSE:
+-        if ( p[1] == 0.0 ) p[2] = p[0];
++        if ( p[1] == 0.0 && p[2] == 0.0 ) p[2] = p[0];  // SWMM 5.0 format
+         if ( p[2] > 0.0 )                        // std. ellipse pipe
+         {
+             index = (int)floor(p[2]) - 1;        // size code
+-            if ( index < 0 ||
++            if ( index < 0 || index + 1 != p[2] ||
+                  index >= NumCodesEllipse ) return FALSE;
+             xsect->yFull = MajorAxis_Ellipse[index]/12.;
+             xsect->wMax  = MinorAxis_Ellipse[index]/12.;
+@@ -610,11 +610,11 @@ int xsect_setParams(TXsect *xsect, int type, double p[], double ucf)
+         break;
+ 
+     case ARCH:
+-        if ( p[1] == 0.0 ) p[2] = p[0];
++        if ( p[1] == 0.0 && p[2] == 0.0 ) p[2] = p[0];  // SWMM 5.0 format
+         if ( p[2] > 0.0 )                        // std. arch pipe
+         {
+             index = (int)floor(p[2]) - 1;        // size code
+-            if ( index < 0 ||
++            if ( index < 0 || index + 1 != p[2] ||
+                  index >= NumCodesArch ) return FALSE;
+             xsect->yFull = Yfull_Arch[index]/12.;     // Yfull units are inches
+             xsect->wMax  = Wmax_Arch[index]/12.;      // Wmax units are inches

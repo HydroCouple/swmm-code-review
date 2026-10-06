@@ -1,0 +1,98 @@
+API-06: apply the API external buildup as a rate per day and read it back as set
+
+swmm_SUBCATCH_EXTERNAL_POLLUTANT_BUILDUP was added to the surface at every
+runoff step as value x area, with no time-step factor and without being
+cleared, so one call produced a buildup proportional to the number of runoff
+steps (24 lb/ac with a 1 h DRY_STEP, 288 lb/ac with 5 min, for a value of 1).
+surfqual_applyAPIBuildup() now receives the runoff step and adds
+value x area x tStep / 86400, i.e. the property is a buildup rate in mass (or
+count) per acre or hectare per day, which persists until it is changed like
+the node and link mass fluxes. The getter divided the stored value by
+UCF(LANDAREA) (43,560x in US units) although the setter stores it unscaled;
+it now returns the value as set.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply API-06_swmm530.patch
+
+diff --git a/src/legacy/engine/funcs.h b/src/legacy/engine/funcs.h
+index 20e8975..c971502 100644
+--- a/src/legacy/engine/funcs.h
++++ b/src/legacy/engine/funcs.h
+@@ -1638,12 +1638,14 @@ void surfqual_getBuildup(int subcatchIndex, double tStep);
+ /*!
+ * \brief Applies the buildup of a pollutant over a subcatchment for a given time step.
+ * \param[in] subcatchIndex Subcatchment index
++* \param[in] tStep Time step (sec)
+ * \details Applies the buildup of a pollutant over a subcatchment for a given time step.
++* The API rate is in mass (or count) per acre or hectare per day.
+ * API use is unconstrained by whether its is raining or not and other factors that apply
+ * to the inbuilt buildup function. Negative buildup may be applied in which case the
+ * function will not allow the buildup to go below zero.
+ */
+-void surfqual_applyAPIBuildup(int subcatchIndex);
++void surfqual_applyAPIBuildup(int subcatchIndex, double tStep);
+ 
+ /*!
+ * \brief Reduces pollutant buildup over a subcatchment if sweeping occurs.
+diff --git a/src/legacy/engine/objects.h b/src/legacy/engine/objects.h
+index 6b54d76..198f247 100644
+--- a/src/legacy/engine/objects.h
++++ b/src/legacy/engine/objects.h
+@@ -400,7 +400,7 @@ typedef struct
+    double        slope;           // slope (ft/ft)
+    double        curbLength;      // total curb length (ft)
+    double*       initBuildup;     // initial pollutant buildup (mass or count/ft2)
+-   double*       apiExtBuildup;   // build up flux from API (mass or count/ft2)
++   double*       apiExtBuildup;   // build up flux from API (mass or count per ac or ha per day)
+    TLandFactor*  landFactor;      // array of land use factors
+    TGroundwater* groundwater;     // associated groundwater data
+    MathExpr*     gwLatFlowExpr;   // user-supplied lateral outflow expression
+diff --git a/src/legacy/engine/runoff.c b/src/legacy/engine/runoff.c
+index bf00bad..6e056bf 100644
+--- a/src/legacy/engine/runoff.c
++++ b/src/legacy/engine/runoff.c
+@@ -274,7 +274,7 @@ void runoff_execute()
+         if ( IgnoreQuality ) continue;
+ 
+         // --- apply api unconstrained pollutant buildup from API
+-        surfqual_applyAPIBuildup(j);
++        surfqual_applyAPIBuildup(j, runoffStep);
+         
+         // --- add to pollutant buildup if runoff is negligible
+         if ( runoff < MIN_RUNOFF ) surfqual_getBuildup(j, runoffStep); 
+diff --git a/src/legacy/engine/surfqual.c b/src/legacy/engine/surfqual.c
+index 893b975..e44d19c 100644
+--- a/src/legacy/engine/surfqual.c
++++ b/src/legacy/engine/surfqual.c
+@@ -158,7 +158,7 @@ void surfqual_getBuildup(int subcatchIndex, double tStep)
+ /*!
+  * \copydoc surfqual_applyAPIBuildup
+  */
+-void surfqual_applyAPIBuildup(int subcatchIndex)
++void surfqual_applyAPIBuildup(int subcatchIndex, double tStep)
+ {
+     int i;             // land use index
+     int p;             // pollutant index
+@@ -186,7 +186,8 @@ void surfqual_applyAPIBuildup(int subcatchIndex)
+             oldBuildup = Subcatch[subcatchIndex].landFactor[i].buildup[p];
+ 
+             //--- add bounded building from external API
+-            newBuildup = MAX(0.0, oldBuildup + Subcatch[subcatchIndex].apiExtBuildup[p] * area);
++            newBuildup = MAX(0.0, oldBuildup + Subcatch[subcatchIndex].apiExtBuildup[p] * area *
++                             tStep / SECperDAY);
+ 
+             // --- update mass balance totals
+             Subcatch[subcatchIndex].landFactor[i].buildup[p] = newBuildup;
+diff --git a/src/legacy/engine/swmm5.c b/src/legacy/engine/swmm5.c
+index 4096c9a..efaf3f7 100644
+--- a/src/legacy/engine/swmm5.c
++++ b/src/legacy/engine/swmm5.c
+@@ -2678,7 +2678,7 @@ static double getSubcatchValue(int property, int index, int subIndex, int pollut
+     case swmm_SUBCATCH_EXTERNAL_POLLUTANT_BUILDUP:
+         if (pollutantIndex < 0 || pollutantIndex >= Nobjects[POLLUT])
+             return ERR_API_OBJECT_INDEX;
+-        return subcatch->apiExtBuildup[pollutantIndex] / UCF(LANDAREA);
++        return subcatch->apiExtBuildup[pollutantIndex];
+ 
+     case swmm_SUBCATCH_POLLUTANT_RUNOFF_CONCENTRATION:
+         if (pollutantIndex < 0 || pollutantIndex >= Nobjects[POLLUT])

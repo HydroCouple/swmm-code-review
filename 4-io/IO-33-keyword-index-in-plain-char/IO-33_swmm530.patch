@@ -1,0 +1,54 @@
+IO-33: keep [FILES] and [REPORT] keyword indices in an int
+
+iface_readFileParams() and report_readOptions() stored findmatch()'s result
+in a plain char, through a (char) cast, and tested it with k < 0. Where plain
+char is unsigned (Linux on ARM and aarch64, PowerPC, s390x), findmatch()'s
+-1 for an unknown word becomes 255 and the test never fires: a misspelt
+[FILES] mode (SVAE HOTSTART ...) was dropped without a message and a
+misspelt [REPORT] keyword was reported against its value (ERROR 205 YES).
+k is now an int and the cast is gone, so an unknown word is ERROR 205 on
+every platform. Nothing changes where char is signed (x86, Windows, macOS).
+
+Requires: IO-31
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-33_swmm530.patch
+
+diff --git a/src/legacy/engine/iface.c b/src/legacy/engine/iface.c
+index 23272de..600699f 100644
+--- a/src/legacy/engine/iface.c
++++ b/src/legacy/engine/iface.c
+@@ -76,14 +76,14 @@ int iface_readFileParams(char* tok[], int ntoks)
+ //  USE/SAVE  FileType  FileName
+ //
+ {
+-    char  k;
++    int   k;
+     int   i, j;
+     char  fname[MAXFNAME+1];
+     double saveDateTime = 0, saveDate, saveTime;
+ 
+     // --- determine file disposition and type
+     if ( ntoks < 2 ) return error_setInpError(ERR_ITEMS, "");
+-    k = (char)findmatch(tok[0], FileModeWords);
++    k = findmatch(tok[0], FileModeWords);
+     if ( k < 0 ) return error_setInpError(ERR_KEYWORD, tok[0]);
+     j = findmatch(tok[1], FileTypeWords);
+     if ( j < 0 ) return error_setInpError(ERR_KEYWORD, tok[1]);
+diff --git a/src/legacy/engine/report.c b/src/legacy/engine/report.c
+index 63218e4..a076fc2 100644
+--- a/src/legacy/engine/report.c
++++ b/src/legacy/engine/report.c
+@@ -98,10 +98,10 @@ int report_readOptions(char* tok[], int ntoks)
+ //  Purpose: reads reporting options from a line of input
+ //
+ {
+-    char  k;
++    int   k;
+     int   j, m, t;
+     if ( ntoks < 2 ) return error_setInpError(ERR_ITEMS, "");
+-    k = (char)findmatch(tok[0], ReportWords);
++    k = findmatch(tok[0], ReportWords);
+     if ( k < 0 ) return error_setInpError(ERR_KEYWORD, tok[0]);
+     if ( match(tok[0], w_NODESTATS) ) k = 9;  // NODE is a prefix of NODESTATS
+ 

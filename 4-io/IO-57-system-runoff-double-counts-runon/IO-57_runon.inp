@@ -1,0 +1,57 @@
+[TITLE]
+IO-57: S1 drains onto S2, S2 drains to J1 (the only node with inflow)
+
+[OPTIONS]
+FLOW_UNITS           CFS
+INFILTRATION         HORTON
+FLOW_ROUTING         KINWAVE
+START_DATE           01/01/2020
+START_TIME           00:00:00
+END_DATE             01/01/2020
+END_TIME             03:00:00
+WET_STEP             00:00:30
+DRY_STEP             00:05:00
+REPORT_STEP          00:05:00
+ROUTING_STEP         30
+
+[RAINGAGES]
+;;Name  Format     Interval  SCF  Source
+G1      INTENSITY  1:00      1.0  TIMESERIES  RAIN
+
+[TIMESERIES]
+RAIN  0:00  1.0
+RAIN  1:00  0.0
+
+[SUBCATCHMENTS]
+;;Name  Gage  Outlet  Area  %Imperv  Width  %Slope  CurbLen
+S1      G1    S2      5     100      1000   2       0
+S2      G1    J1      5     100      1000   2       0
+
+[SUBAREAS]
+;;Subcat  N-Imperv  N-Perv  S-Imperv  S-Perv  PctZero  RouteTo
+S1        0.015     0.1     0         0       100      OUTLET
+S2        0.015     0.1     0         0       100      OUTLET
+
+[INFILTRATION]
+S1  3  0.5  4  7  0
+S2  3  0.5  4  7  0
+
+[JUNCTIONS]
+;;Name  Elev  MaxDepth  InitDepth  SurDepth  Aponded
+J1      10    5         0          0         0
+
+[OUTFALLS]
+O1      9     FREE
+
+[CONDUITS]
+C1  J1  O1  400  0.013  0  0  0  0
+
+[XSECTIONS]
+C1  CIRCULAR  3  0  0  0  1
+
+[REPORT]
+INPUT     NO
+CONTROLS  NO
+SUBCATCHMENTS ALL
+NODES     ALL
+LINKS     ALL

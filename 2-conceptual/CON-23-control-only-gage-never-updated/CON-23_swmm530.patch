@@ -1,0 +1,85 @@
+CON-23: update rain gages that only control rules read
+
+A gage is advanced through its record only if it is flagged as used, and
+only subcatchments and unit hydrographs set the flag. A gage read only by a
+rule premise or VARIABLE ("GAGE G2 INTENSITY", "GAGE G2 6") was never
+updated, and getRainValue() returned 0 for it, so the rule never acted.
+Three changes:
+- getPremiseVariable() flags a gage named in a rule as used;
+- gage_readParams() no longer clears the flag (Gage[] is calloc'd), so a
+  [CONTROLS] or [HYDROGRAPHS] section placed before [RAINGAGES] keeps its
+  mark (this also restores RDII inflow, which was 0 in that order);
+- in a model without subcatchments, where runoff_execute() never runs,
+  routing_execute() updates the gages and their past-rain totals itself.
+
+Requires: NUM-19
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply CON-23_swmm530.patch
+
+diff --git a/src/legacy/engine/controls.c b/src/legacy/engine/controls.c
+index e423886..30d14e8 100644
+--- a/src/legacy/engine/controls.c
++++ b/src/legacy/engine/controls.c
+@@ -1211,6 +1211,7 @@ int getPremiseVariable(char *tok[], int nToks, int *k, struct TVariable *v)
+         if (index < 0)
+             return error_setInpError(ERR_NAME, tok[n]);
+         object = r_GAGE;
++        Gage[index].isUsed = TRUE;   // so that the gage gets updated
+         break;
+ 
+     case r_NODE:
+diff --git a/src/legacy/engine/gage.c b/src/legacy/engine/gage.c
+index 69f7ce0..929f8fb 100644
+--- a/src/legacy/engine/gage.c
++++ b/src/legacy/engine/gage.c
+@@ -125,7 +125,6 @@ int gage_readParams(int gageIndex, char* tok[], int ntoks)
+     }
+     Gage[gageIndex].unitsFactor = 1.0;
+     Gage[gageIndex].coGage = -1;
+-    Gage[gageIndex].isUsed = FALSE;
+     return 0;
+ }
+ 
+diff --git a/src/legacy/engine/routing.c b/src/legacy/engine/routing.c
+index 94892d5..feead0c 100644
+--- a/src/legacy/engine/routing.c
++++ b/src/legacy/engine/routing.c
+@@ -56,6 +56,7 @@ static int* SortedLinks;
+ static int  NextEvent;
+ static int  BetweenEvents;
+ static double NewRuleTime;
++static double PastRainTime;  // routing time not yet added to gage past rain (sec)
+ 
+ //-----------------------------------------------------------------------------
+ //  External functions (declared in funcs.h)
+@@ -129,6 +130,7 @@ int routing_open()
+     NextEvent = 0;
+     BetweenEvents = (NumEvents > 0);
+     NewRuleTime = 0.0;
++    PastRainTime = 0.0;
+     return ErrorCode;
+ }
+ 
+@@ -229,6 +231,21 @@ void routing_execute(int routingModel, double routingStep)
+ 
+     // --- take any applicable control rule actions
+     currentDate = getDateTime(NewRoutingTime);
++    // --- with no runoff computed, update gages read by control rules here
++    //     (past rain takes whole seconds, so carry the fraction of a
++    //     dynamic wave step over to the next step)
++    if ( Nobjects[SUBCATCH] == 0 && Nobjects[GAGE] > 0 )
++    {
++        int pastRainStep;
++        PastRainTime += routingStep;
++        pastRainStep = (int)PastRainTime;
++        PastRainTime -= pastRainStep;
++        for (j = 0; j < Nobjects[GAGE]; j++)
++        {
++            gage_setState(j, currentDate);
++            gage_updatePastRain(j, pastRainStep);
++        }
++    }
+     actionCount = evaluateControlRules(currentDate, routingStep);
+ 
+     // --- initialize mass balance and system inflow variables

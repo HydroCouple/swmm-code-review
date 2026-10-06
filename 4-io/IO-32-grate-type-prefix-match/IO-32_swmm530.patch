@@ -1,0 +1,27 @@
+IO-32: read grate type P_BAR-50x100 as P_BAR-50x100, not P_BAR-50
+
+readGrateInletParams() looks the grate type up with findmatch(), which accepts
+the first keyword that the token starts with. "P_BAR-50" comes before
+"P_BAR-50x100" in GrateTypeWords and is a prefix of it, so P_BAR-50x100 was
+always read as P_BAR-50, with that grate's splash-over velocity and open
+area ratio. When findmatch() returns P_BAR-50, check for an exact
+(case-insensitive) match of P_BAR-50x100.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-32_swmm530.patch
+
+diff --git a/src/legacy/engine/inlet.c b/src/legacy/engine/inlet.c
+index fa52cb3..26cbea9 100644
+--- a/src/legacy/engine/inlet.c
++++ b/src/legacy/engine/inlet.c
+@@ -836,6 +836,10 @@ int readGrateInletParams(int i, char* tok[], int ntoks)
+     grateType = findmatch(tok[4], GrateTypeWords);
+     if (grateType < 0) return error_setInpError(ERR_KEYWORD, tok[4]);
+ 
++    // --- findmatch() stops at "P_BAR-50", a prefix of "P_BAR-50x100"
++    if (grateType == P50 && strcomp(tok[4], GrateTypeWords[P50x100]))
++        grateType = P50x100;
++
+     // --- only read open area & splash velocity for GENERIC type grate
+     if (grateType == GENERIC)
+     {

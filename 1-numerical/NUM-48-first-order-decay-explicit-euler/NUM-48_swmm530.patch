@@ -1,0 +1,37 @@
+NUM-48: apply first-order decay as exp(-K1 dt), and growth under STEADY
+
+getReactedQual(), used for conduits and storage units under KINWAVE and
+DYNWAVE, computed c * (1 - K1 dt), the explicit Euler step, instead of
+c * exp(-K1 dt) of reference manual eq. 5-6. The result depended on the
+routing step (a pond decaying for 6 h at K1 = 24/day ends 0.8 %, 4.9 % and
+23 % low with 10, 60 and 300 s steps) and K1 dt >= 1 removed everything.
+Use exp(), which also handles a negative K1 (growth) exactly. In
+findSFLinkQual() (STEADY), which already uses exp(), apply the reaction for
+any non-zero K1 instead of only K1 > 0, so growth is not ignored there.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-48_swmm530.patch
+
+diff --git a/src/legacy/engine/qualrout.c b/src/legacy/engine/qualrout.c
+index 1cf5ae1..7afd410 100644
+--- a/src/legacy/engine/qualrout.c
++++ b/src/legacy/engine/qualrout.c
+@@ -433,7 +433,7 @@ void findSFLinkQual(int i, double qSeep, double fEvap, double tStep)
+ 
+         // --- apply first-order decay over travel time
+         c2 = c1;
+-        if (Pollut[p].kDecay > 0.0)
++        if (Pollut[p].kDecay != 0.0)
+         {
+             c2 = c1 * exp(-Pollut[p].kDecay * tStep);
+             c2 = MAX(0.0, c2);
+@@ -610,8 +610,7 @@ double getReactedQual(int p, double c, double v1, double tStep)
+ 
+     if (kDecay == 0.0)
+         return c;
+-    c2 = c * (1.0 - kDecay * tStep);
+-    c2 = MAX(0.0, c2);
++    c2 = c * exp(-kDecay * tStep);
+     lossRate = (c - c2) * v1 / tStep;
+     massbal_addReactedMass(p, lossRate);
+     return c2;

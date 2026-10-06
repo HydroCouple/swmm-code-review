@@ -1,0 +1,42 @@
+NUM-10: list dummy conduits and ideal pumps after the other non-conduit links
+
+The DW non-conduit callback computes and scatters link flows one at a time
+in the order of StructureSolver::nc_indices_, which was link-index order. A
+DUMMY conduit or an ideal pump passes on its inlet node's inflow as it stands
+at that moment, so a weir, orifice, outlet or pump with a higher index that
+feeds the node is never passed on, and the node floods. Build nc_indices_ in
+two passes so DUMMY conduits and ideal pumps come last, as the 5.3.0 patch
+does in findLinkFlows().
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-10_swmm600.patch
+
+diff --git a/src/engine/hydraulics/HydStructures.cpp b/src/engine/hydraulics/HydStructures.cpp
+index 77d61bf..4d1cf94 100644
+--- a/src/engine/hydraulics/HydStructures.cpp
++++ b/src/engine/hydraulics/HydStructures.cpp
+@@ -234,12 +234,22 @@ void StructureSolver::init(SimulationContext& ctx) {
+     // (dynwave.c:411-414) is false for them, so findLinkFlows routes them
+     // through findNonConduitFlow in link-index order — their flow is the
+     // upstream node's inflow + overflow, not a momentum solve.
++    // DUMMY conduits and ideal pumps pass on their inlet node's inflow, so
++    // they are listed after every other non-conduit link has added to it.
+     nc_indices_.clear();
+     nc_indices_.reserve(static_cast<size_t>(n_pumps + n_orifices + n_weirs + n_outlets));
++    for (int pass = 0; pass < 2; ++pass)
+     for (int j = 0; j < ctx.n_links(); ++j) {
+         auto uj = static_cast<size_t>(j);
+-        if (ctx.links.type[uj] != LinkType::CONDUIT ||
+-            ctx.links.xsect_shape[uj] == XsectShape::DUMMY)
++        const bool pass_thru =
++            (ctx.links.type[uj] == LinkType::CONDUIT &&
++             ctx.links.xsect_shape[uj] == XsectShape::DUMMY) ||
++            (ctx.links.type[uj] == LinkType::PUMP &&
++             ctx.link_subtypes.pumps.curve_type[static_cast<size_t>(
++                 ctx.link_subtypes.pump_row(j))] == 6);
++        if ((ctx.links.type[uj] != LinkType::CONDUIT ||
++             ctx.links.xsect_shape[uj] == XsectShape::DUMMY) &&
++            pass_thru == (pass == 1))
+             nc_indices_.push_back(j);
+     }
+ 

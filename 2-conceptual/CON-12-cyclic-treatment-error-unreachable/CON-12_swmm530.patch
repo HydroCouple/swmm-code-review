@@ -1,0 +1,25 @@
+CON-12: report a cyclic treatment dependency as ERROR 161
+
+getRemoval() set ErrCode = 1 when an equation reached a removal that was
+still being evaluated, but treatmnt_treat() only reports the error, and skips
+the apply pass, when ErrCode == ERR_CYCLIC_TREATMENT (161). The branch was
+dead: the run went on with the cyclic removals set to 0 and no message. Set
+ErrCode to ERR_CYCLIC_TREATMENT so the documented ERROR 161 is reported and
+the run stops.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply CON-12_swmm530.patch
+
+diff --git a/src/legacy/engine/treatmnt.c b/src/legacy/engine/treatmnt.c
+index 3638cd3..66f414d 100644
+--- a/src/legacy/engine/treatmnt.c
++++ b/src/legacy/engine/treatmnt.c
+@@ -401,7 +401,7 @@ double  getRemoval(int p)
+     // --- case where removal already being computed for another pollutant
+     if ( R[p] > 1.0 || ErrCode )
+     {
+-        ErrCode = 1;
++        ErrCode = ERR_CYCLIC_TREATMENT;
+         return 0.0;
+     }
+ 

@@ -1,0 +1,23 @@
+NUM-25: use Eo = 1 for a curb inlet when the spread is within the gutter
+
+Same fix as for 5.3.0 in Inlet.cpp getCurbInletCapture(): getEo(Sr, T-W, W)
+returns NaN when the spread T is narrower than the gutter width W, which makes
+the inlet capture 100% of the flow. Use Eo = 1 in that case.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-25_swmm600.patch
+
+diff --git a/src/engine/hydraulics/Inlet.cpp b/src/engine/hydraulics/Inlet.cpp
+index 2738ce5..976850e 100644
+--- a/src/engine/hydraulics/Inlet.cpp
++++ b/src/engine/hydraulics/Inlet.cpp
+@@ -297,7 +297,8 @@ double getCurbInletCapture(const Geom& g, double Q, double L) {
+     // --- for depressed gutter section
+     if (g.a > 0.0) {
+         const double Sr = g.sw / g.sx;
+-        const double Eo = getEo(Sr, g.t - g.w, g.w);
++        // spread within the depressed gutter: all flow is gutter flow
++        const double Eo = (g.t <= g.w) ? 1.0 : getEo(Sr, g.t - g.w, g.w);
+         Se = g.sx + (g.a / g.w) * Eo;                      // HEC-22 Eq(4-24)
+     }
+ 

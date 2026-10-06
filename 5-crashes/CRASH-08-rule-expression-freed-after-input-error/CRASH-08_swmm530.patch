@@ -1,0 +1,27 @@
+CRASH-08: don't walk a NULL Expression array when closing after an input error
+
+ExpressionCount is counted in the first input pass. When that pass already
+found an error (a duplicate ID, an invalid option value), createObjects()
+returns before controls_create() allocates Expression[], and controls_delete()
+then reads ExpressionCount entries of a NULL array on close: a segmentation
+fault in swmm_close() (or swmm_run()) instead of the input error message,
+with the report file left empty. Skip the loop when Expression is NULL, as
+deleteObjects() does for its own arrays.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply CRASH-08_swmm530.patch
+
+diff --git a/src/legacy/engine/controls.c b/src/legacy/engine/controls.c
+index e423886..d1934cd 100644
+--- a/src/legacy/engine/controls.c
++++ b/src/legacy/engine/controls.c
+@@ -844,7 +844,8 @@ void controls_delete(void)
+ {
+     int i;
+ 
+-    for (i = 0; i < ExpressionCount; i++)
++    // --- Expression is NULL if input counting failed before it was created
++    for (i = 0; Expression && i < ExpressionCount; i++)
+     {
+         mathexpr_delete(Expression[i].expression);
+         Expression[i].expression = NULL;

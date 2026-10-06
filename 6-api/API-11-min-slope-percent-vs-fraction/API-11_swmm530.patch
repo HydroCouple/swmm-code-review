@@ -1,0 +1,48 @@
+API-11: read and write swmm_MINSLOPE in percent and apply it to the conduits
+
+[OPTIONS] MIN_SLOPE is a percent and project.c stores MinSlope as a
+fraction. getSystemValue() returned the fraction (0.005 for MIN_SLOPE 0.5),
+while setSystemValue() checked the percent range 0..100 and stored the value
+as given (0.5 became a 50 % slope). The minimum is applied in
+conduit_getSlope() during swmm_open(), so a value set before swmm_start()
+did not reach the conduits either.
+
+Return MinSlope * 100, store value / 100, and recompute every conduit's
+slope with link_updateSlope() (added by API-10) after a change.
+
+Requires: API-10
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b,
+after API-10_swmm530.patch:
+    git apply API-11_swmm530.patch
+
+diff --git a/src/legacy/engine/swmm5.c b/src/legacy/engine/swmm5.c
+index a011827..44a41df 100644
+--- a/src/legacy/engine/swmm5.c
++++ b/src/legacy/engine/swmm5.c
+@@ -2952,7 +2952,7 @@ double getSystemValue(int property)
+     case swmm_MINSURFAREA:
+         return MinSurfArea * UCF(LENGTH) * UCF(LENGTH);
+     case swmm_MINSLOPE:
+-        return MinSlope;
++        return MinSlope * 100.0;
+     case swmm_RUNOFFERROR:
+         return RunoffError;
+     case swmm_FLOWERROR:
+@@ -3442,7 +3442,15 @@ static int setSystemValue(int property, double value)
+     case swmm_MINSLOPE:
+         if (value >= 0 && value < 100)
+         {
+-            MinSlope = value;
++            int j;
++
++            // --- value is a percent, as in [OPTIONS]; update the conduit
++            //     slopes computed with the old value at swmm_open
++            MinSlope = value / 100.0;
++            for (j = 0; j < Nobjects[LINK]; j++)
++            {
++                if (Link[j].type == CONDUIT) link_updateSlope(j);
++            }
+             return 0;
+         }
+         else

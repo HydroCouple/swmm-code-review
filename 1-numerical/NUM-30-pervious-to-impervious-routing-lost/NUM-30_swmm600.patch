@@ -1,0 +1,29 @@
+NUM-30: route pervious runoff onto IMPERV0 when there is no IMPERV1 area
+
+With RouteTo IMPERVIOUS only (1 - PctRouted) of the pervious runoff goes to
+the outlet; the rest is meant to arrive next step as inflow to the
+impervious area with depression storage (IMPERV1). RunoffSolver::execute()
+skipped that transfer when IMPERV1 has no area (PctZero = 100), so the
+routed share left the pervious sub-area and was never added anywhere. Send
+it to IMPERV0, the only impervious sub-area in that case (the same change
+as the 5.3.0 patch).
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-30_swmm600.patch
+
+diff --git a/src/engine/hydrology/Runoff.cpp b/src/engine/hydrology/Runoff.cpp
+index aa81dc7..bd6a301 100644
+--- a/src/engine/hydrology/Runoff.cpp
++++ b/src/engine/hydrology/Runoff.cpp
+@@ -587,6 +587,11 @@ void RunoffSolver::execute(SimulationContext& ctx, double dt, double evap_rate_i
+             double q = soa_.old_runoff_perv[ui];
+             runon_imperv1 += q * (1.0 - f_outlet) * fp / f1;
+         }
++        else if (route_mode == 1 && f0 > 0.0) {
++            // PctZero = 100: no IMPERV1 area, so onto IMPERV0
++            double q = soa_.old_runoff_perv[ui];
++            runon_imperv0 += q * (1.0 - f_outlet) * fp / f0;
++        }
+ 
+         // Gap #23: LID return flow to pervious area (legacy lid_getFlowToPerv
+         // in subcatch_getRunon — one-step lag), after the transfer above.

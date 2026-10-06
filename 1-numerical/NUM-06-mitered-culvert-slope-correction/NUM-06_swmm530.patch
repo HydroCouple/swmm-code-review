@@ -1,0 +1,31 @@
+NUM-06: use the HDS-5 slope correction +0.7*S for mitered culvert inlets, not +7*S
+
+culvert_getInflow() stores the slope correction with the opposite sign to
+HDS-5 (HW/D = ... - scf), so scf = 0.5*S reproduces HDS-5's -0.5*S for most
+inlets. For mitered inlets (codes 5, 37, 46) HDS-5 and the SWMM Hydraulics
+Reference Manual (eq. 7-39/7-46) use +0.7*S, i.e. scf = -0.7*S, but the code
+has -7.0*S. Mitered culverts therefore get ten times the correction: at a 5%
+slope their inlet-control headwater is 0.32*D too high. Use -0.7.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-06_swmm530.patch
+
+diff --git a/src/legacy/engine/culvert.c b/src/legacy/engine/culvert.c
+index 5f62877..c036ee6 100644
+--- a/src/legacy/engine/culvert.c
++++ b/src/legacy/engine/culvert.c
+@@ -201,12 +201,12 @@ double culvert_getInflow(int j, double q0, double h)
+     culvert.yFull = culvert.xsect->yFull;
+     culvert.ad = culvert.xsect->aFull * sqrt(culvert.yFull);
+ 
+-    // --- slope correction factor (-7 for mitered inlets, 0.5 for others)
++    // --- slope correction factor (-0.7 for mitered inlets, 0.5 for others)
+     switch (code)
+     {
+     case 5:
+     case 37:
+-    case 46: culvert.scf = -7.0 * Conduit[k].slope; break;
++    case 46: culvert.scf = -0.7 * Conduit[k].slope; break;
+     default: culvert.scf = 0.5 * Conduit[k].slope;
+     }
+ 

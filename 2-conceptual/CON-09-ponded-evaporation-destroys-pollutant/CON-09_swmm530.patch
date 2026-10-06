@@ -1,0 +1,30 @@
+CON-09: keep pollutant in ponded surface water when the water evaporates
+
+findPondedLoads() mixed the ponded mass with rain and run-on over the
+step's water volume, removed the infiltrated and runoff mass, and then
+rebuilt the ponded mass as cPonded * depth * area. The pollutant in the
+water that evaporated during the step (cPonded * Vevap) was dropped with
+no ledger entry: 0.1 in of rain at 10 mg/L that evaporates from
+depression storage gave a 100 % runoff quality continuity error. Keep the
+mass that infiltration and runoff did not remove, so evaporation
+concentrates the ponded water (reference manual eq. 4-11, note 4).
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply CON-09_swmm530.patch
+
+diff --git a/src/legacy/engine/surfqual.c b/src/legacy/engine/surfqual.c
+index 893b975..e7d0edf 100644
+--- a/src/legacy/engine/surfqual.c
++++ b/src/legacy/engine/surfqual.c
+@@ -461,8 +461,9 @@ void findPondedLoads(int j, double tStep)
+                                         bmpRemoval * Pollut[p].mcf);
+             wOutflow -= bmpRemoval;
+ 
+-            // --- update ponded mass (using newly computed ponded depth)
+-            Subcatch[j].pondedQual[p] = cPonded * subcatch_getDepth(j) * nonLidArea;
++            // --- update ponded mass: what infiltration and runoff did not
++            //     remove stays (evaporation takes water, not pollutant)
++            Subcatch[j].pondedQual[p] = wPonded;
+             OutflowLoad[p] += wOutflow;
+         }
+     }

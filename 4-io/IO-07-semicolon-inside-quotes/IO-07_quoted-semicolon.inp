@@ -1,0 +1,42 @@
+[TITLE]
+IO-07: inflow series TS1 read from the file "IO-07_flow;v2.dat" (2 cfs from 0:00 to 6:00)
+
+[OPTIONS]
+FLOW_UNITS           CFS
+FLOW_ROUTING         KINWAVE
+START_DATE           01/01/2020
+START_TIME           00:00:00
+REPORT_START_DATE    01/01/2020
+REPORT_START_TIME    00:00:00
+END_DATE             01/01/2020
+END_TIME             06:00:00
+REPORT_STEP          00:15:00
+WET_STEP             00:05:00
+DRY_STEP             01:00:00
+ROUTING_STEP         30
+
+[JUNCTIONS]
+;;Name Elev MaxDepth InitDepth SurDepth Aponded
+J1   10   5   0   0   0
+
+[OUTFALLS]
+O1   0   FREE   NO
+
+[CONDUITS]
+;;Name From To Length Roughness InOffset OutOffset
+C1   J1   O1   100   0.013   0   0   0   0
+
+[XSECTIONS]
+C1   CIRCULAR   1   0   0   0   1
+
+[INFLOWS]
+;;Node Constituent Series
+J1   FLOW   TS1
+
+[TIMESERIES]
+;;Name FILE "file name"
+TS1  FILE  "IO-07_flow;v2.dat"
+
+[REPORT]
+NODES ALL
+LINKS ALL

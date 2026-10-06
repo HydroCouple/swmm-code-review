@@ -1,0 +1,54 @@
+[TITLE]
+API-15: gages G1 and G2 share series TS1 (1.0 in/hr for five hours)
+
+[OPTIONS]
+FLOW_UNITS       CFS
+INFILTRATION     HORTON
+FLOW_ROUTING     KINWAVE
+START_DATE       01/01/2020
+START_TIME       00:00:00
+END_DATE         01/01/2020
+END_TIME         06:00:00
+REPORT_STEP      00:15:00
+WET_STEP         00:05:00
+DRY_STEP         00:05:00
+ROUTING_STEP     60
+
+[EVAPORATION]
+CONSTANT 0.0
+
+[RAINGAGES]
+;;Name  Format     Interval  SCF  Source
+G1      INTENSITY  1:00      1.0  TIMESERIES  TS1
+G2      INTENSITY  1:00      1.0  TIMESERIES  TS1
+
+[TIMESERIES]
+;; hourly records of 1.0 in/hr from 0:00 to 5:00
+TS1  0:00  1.0
+TS1  1:00  1.0
+TS1  2:00  1.0
+TS1  3:00  1.0
+TS1  4:00  1.0
+TS1  5:00  0.0
+
+[SUBCATCHMENTS]
+;;Name  Gage  Outlet  Area  %Imperv  Width  %Slope  CurbLen
+S1      G1    O1      10    100      500    1       0
+S2      G2    O1      10    100      500    1       0
+
+[SUBAREAS]
+;;Subcatch  N-Imperv  N-Perv  S-Imperv  S-Perv  PctZero  RouteTo
+S1          0.01      0.1     0         0       0        OUTLET
+S2          0.01      0.1     0         0       0        OUTLET
+
+[INFILTRATION]
+;;Subcatch  MaxRate  MinRate  Decay  DryTime  MaxInfil
+S1          0        0        4      7        0
+S2          0        0        4      7        0
+
+[OUTFALLS]
+;;Name  Elev  Type
+O1      0     FREE
+
+[REPORT]
+SUBCATCHMENTS ALL

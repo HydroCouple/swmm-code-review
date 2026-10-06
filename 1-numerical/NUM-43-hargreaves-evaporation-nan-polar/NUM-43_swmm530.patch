@@ -1,0 +1,28 @@
+NUM-43: clamp the cosine of the sunset hour angle in getTempEvap()
+
+getTempEvap() took acos(-tan(lat)*tan(decl)) without a range check. Above
+the polar circles the argument leaves [-1, 1] around the solstices, acos()
+returns NaN, and the Hargreaves evaporation rate, the runoff balance and the
+subcatchment storage all become NaN. Limit the argument to [-1, 1] (hour
+angle pi when the sun never sets, 0 when it never rises), as
+updateTempTimes() in the same file already does. Results at latitudes
+where the argument stays in range are unchanged.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-43_swmm530.patch
+
+diff --git a/src/legacy/engine/climate.c b/src/legacy/engine/climate.c
+index c343b93..5732a65 100644
+--- a/src/legacy/engine/climate.c
++++ b/src/legacy/engine/climate.c
+@@ -1352,7 +1352,9 @@ double getTempEvap(int day, double tave, double trng)
+     double dr = 1.0 + 0.033 * cos(a * day);              // relative earth-sun distance
+     double phi = Temp.anglat * 2.0 * PI / 360.0;         // latitude angle (rad)
+     double del = 0.4093 * sin(a * (284. + (double)day)); // solar declination angle (rad)
+-    double omega = acos(-tan(phi) * tan(del));           // sunset hour angle (rad)
++    double x = MAX(-1.0, MIN(1.0, -tan(phi) * tan(del))); // cos(omega), kept in [-1, 1]
++                                                         // in polar day and night
++    double omega = acos(x);                              // sunset hour angle (rad)
+     double ra = 37.6 * dr *                              // extraterrestrial radiation
+                 (omega * sin(phi) * sin(del) +
+                  cos(phi) * cos(del) * sin(omega));

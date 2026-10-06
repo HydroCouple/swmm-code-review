@@ -1,0 +1,57 @@
+IO-21: reject a time pattern with the wrong number of factors
+
+handle_patterns() appended whatever factors a [PATTERNS] entry held and
+nothing compared the count with the 12, 7, 24 or 24 factors a MONTHLY, DAILY,
+HOURLY or WEEKEND pattern needs; a missing factor acted as 1.0. Check every
+pattern's count in resolve_cross_references(), next to the check of the
+pattern names, and report error 237, as the 5.3.0 patch does.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-21_swmm600.patch
+
+diff --git a/src/engine/core/ErrorCodes.cpp b/src/engine/core/ErrorCodes.cpp
+index 41a0f4b..51ae73f 100644
+--- a/src/engine/core/ErrorCodes.cpp
++++ b/src/engine/core/ErrorCodes.cpp
+@@ -125,6 +125,7 @@ static const std::unordered_map<int, const char*>& error_table() {
+         {231, "Transect %s has no depth."},
+         {233, "invalid math expression."},
+         {235, "invalid infiltration parameters."},
++        {237, "wrong number of factors for Time Pattern %s."},
+ 
+         // File I/O
+         {301, "files share same names."},
+diff --git a/src/engine/core/ErrorCodes.hpp b/src/engine/core/ErrorCodes.hpp
+index 58441c6..cfac09e 100644
+--- a/src/engine/core/ErrorCodes.hpp
++++ b/src/engine/core/ErrorCodes.hpp
+@@ -133,6 +133,7 @@ enum ErrorCode : int {
+     ERR_TRANSECT_NO_DEPTH       = 231,  ///< Transect %s has no depth
+     ERR_MATH_EXPR               = 233,  ///< invalid math expression
+     ERR_INFILTRATION            = 235,  ///< invalid infiltration parameters
++    ERR_PATTERN_FACTORS         = 237,  ///< wrong number of factors for Time Pattern %s
+ 
+     // --- File I/O (301–363) ---
+     ERR_FILE_NAME               = 301,  ///< files share same names
+diff --git a/src/engine/input/PostParseResolver.cpp b/src/engine/input/PostParseResolver.cpp
+index 807f527..f47860f 100644
+--- a/src/engine/input/PostParseResolver.cpp
++++ b/src/engine/input/PostParseResolver.cpp
+@@ -2376,6 +2376,17 @@ void resolve_cross_references(SimulationContext& ctx) {
+             check(ctx.dwf_inflows.pat3[ui]);
+             check(ctx.dwf_inflows.pat4[ui]);
+         }
++
++        // IO-21: a pattern needs exactly 12 MONTHLY, 7 DAILY or 24 HOURLY /
++        // WEEKEND factors; a missing one would silently act as 1.0.
++        for (int k = 0; k < ctx.patterns.count(); ++k) {
++            const auto uk = static_cast<std::size_t>(k);
++            const int type = ctx.patterns.types[uk];
++            const std::size_t need = (type == 0) ? 12 : (type == 1) ? 7 : 24;
++            if (type >= 0 && ctx.patterns.factors[uk].size() != need)
++                ctx.errors.push_back(format_error(openswmm::ERR_PATTERN_FACTORS,
++                                                  ctx.patterns.names[uk]));
++        }
+     }
+ 
+     // -------------------------------------------------------------------------

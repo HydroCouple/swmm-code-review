@@ -1,0 +1,54 @@
+NUM-45: set the concentration of a dry node with no inflow to zero
+
+The non-storage branch of QualitySolver::mixAtNodes() published a dry node's
+summed load rate (qual_mass_in, mass/s) as its concentration when the node
+had no inflow, copying 5.3.0. A node with no water has no concentration:
+report 0, as 5.2.4 does. Wet nodes and nodes with inflow are unchanged.
+
+test_quality_routing's ResidualInflowBelowLegacyZeroIsNotDividedBy expected
+the 5.3.0 load-rate residue (1e-14 x 1e5) at its dry node; it now expects 0.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-45_swmm600.patch
+
+diff --git a/src/engine/quality/QualityRouting.cpp b/src/engine/quality/QualityRouting.cpp
+index 917fc1d..b5a5c29 100644
+--- a/src/engine/quality/QualityRouting.cpp
++++ b/src/engine/quality/QualityRouting.cpp
+@@ -1111,14 +1111,10 @@ void QualitySolver::mixAtNodes(SimulationContext& ctx, double dt) {
+                     // quality.
+                     nodes.conc[idx] = nodes.conc_old[idx];
+                 } else {
+-                    // A DRY one leaves Node.newQual as the accumulator
+-                    // (qualrout.c findNodeQual): the summed q*c load rate,
+-                    // published as its concentration. The inflow is only
+-                    // at or below ZERO (1e-10 cfs), not absent, so the
+-                    // load is tiny but not zero (1943-h-h-elements-si-units
+-                    // reports 1e-10..1e-13 mg/L there).
+-                    nodes.conc[idx] = (idx < nodes.qual_mass_in.size())
+-                                    ? nodes.qual_mass_in[idx] : 0.0;
++                    // A DRY one holds no water, so no concentration
++                    // (5.2.4 findNodeQual). Its summed load rate
++                    // (qual_mass_in) is not a concentration.
++                    nodes.conc[idx] = 0.0;
+                 }
+             }
+             continue;
+diff --git a/tests/unit/engine/test_quality_routing.cpp b/tests/unit/engine/test_quality_routing.cpp
+index 093155d..1ca2475 100644
+--- a/tests/unit/engine/test_quality_routing.cpp
++++ b/tests/unit/engine/test_quality_routing.cpp
+@@ -552,9 +552,10 @@ TEST_F(QualityRoutingTest, ResidualInflowBelowLegacyZeroIsNotDividedBy) {
+ 
+     solver.execute(ctx, dt);
+ 
+-    // Legacy leaves a dry node's accumulator in place: the q*c load rate
+-    // (1e-14 * 1e5), not the ratio 1e5.
+-    EXPECT_DOUBLE_EQ(ctx.nodes.conc[1 * NP + 0], 1.0e-14 * 1.0e5)
++    // Not the ratio 1e5. A node with no water and no inflow has no
++    // concentration: 0, as in 5.2.4 (5.3.0 left the q*c load-rate
++    // accumulator, 1e-14 * 1e5, in place; the code review's NUM-45 fix).
++    EXPECT_DOUBLE_EQ(ctx.nodes.conc[1 * NP + 0], 0.0)
+         << "an inflow below legacy's ZERO must be refused, not divided by";
+ 
+     // The same node, a decade ABOVE ZERO, still divides: this is a

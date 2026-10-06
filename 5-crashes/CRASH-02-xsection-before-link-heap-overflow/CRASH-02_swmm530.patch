@@ -1,0 +1,38 @@
+CRASH-02: do not write conduit data for a link whose own row is not stored
+
+link_readXsectParams() sets Conduit[Link[j].subIndex].barrels when
+Link[j].type == CONDUIT. Link[] is zero-filled, so for a link whose own row
+comes later in the file, or was rejected for an error, the type reads as
+CONDUIT and the sub-index as 0: the barrels go to the first conduit, and
+with no conduits at all the write is past the end of a zero-length array.
+Write the barrels only once the link's own row has been stored (Link[j].ID
+is set by that row). The cross-section itself is stored on the link as
+before, so a regulator's [XSECTIONS] row may still precede its section.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply CRASH-02_swmm530.patch
+
+diff --git a/src/legacy/engine/link.c b/src/legacy/engine/link.c
+index 31925e1..3c51980 100644
+--- a/src/legacy/engine/link.c
++++ b/src/legacy/engine/link.c
+@@ -190,7 +190,9 @@ int link_readXsectParams(char* tok[], int ntoks)
+     if ( k < 0 ) return error_setInpError(ERR_KEYWORD, tok[1]);
+ 
+     // --- assign default number of barrels to conduit
+-    if ( Link[j].type == CONDUIT ) Conduit[Link[j].subIndex].barrels = 1;
++    //     (Link[j].ID is set when the link's own data line is read; until
++    //     then its type and sub-index are only the zeroed defaults)
++    if ( Link[j].ID && Link[j].type == CONDUIT ) Conduit[Link[j].subIndex].barrels = 1;
+ 
+     // --- assume link is not a culvert
+     Link[j].xsect.culvertCode = 0;
+@@ -251,7 +253,7 @@ int link_readXsectParams(char* tok[], int ntoks)
+         }
+ 
+         // --- parse number of barrels if present
+-        if ( Link[j].type == CONDUIT && ntoks >= 7 )
++        if ( Link[j].ID && Link[j].type == CONDUIT && ntoks >= 7 )
+         {
+             i = atoi(tok[6]);
+             if ( i <= 0 ) return error_setInpError(ERR_NUMBER, tok[6]);

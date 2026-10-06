@@ -1,0 +1,29 @@
+NUM-15: reject a FUNCTIONAL storage exponent of -1 or less
+
+A FUNCTIONAL storage unit's volume is the integral of A0 + A1*Depth^A2 from
+depth 0, which storage_getVolume() evaluates as A0*d + A1/(A2+1)*d^(A2+1).
+The integral does not exist for A2 <= -1: at -1 the code divides by zero
+and every volume is inf (continuity error NaN), below -1 it returns a finite
+number for an infinite integral. storage_readParams() only checked A0.
+Reject A2 <= -1 with ERROR 211 (invalid number) at the exponent token, as a
+negative A0 already is.
+The 6.0.0 check sits in the [STORAGE] handler.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-15_swmm600.patch
+
+diff --git a/src/engine/input/handlers/NodesHandler.cpp b/src/engine/input/handlers/NodesHandler.cpp
+index 2e125a5..dba8c65 100644
+--- a/src/engine/input/handlers/NodesHandler.cpp
++++ b/src/engine/input/handlers/NodesHandler.cpp
+@@ -378,6 +378,10 @@ void handle_storage(SimulationContext& ctx, const std::vector<std::string>& line
+             if (tok.size() > 5) S.a[srow] = to_double(tok[5]);
+             if (tok.size() > 6) S.b[srow] = to_double(tok[6]);
+             if (tok.size() > 7) S.c[srow] = to_double(tok[7]);
++            // volume (integral of area from 0 depth) requires exponent > -1
++            // (legacy storage_readParams, ERROR 211)
++            if (tok.size() > 6 && S.b[srow] <= -1.0)
++                ctx.errors.push_back(format_error(ERR_NUMBER, tok[6]));
+         } else {
+             // CYLINDRICAL / CONICAL / PARABOLIC / PYRAMIDAL — three raw dimensions
+             // (L, W, Z). Keep them verbatim for lossless round-trip AND derive the

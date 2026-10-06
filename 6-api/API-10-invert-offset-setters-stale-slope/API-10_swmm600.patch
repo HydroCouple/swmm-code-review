@@ -1,0 +1,151 @@
+API-10: recompute a conduit's slope when a node invert or link offset is set
+
+swmm_node_set_invert_elev() and swmm_link_set_offset_up/_dn() are accepted
+after swmm_engine_open() but only stored the value. The conduit slope is
+computed during open by resolve_cross_references() and beta, q_full and
+q_max from it, so the edit had no effect on swmm_link_get_slope() or on
+kinematic-wave routing.
+
+Add recompute_conduit_slope(ctx, j), which repeats the resolver's slope
+steps for one conduit (without the warnings), reverses the conduit under
+dynamic wave if it became adverse, as open does, and then calls
+recompute_conduit_flow_properties(). The three setters call it in the
+OPENED state for the affected conduits. Lengthening is applied later, in
+Router::init, from the updated slope.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply API-10_swmm600.patch
+
+diff --git a/src/engine/core/openswmm_links_impl.cpp b/src/engine/core/openswmm_links_impl.cpp
+index 9963ab2..575ed0f 100644
+--- a/src/engine/core/openswmm_links_impl.cpp
++++ b/src/engine/core/openswmm_links_impl.cpp
+@@ -277,6 +277,9 @@ SWMM_ENGINE_API int swmm_link_set_offset_up(SWMM_Engine engine, int idx, double
+     // units: display LENGTH -> internal ft; authored -> stored (sediment bump)
+     ctx.links.offset1[static_cast<std::size_t>(idx)] =
+         to_internal(ctx, openswmm::ucf::LENGTH, offset) + offsetBump(ctx, idx);
++    // after open the slope is already resolved: update it
++    if (ctx.state == openswmm::EngineState::OPENED)
++        openswmm::input::recompute_conduit_slope(ctx, idx);
+     return SWMM_OK;
+ }
+ 
+@@ -288,6 +291,9 @@ SWMM_ENGINE_API int swmm_link_set_offset_dn(SWMM_Engine engine, int idx, double
+     // units: display LENGTH -> internal ft; authored -> stored (sediment bump)
+     ctx.links.offset2[static_cast<std::size_t>(idx)] =
+         to_internal(ctx, openswmm::ucf::LENGTH, offset) + offsetBump(ctx, idx);
++    // after open the slope is already resolved: update it
++    if (ctx.state == openswmm::EngineState::OPENED)
++        openswmm::input::recompute_conduit_slope(ctx, idx);
+     return SWMM_OK;
+ }
+ 
+diff --git a/src/engine/core/openswmm_nodes_impl.cpp b/src/engine/core/openswmm_nodes_impl.cpp
+index 8cd649f..b2a9c38 100644
+--- a/src/engine/core/openswmm_nodes_impl.cpp
++++ b/src/engine/core/openswmm_nodes_impl.cpp
+@@ -32,6 +32,7 @@
+ #include "../../../include/openswmm/engine/openswmm_nodes.h"
+ #include "../data/StorageGeometry.hpp"
+ #include "../edit/VirtualJunctionOps.hpp"
++#include "../input/PostParseResolver.hpp"
+ #include "../hydraulics/Node.hpp"
+ 
+ #include <algorithm>
+@@ -149,6 +150,15 @@ SWMM_ENGINE_API int swmm_node_set_invert_elev(SWMM_Engine engine, int idx, doubl
+     CHECK_GEOMETRY(ctx);
+     CHECK_INDEX(idx >= 0 && idx < ctx.n_nodes());
+     ctx.nodes.invert_elev[static_cast<std::size_t>(idx)] = to_internal(ctx, openswmm::ucf::LENGTH, elev); // units
++    // After open the conduit slopes are already resolved: update the ones
++    // that end at this node.
++    if (ctx.state == openswmm::EngineState::OPENED) {
++        for (int j = 0; j < ctx.n_links(); ++j) {
++            const auto uj = static_cast<std::size_t>(j);
++            if (ctx.links.node1[uj] == idx || ctx.links.node2[uj] == idx)
++                openswmm::input::recompute_conduit_slope(ctx, j);
++        }
++    }
+     return SWMM_OK;
+ }
+ 
+diff --git a/src/engine/input/PostParseResolver.cpp b/src/engine/input/PostParseResolver.cpp
+index 807f527..ce1c62e 100644
+--- a/src/engine/input/PostParseResolver.cpp
++++ b/src/engine/input/PostParseResolver.cpp
+@@ -1189,6 +1189,52 @@ void recompute_conduit_flow_properties(SimulationContext& ctx, int j) {
+     }
+ }
+ 
++void recompute_conduit_slope(SimulationContext& ctx, int j) {
++    using constants::MIN_DELTA_Z;
++
++    auto uj = static_cast<std::size_t>(j);
++    if (ctx.links.type[uj] != LinkType::CONDUIT) return;
++    const int n1 = ctx.links.node1[uj];
++    const int n2 = ctx.links.node2[uj];
++    const int cr = ctx.link_subtypes.conduit_row(j);
++    const double length = conduit_true_length(ctx, j);
++    if (n1 < 0 || n2 < 0 || cr < 0 || length <= 0.0) return;
++    const auto ucr = static_cast<std::size_t>(cr);
++
++    // Same steps as the conduit slope pass in resolve_cross_references
++    // (legacy conduit_getSlope), without the warnings.
++    double elev1 = ctx.links.offset1[uj] + ctx.nodes.invert_elev[n1];
++    double elev2 = ctx.links.offset2[uj] + ctx.nodes.invert_elev[n2];
++    double delta = std::fabs(elev1 - elev2);
++    if (delta < MIN_DELTA_Z) delta = MIN_DELTA_Z;
++    double slope = (delta >= length) ? delta / length
++                                     : delta / std::sqrt(length * length - delta * delta);
++    const double min_slope = ctx.options.min_slope / 100.0;
++    bool min_slope_kw_sf = false;
++    if (min_slope > 0.0 && slope < min_slope) {
++        slope = min_slope;
++        min_slope_kw_sf = (ctx.options.routing_model == RoutingModel::STEADY ||
++                           ctx.options.routing_model == RoutingModel::KINWAVE);
++    }
++    if (elev1 < elev2 && !min_slope_kw_sf) slope = -slope;
++    ctx.link_subtypes.conduits.slope[ucr] = slope;
++
++    // An edit that makes a conduit adverse under dynamic wave reverses it,
++    // as at open.
++    if ((ctx.options.routing_model == RoutingModel::DYNWAVE ||
++         ctx.options.routing_model == RoutingModel::FV) &&
++        slope < 0.0 && ctx.links.xsect_shape[uj] != XsectShape::DUMMY) {
++        std::swap(ctx.links.node1[uj], ctx.links.node2[uj]);
++        std::swap(ctx.links.offset1[uj], ctx.links.offset2[uj]);
++        ctx.links.direction[uj] *= -1;
++        ctx.links.q0[uj] = -ctx.links.q0[uj];
++        std::swap(ctx.link_subtypes.conduits.loss_inlet[ucr],
++                  ctx.link_subtypes.conduits.loss_outlet[ucr]);
++        ctx.link_subtypes.conduits.slope[ucr] = -slope;
++    }
++    recompute_conduit_flow_properties(ctx, j);
++}
++
+ // ---------------------------------------------------------------------------
+ // Centralised display → internal (feet/cfs/ft³) unit conversion.
+ // ---------------------------------------------------------------------------
+diff --git a/src/engine/input/PostParseResolver.hpp b/src/engine/input/PostParseResolver.hpp
+index f779f20..e0b5362 100644
+--- a/src/engine/input/PostParseResolver.hpp
++++ b/src/engine/input/PostParseResolver.hpp
+@@ -175,6 +175,19 @@ void resolve_external_file_slots(SimulationContext& ctx,
+  */
+ void recompute_conduit_flow_properties(SimulationContext& ctx, int j);
+ 
++/**
++ * @brief Recompute a conduit's slope from its end-node inverts and offsets,
++ *        then its flow properties (@ref recompute_conduit_flow_properties).
++ *
++ * @details Used by the invert and offset setters after @c open(), so the
++ *          edit changes the slope, beta and full flow as the same edit in
++ *          the input file would.
++ *
++ * @param ctx  Simulation context (mutated in place).
++ * @param j    Link index (non-conduits are left untouched).
++ */
++void recompute_conduit_slope(SimulationContext& ctx, int j);
++
+ /**
+  * @brief The Manning's n a conduit actually routes with, before any Courant
+  *        lengthening adjustment — legacy conduit_validate's @c roughness.

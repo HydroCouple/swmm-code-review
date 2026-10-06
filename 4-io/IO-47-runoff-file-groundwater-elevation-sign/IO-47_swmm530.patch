@@ -1,0 +1,29 @@
+IO-47: restore the groundwater table from a runoff interface file with the right sign
+
+subcatch_getResults() saves the water table elevation as
+gw->bottomElev + gw->lowerDepth, but runoff_readFromFile() restored
+gw->lowerDepth as Aquifer[].bottomElev - elevation: the negative of the depth,
+measured from the aquifer's bottom rather than the subcatchment's own (which
+[GROUNDWATER] can override). A USE RUNOFF run reported the water table
+mirrored below the aquifer bottom. Subtract gw->bottomElev from the elevation.
+
+Requires: IO-46
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-46_swmm530.patch IO-47_swmm530.patch
+
+diff --git a/src/legacy/engine/runoff.c b/src/legacy/engine/runoff.c
+index b28536e..76a3749 100644
+--- a/src/legacy/engine/runoff.c
++++ b/src/legacy/engine/runoff.c
+@@ -471,8 +471,8 @@ void  runoff_readFromFile(void)
+             if ( Subcatch[j].area > 0.0 )
+                 gw->newFlow = SubcatchResults[SUBCATCH_GW_FLOW] / UCF(FLOW) /
+                               Subcatch[j].area;
+-            gw->lowerDepth = Aquifer[gw->aquifer].bottomElev -
+-                             (SubcatchResults[SUBCATCH_GW_ELEV] / UCF(LENGTH));
++            gw->lowerDepth = SubcatchResults[SUBCATCH_GW_ELEV] / UCF(LENGTH) -
++                             gw->bottomElev;
+             gw->theta      = SubcatchResults[SUBCATCH_SOIL_MOIST];
+         }
+ 

@@ -1,0 +1,47 @@
+[TITLE]
+BND-01: a side orifice discharging to a NORMAL outfall whose invert is above the storage invert
+
+[OPTIONS]
+FLOW_UNITS           CFS
+INFILTRATION         HORTON
+FLOW_ROUTING         DYNWAVE
+LINK_OFFSETS         DEPTH
+START_DATE           01/01/2020
+START_TIME           00:00:00
+REPORT_START_DATE    01/01/2020
+REPORT_START_TIME    00:00:00
+END_DATE             01/01/2020
+END_TIME             06:00:00
+REPORT_STEP          00:15:00
+WET_STEP             00:05:00
+DRY_STEP             01:00:00
+ROUTING_STEP         5
+ALLOW_PONDING        NO
+
+;; Storage invert 100 ft. The 1 ft x 2 ft side orifice sits 3 ft above it
+;; (bottom 103, crown 104). The NORMAL outfall's invert is 102 ft, below the
+;; orifice, so the orifice discharges freely. 5.3.0 gives O1 a depth equal
+;; to the orifice offset (3 ft, HGL 105), which is above the orifice crown.
+[STORAGE]
+;;Name Elev MaxDepth InitDepth Shape     Coeff Expon Const SurDepth Fevap
+SU1    100  20       0         FUNCTIONAL 0     0     2000  0        0
+
+[OUTFALLS]
+;;Name  Elev  Type    Stage Gated
+O1      102   NORMAL        NO
+
+[ORIFICES]
+;;Name From To  Type Offset Cd   Gated
+OR1     SU1  O1  SIDE 3      0.65 NO
+
+[XSECTIONS]
+;;Link  Shape       Height Width
+OR1     RECT_CLOSED 1      2      0  0
+
+[INFLOWS]
+;;Node Param TSeries Type Mfactor Sfactor Baseline
+SU1    FLOW  ""      FLOW 1.0     1.0     5
+
+[REPORT]
+NODES ALL
+LINKS ALL

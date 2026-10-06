@@ -1,0 +1,37 @@
+NUM-31: spread routed outfall volume over the runoff step it is applied in
+
+runoff_execute() passed the PREVIOUS runoff step to runoff_getOutfallRunon(),
+which turns the volume an outfall routed onto a subcatchment into a rate,
+vRouted / tStep. The rate is then applied over the CURRENT runoff step, which
+has already been chosen and can be much longer (WET_STEP -> DRY_STEP) or
+shorter, while the mass balance books vRouted. The subcatchment therefore
+received vRouted x newStep / oldStep. Pass the current step instead; the
+pollutant load is converted the same way.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-31_swmm530.patch
+
+diff --git a/src/legacy/engine/runoff.c b/src/legacy/engine/runoff.c
+index bf00bad..608619a 100644
+--- a/src/legacy/engine/runoff.c
++++ b/src/legacy/engine/runoff.c
+@@ -244,7 +244,9 @@ void runoff_execute()
+     for (j = 0; j < Nobjects[SUBCATCH]; j++) subcatch_setOldState(j);
+ 
+     // --- determine any runon from drainage system outfall nodes
+-    if ( oldRunoffStep > 0.0 ) runoff_getOutfallRunon(oldRunoffStep);
++    //     (the volume routed since the last runoff time is applied
++    //     over the runoff step about to be taken)
++    if ( oldRunoffStep > 0.0 ) runoff_getOutfallRunon(runoffStep);
+ 
+     // --- determine runon from upstream subcatchments, and implement snow removal
+     for (j = 0; j < Nobjects[SUBCATCH]; j++)
+@@ -497,7 +499,7 @@ void  runoff_readFromFile(void)
+ 
+ void runoff_getOutfallRunon(double tStep)
+ //
+-//  Input:   tStep = previous runoff time step (sec)
++//  Input:   tStep = current runoff time step (sec)
+ //  Output:  none
+ //  Purpose: adds flow and pollutant loads leaving drainage system outfalls
+ //           during the previous runoff time step to designated subcatchments.

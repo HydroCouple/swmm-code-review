@@ -1,0 +1,28 @@
+CON-20: give a swale the pervious area's infiltration rate, not a diluted one
+
+findNativeInfil() set the native soil infiltration rate that a vegetative
+swale uses (when the subcatchment does not use Green-Ampt) to the
+infiltration volume of the non-LID pervious subarea divided by the whole
+non-LID area. That is the pervious area's rate times its fraction of the
+subcatchment, so a swale in a 90 % impervious subcatchment infiltrated at
+a tenth of the soil's rate. Divide by the pervious subarea's area instead,
+which gives the rate "computed for the pervious area of the subcatchment"
+that the reference manual specifies.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply CON-20_swmm530.patch
+
+diff --git a/src/legacy/engine/lid.c b/src/legacy/engine/lid.c
+index e2ac45a..a812a7c 100644
+--- a/src/legacy/engine/lid.c
++++ b/src/legacy/engine/lid.c
+@@ -1752,7 +1752,8 @@ void findNativeInfil(int j, double tStep)
+     nonLidArea = Subcatch[j].area - Subcatch[j].lidArea;
+     if ( nonLidArea > 0.0 && Subcatch[j].fracImperv < 1.0 )
+     {
+-        NativeInfil = Vinfil / nonLidArea / tStep;
++        NativeInfil = Vinfil / (nonLidArea * Subcatch[j].subArea[PERV].fArea) /
++                      tStep;
+     }
+ 
+     //... otherwise find infil. rate for the subcatchment's rainfall + runon

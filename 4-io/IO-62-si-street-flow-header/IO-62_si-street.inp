@@ -1,0 +1,56 @@
+[TITLE]
+IO-62: one street with a grate inlet, in SI units (CMS)
+
+[OPTIONS]
+FLOW_UNITS CMS
+FLOW_ROUTING DYNWAVE
+LINK_OFFSETS DEPTH
+START_DATE 07/27/2020
+START_TIME 00:00:00
+END_DATE 07/27/2020
+END_TIME 01:00:00
+REPORT_STEP 00:15:00
+WET_STEP 00:05:00
+DRY_STEP 01:00:00
+ROUTING_STEP 0:00:10
+
+[JUNCTIONS]
+;;Name  Elev  MaxDepth  InitDepth  SurDepth  Aponded
+U       30    0         0          0         0
+B       29    0         0          0         0
+C       1     0         0          0         0
+
+[OUTFALLS]
+O       28    FREE NO
+X       0     FREE NO
+
+[CONDUITS]
+;;Name  From  To  Length  N      InOff  OutOff  InitQ  MaxQ
+S1      U     B   100     0.016  0      0       0      0
+S2      B     O   100     0.016  0      0       0      0
+P       C     X   100     0.01   0      0       0      0
+
+[XSECTIONS]
+S1  STREET    Street1  0  0  0  1
+S2  STREET    Street1  0  0  0  1
+P   CIRCULAR  0.6      0  0  0  1
+
+[STREETS]
+;;Name   Tcrown  Hcurb  Sx  nRoad  a  W  Sides
+Street1  7       0.15   2   0.016  0  0  1
+
+[INLETS]
+;;Name  Type   Length  Width  GrateType
+Grate   GRATE  0.6     0.6    P_BAR-30
+
+[INLET_USAGE]
+;;Link  Inlet  CaptureNode  #Inlets
+S1      Grate  C            2
+
+[INFLOWS]
+;;Node  Param  TSeries  Type  Mfactor  Sfactor  Baseline
+U       FLOW   ""       FLOW  1.0      1.0      0.05
+
+[REPORT]
+INPUT NO
+LINKS ALL

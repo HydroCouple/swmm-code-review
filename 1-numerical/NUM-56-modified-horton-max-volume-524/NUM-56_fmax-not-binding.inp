@@ -1,0 +1,52 @@
+[TITLE]
+NUM-56: MODIFIED_HORTON with a maximum infiltration volume Fmax that cannot
+bind. 1 in of rain in the first hour on two identical pervious subcatchments:
+S1 has Fmax = 5 in, S2 has no limit (Fmax = 0). With less rain than Fmax,
+both must infiltrate the same amount.
+
+[OPTIONS]
+FLOW_UNITS           CFS
+INFILTRATION         MODIFIED_HORTON
+FLOW_ROUTING         KINWAVE
+START_DATE           06/01/2020
+START_TIME           00:00:00
+REPORT_START_DATE    06/01/2020
+REPORT_START_TIME    00:00:00
+END_DATE             06/01/2020
+END_TIME             06:00:00
+WET_STEP             00:05:00
+DRY_STEP             01:00:00
+REPORT_STEP          00:05:00
+ROUTING_STEP         0:00:30
+IGNORE_ROUTING       YES
+
+[EVAPORATION]
+CONSTANT         0.0
+
+[RAINGAGES]
+G1   INTENSITY 1:00 1.0 TIMESERIES R1
+
+[SUBCATCHMENTS]
+;;Name Gage Outlet Area %Imperv Width %Slope CurbLen
+S1   G1   O1   1.0   0   100   1.0   0
+S2   G1   O1   1.0   0   100   1.0   0
+
+[SUBAREAS]
+;;Name N-Imperv N-Perv S-Imperv S-Perv PctZero RouteTo
+S1   0.01   0.1   0.05   0.05   0   OUTLET
+S2   0.01   0.1   0.05   0.05   0   OUTLET
+
+[INFILTRATION]
+;;Name f0 fmin decay drytime Fmax
+S1   3.0   0.5   4   7   5.0
+S2   3.0   0.5   4   7   0
+
+[OUTFALLS]
+O1   0   FREE
+
+[TIMESERIES]
+R1   0:00   1.0
+R1   2:00   0.0
+
+[REPORT]
+SUBCATCHMENTS ALL

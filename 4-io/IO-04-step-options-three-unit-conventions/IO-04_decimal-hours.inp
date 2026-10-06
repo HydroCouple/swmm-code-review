@@ -1,0 +1,38 @@
+[TITLE]
+IO-04: clock-time and step options written as decimal hours
+;; START_TIME 6.5 = 06:30, END_TIME 12.5 = 12:30, REPORT_STEP 0.25 = 00:15:00,
+;; ROUTING_STEP 30 = 30 seconds (ROUTING_STEP takes seconds)
+
+[OPTIONS]
+FLOW_UNITS           CFS
+FLOW_ROUTING         KINWAVE
+START_DATE           01/01/2020
+START_TIME           6.5
+REPORT_START_DATE    01/01/2020
+REPORT_START_TIME    6.5
+END_DATE             01/01/2020
+END_TIME             12.5
+REPORT_STEP          0.25
+ROUTING_STEP         30
+
+[JUNCTIONS]
+;;Name Elev MaxDepth InitDepth SurDepth Aponded
+J1   10   5   0   0   0
+
+[OUTFALLS]
+O1   0   FREE   NO
+
+[CONDUITS]
+;;Name From To Length Roughness InOffset OutOffset
+C1   J1   O1   100   0.013   0   0   0   0
+
+[XSECTIONS]
+C1   CIRCULAR   1   0   0   0   1
+
+[INFLOWS]
+;;Node Constituent Series Type Mfactor Sfactor Baseline
+J1   FLOW   ""   FLOW   1.0   1.0   1.0
+
+[REPORT]
+NODES ALL
+LINKS ALL

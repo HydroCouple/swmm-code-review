@@ -1,0 +1,36 @@
+NUM-34: give [GWF] expressions the K of the aquifer being computed
+
+The variable K of a custom groundwater flow expression returns the file-scope
+HydCon, which getUpperPerc() sets only when the upper zone is above field
+capacity. For a drier aquifer K is whatever an earlier subcatchment (or an
+earlier ODE stage) left there, or 0. Compute HydCon = Ks exp((theta - phi)
+HCO), the unsaturated conductivity at the current moisture content, in
+getFluxes() before the expressions are evaluated, for every aquifer. The
+percolation rate is unchanged; K is unchanged wherever it was set before.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-34_swmm530.patch
+
+diff --git a/src/legacy/engine/gwater.c b/src/legacy/engine/gwater.c
+index d511143..ca32aaf 100644
+--- a/src/legacy/engine/gwater.c
++++ b/src/legacy/engine/gwater.c
+@@ -660,6 +660,10 @@ void  getFluxes(double theta, double lowerDepth)
+     // --- find evaporation rate from both zones
+     getEvapRates(theta, upperDepth);
+ 
++    // --- unsaturated hyd. conductivity at current moisture content
++    //     (variable K of custom GW flow expressions)
++    HydCon = A.conductivity * exp((theta - A.porosity) * A.conductSlope);
++
+     // --- find percolation rate from upper to lower zone
+     UpperPerc = getUpperPerc(theta, upperDepth);
+     UpperPerc = MIN(UpperPerc, MaxUpperPerc);
+@@ -800,7 +804,6 @@ double getUpperPerc(double theta, double upperDepth)
+     dhdz = 1.0 + A.tensionSlope * 2.0 * delta / upperDepth;
+ 
+     // --- compute upper zone percolation rate
+-    HydCon = hydcon;
+     return hydcon * dhdz;
+ }
+ 

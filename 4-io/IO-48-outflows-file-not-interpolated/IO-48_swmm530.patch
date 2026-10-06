@@ -1,0 +1,80 @@
+IO-48: interpolate the routing interface file to the report time
+
+output_saveResults() writes node and link results interpolated to the report
+time between OldRoutingTime and NewRoutingTime, but iface_saveOutletResults()
+wrote Node.inflow and Node.newQual, the values at NewRoutingTime, under the
+report date. Pass the interpolation weight to iface_saveOutletResults() and
+write (1-f)*old + f*new for flow and quality, as node_getResults() does. The
+initial record written when the interface file is opened uses f = 1.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-48_swmm530.patch
+
+diff --git a/src/legacy/engine/funcs.h b/src/legacy/engine/funcs.h
+index 20e8975..caf2c4a 100644
+--- a/src/legacy/engine/funcs.h
++++ b/src/legacy/engine/funcs.h
+@@ -1911,7 +1911,7 @@ int iface_getNumIfaceNodes(DateTime aDate);
+ int iface_getIfaceNode(int index);
+ double iface_getIfaceFlow(int index);
+ double iface_getIfaceQual(int index, int pollut);
+-void iface_saveOutletResults(DateTime reportDate, FILE *file);
++void iface_saveOutletResults(DateTime reportDate, double f, FILE *file);
+ /*!
+  * \}
+  */
+diff --git a/src/legacy/engine/iface.c b/src/legacy/engine/iface.c
+index 23272de..cb0922a 100644
+--- a/src/legacy/engine/iface.c
++++ b/src/legacy/engine/iface.c
+@@ -308,9 +308,10 @@ double iface_getIfaceQual(int index, int pollut)
+ 
+ //=============================================================================
+ 
+-void iface_saveOutletResults(DateTime reportDate, FILE* file)
++void iface_saveOutletResults(DateTime reportDate, double f, FILE* file)
+ //
+ //  Input:   reportDate = reporting date/time
++//           f = weight of the new routing state at the reporting time
+ //           file = ptr. to interface file
+ //  Output:  none
+ //  Purpose: saves system outflows to routing interface file.
+@@ -330,10 +331,12 @@ void iface_saveOutletResults(DateTime reportDate, FILE* file)
+         // --- write node ID, date, flow, and quality to file
+         fprintf(file, "\n%-16s", Node[i].ID);
+         fprintf(file, "%s", theDate);
+-        fprintf(file, " %-10f", Node[i].inflow * UCF(FLOW));
++        fprintf(file, " %-10f",
++            ((1.0 - f) * Node[i].oldFlowInflow + f * Node[i].inflow) * UCF(FLOW));
+         for ( p = 0; p < Nobjects[POLLUT]; p++ )
+         {
+-            fprintf(file, " %-10f", Node[i].newQual[p]);
++            fprintf(file, " %-10f",
++                (1.0 - f) * Node[i].oldQual[p] + f * Node[i].newQual[p]);
+         }
+     }
+ }
+@@ -398,7 +401,7 @@ void openFileForOutput()
+     // --- if reporting starts immediately, save initial outlet values
+     if ( ReportStart == StartDateTime )
+     {
+-        iface_saveOutletResults(ReportStart, Foutflows.file);
++        iface_saveOutletResults(ReportStart, 1.0, Foutflows.file);
+     }
+ }
+ 
+diff --git a/src/legacy/engine/output.c b/src/legacy/engine/output.c
+index f57370e..72c6bfa 100644
+--- a/src/legacy/engine/output.c
++++ b/src/legacy/engine/output.c
+@@ -521,7 +521,9 @@ void output_saveResults(double reportTime)
+ 
+     // --- save outfall flows to interface file if called for
+     if ( Foutflows.mode == SAVE_FILE && !IgnoreRouting ) 
+-        iface_saveOutletResults(reportDate, Foutflows.file);
++        iface_saveOutletResults(reportDate,
++            (reportTime - OldRoutingTime) / (NewRoutingTime - OldRoutingTime),
++            Foutflows.file);
+     Nperiods++;
+ }
+ 

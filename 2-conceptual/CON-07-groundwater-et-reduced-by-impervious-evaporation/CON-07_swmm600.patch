@@ -1,0 +1,34 @@
+CON-07: subtract only pervious-surface evaporation from the GW ET budget
+
+RunoffSolver::execute() reproduced legacy's `if (i == PERV) Vpevap += Vevap;`,
+which adds the running total of all three subareas' surface evaporation, so
+water evaporating from the impervious surface took ET away from the
+aquifer. Vol I eq. 5-11/5-12 subtract only the pervious surface's
+evaporation. Add only the pervious subarea's own evaporation, as
+CON-07_swmm530.patch does for 5.3.0.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply CON-07_swmm600.patch
+
+diff --git a/src/engine/hydrology/Runoff.cpp b/src/engine/hydrology/Runoff.cpp
+index aa81dc7..80bd07c 100644
+--- a/src/engine/hydrology/Runoff.cpp
++++ b/src/engine/hydrology/Runoff.cpp
+@@ -473,14 +473,9 @@ void RunoffSolver::execute(SimulationContext& ctx, double dt, double evap_rate_i
+ 
+             // Step 3.5: Update mass balance volumes (legacy lines 934-937)
+             Vevap  += surfEvap * subarea_area * dt;
+-            // legacy subcatch.c:984 `if (i == PERV) Vpevap += Vevap;` — the
+-            // WHOLE subcatchment's surface evaporation so far (the pervious
+-            // subarea is processed last, after both impervious ones), not
+-            // the pervious share. gwater_getGroundwater subtracts it from
+-            // MaxEvap = Evap.rate * FracPerv, so an impervious cover
+-            // evaporating at the full rate leaves the aquifer no evaporation
+-            // (runoff41-sw5: legacy's soil moisture holds at field capacity).
+-            if (isPervious) Vpevap += Vevap;
++            // Only the pervious subarea's surface evaporation is subtracted
++            // from the aquifer's ET budget (Vol I eq. 5-11/5-12).
++            if (isPervious) Vpevap += surfEvap * subarea_area * dt;
+             Vinfil += infil * subarea_area * dt;
+ 
+             // Step 3.6: Loss check shortcut (legacy lines 945-948)

@@ -1,0 +1,54 @@
+[TITLE]
+NUM-40: a monthly RAINFALL adjustment of 2.0 in January and 3.0 in February
+
+[OPTIONS]
+FLOW_UNITS       CFS
+INFILTRATION     HORTON
+FLOW_ROUTING     KINWAVE
+START_DATE       01/31/2020
+START_TIME       00:00:00
+END_DATE         02/02/2020
+END_TIME         00:00:00
+REPORT_STEP      01:00:00
+WET_STEP         00:05:00
+DRY_STEP         01:00:00
+ROUTING_STEP     60
+
+[EVAPORATION]
+CONSTANT 0.0
+
+[ADJUSTMENTS]
+;;        Jan  Feb  Mar  Apr  May  Jun  Jul  Aug  Sep  Oct  Nov  Dec
+RAINFALL  2.0  3.0  1.0  1.0  1.0  1.0  1.0  1.0  1.0  1.0  1.0  1.0
+
+[RAINGAGES]
+;;Name  Format  Interval  SCF  Source
+G1      VOLUME  1:00      1.0  TIMESERIES  STORMS
+
+[TIMESERIES]
+;; 1 in on 31 Jan 06:00-07:00 and 1 in on 1 Feb 06:00-07:00. Adjusted, the
+;; storms are 2 in and 3 in. The zero records only set the series' recording
+;; interval to 1 hour (they are skipped when the gage reads ahead).
+STORMS  01/31/2020  06:00  1.0
+STORMS  01/31/2020  07:00  0.0
+STORMS  02/01/2020  06:00  1.0
+STORMS  02/01/2020  07:00  0.0
+
+[SUBCATCHMENTS]
+;;Name  Gage  Outlet  Area  %Imperv  Width  %Slope  CurbLen
+S1      G1    O1      10    100      500    1       0
+
+[SUBAREAS]
+;;Subcatch  N-Imperv  N-Perv  S-Imperv  S-Perv  PctZero  RouteTo
+S1          0.01      0.1     0         0       0        OUTLET
+
+[INFILTRATION]
+;;Subcatch  MaxRate  MinRate  Decay  DryTime  MaxInfil
+S1          0        0        4      7        0
+
+[OUTFALLS]
+;;Name  Elev  Type
+O1      0     FREE
+
+[REPORT]
+SUBCATCHMENTS ALL

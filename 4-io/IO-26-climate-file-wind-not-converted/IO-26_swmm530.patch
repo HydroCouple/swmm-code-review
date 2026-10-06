@@ -1,0 +1,29 @@
+IO-26: convert wind speed from a user-prepared climate file to mph
+
+parseUserFileLine() stored the wind speed column as read. SWMM works in mph
+internally, and the manual says a user-prepared climate file gives wind speed
+in km/hour for metric units, as the WINDSPEED MONTHLY values are (which
+setWind() divides by UCF(WINDSPEED)). In SI models the file's wind speed was
+used 1.608 times too large in rain-on-snow melt and reported 1.608 times too
+large by swmm_getValue(swmm_WINDSPEED). Divide by UCF(WINDSPEED) when the
+value is read. US models (factor 1) are unchanged.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-26_swmm530.patch
+
+diff --git a/src/legacy/engine/climate.c b/src/legacy/engine/climate.c
+index c343b93..50079ba 100644
+--- a/src/legacy/engine/climate.c
++++ b/src/legacy/engine/climate.c
+@@ -1604,9 +1604,9 @@ void parseUserFileLine()
+     if (strlen(s2) > 0 && *s2 != '*')
+         FileData[EVAP][d] = atof(s2);
+ 
+-    // --- process WIND
++    // --- process WIND (km/hr for SI units ==> mph)
+     if (strlen(s3) > 0 && *s3 != '*')
+-        FileData[WIND][d] = atof(s3);
++        FileData[WIND][d] = atof(s3) / UCF(WINDSPEED);
+ }
+ 
+ /*!

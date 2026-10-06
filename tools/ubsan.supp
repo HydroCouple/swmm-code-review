@@ -1,0 +1,12 @@
+# UndefinedBehaviorSanitizer suppressions used by tools/run-test.sh.
+#
+# Only float-cast-overflow is recoverable in the review builds (tools/config.sh),
+# so only these two known, reported reports can be silenced. Without the
+# suppressions most decks with rain gages stop at the first one, before the
+# behaviour a test is looking for. Issues whose test is about one of these
+# reports contain a file named "no-ubsan-suppressions".
+#
+# CRASH-01: datetime_timeDiff casts a seconds difference to int.
+float-cast-overflow:datetime_timeDiff
+# 5.2.4 only (fixed in 5.3.0): gage_validate casts a huge interval to int for a one-point series.
+float-cast-overflow:gage_validate

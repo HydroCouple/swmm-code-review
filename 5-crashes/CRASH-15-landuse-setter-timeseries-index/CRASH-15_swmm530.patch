@@ -1,0 +1,40 @@
+CRASH-15: reject an external-buildup time series index that does not exist
+
+For an EXTERNAL buildup function, coefficient 3 is the index of the
+loading time series, and landuse_getExternalBuildup() reads
+Tseries[(int)floor(coeff[2])] at every runoff step. setLanduseValue()
+accepted any coefficient 3 >= 0 and any function code, so an EXTERNAL
+function could be given, or switched to, an index past the end of Tseries[]
+(an out-of-bounds read, or a crash with no time series at all) or a value
+too large for an int (undefined conversion). Return ERR_API_PROPERTY_VALUE
+when the setter would leave an EXTERNAL function with coefficient 3 not
+below the number of time series.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply CRASH-15_swmm530.patch
+
+diff --git a/src/legacy/engine/swmm5.c b/src/legacy/engine/swmm5.c
+index 4096c9a..733c91a 100644
+--- a/src/legacy/engine/swmm5.c
++++ b/src/legacy/engine/swmm5.c
+@@ -1817,6 +1817,10 @@ int setLanduseValue(int property, int index, int subIndex, double value)
+     switch (property)
+     {
+     case swmm_LANDUSE_BUILDUP_FUNC:
++        // --- coefficient 3 of an external function is a time series index
++        if ((int)value == EXTERNAL_BUILDUP &&
++            Landuse[index].buildupFunc[subIndex].coeff[2] >= Nobjects[TSERIES])
++            return ERR_API_PROPERTY_VALUE;
+         Landuse[index].buildupFunc[subIndex].funcType = (int)value;
+         recomputeBuildupMaxDays(index, subIndex);
+         return 0;
+@@ -1832,6 +1836,9 @@ int setLanduseValue(int property, int index, int subIndex, double value)
+         return 0;
+     case swmm_LANDUSE_BUILDUP_COEFF3:
+         if (value < 0.0) return ERR_API_PROPERTY_VALUE;
++        if (Landuse[index].buildupFunc[subIndex].funcType == EXTERNAL_BUILDUP &&
++            value >= Nobjects[TSERIES])
++            return ERR_API_PROPERTY_VALUE;
+         Landuse[index].buildupFunc[subIndex].coeff[2] = value;
+         recomputeBuildupMaxDays(index, subIndex);
+         return 0;

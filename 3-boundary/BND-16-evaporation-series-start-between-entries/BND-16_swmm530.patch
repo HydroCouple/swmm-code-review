@@ -1,0 +1,45 @@
+BND-16: start a time-series evaporation on the entry in effect at the start date
+
+When the simulation starts between two entries of the [EVAPORATION] TIMESERIES
+series, climate_initState() scanned forward to the first entry on or after the
+start date and used that entry's rate from the start. During the run each
+entry applies from its own date, so the period from the start date to the next
+entry got the next period's rate. Move instead to the last entry on or before
+the start date and use its rate; the next entry then takes over at its date as
+usual. Runs that start on or before the first entry are unchanged.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply BND-16_swmm530.patch
+
+diff --git a/src/legacy/engine/climate.c b/src/legacy/engine/climate.c
+index c343b93..c4c0012 100644
+--- a/src/legacy/engine/climate.c
++++ b/src/legacy/engine/climate.c
+@@ -964,6 +964,9 @@ void climate_openFile()
+  */
+ void climate_initState()
+ {
++    int i, n;
++    double d, e;
++
+     LastDay = NO_DATE;
+     Temp.tmax = MISSING;
+     Temp.apiTemp = MISSING;
+@@ -982,7 +985,16 @@ void climate_initState()
+                             &NextEvapDate, &NextEvapRate);
+         if (NextEvapDate < StartDate)
+         {
+-            setNextEvapDate(StartDate);
++            // --- move to the last entry on or before StartDate: its rate
++            //     is in effect until the next entry's date
++            n = 0;
++            while (table_getNextEntry(&Tseries[Evap.tSeries], &d, &e) &&
++                   d <= StartDate) n++;
++            table_getFirstEntry(&Tseries[Evap.tSeries],
++                                &NextEvapDate, &NextEvapRate);
++            for (i = 0; i < n; i++)
++                table_getNextEntry(&Tseries[Evap.tSeries],
++                                   &NextEvapDate, &NextEvapRate);
+         }
+         Evap.rate = NextEvapRate / UCF(EVAPRATE);
+ 

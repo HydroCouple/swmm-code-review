@@ -1,0 +1,25 @@
+NUM-20: give standard arch size code 31 its own full hydraulic radius
+
+Rfull_Arch[] in src/engine/hydraulics/xsect_tables.hpp lists 0.773 ft for both
+size codes 30 (31 x 40 in) and 31 (36 x 46 in) of the corrugated-steel 3 x 1
+in pipe arches. Release 5.1.008 corrected the same duplication in Yfull_Arch[]
+("31,31" -> "31,36") but not in Rfull_Arch[]. Every other entry of the group
+is 0.2991 x rise, the ratio that xsect_setParams() also uses for non-standard
+arches; for a 36 in rise that is 0.897 ft.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-20_swmm600.patch
+
+diff --git a/src/engine/hydraulics/xsect_tables.hpp b/src/engine/hydraulics/xsect_tables.hpp
+index 694fc94..5ac781b 100644
+--- a/src/engine/hydraulics/xsect_tables.hpp
++++ b/src/engine/hydraulics/xsect_tables.hpp
+@@ -542,7 +542,7 @@ static constexpr double Afull_Arch[102] = {
+ static constexpr double Rfull_Arch[102] = {
+     0.25,0.3,0.36,0.45,0.56,0.68,0.8,0.9,1.01,1.13,1.35,
+     1.57,1.77,1.92,2.17,2.42,2.65,0.324,0.374,0.449,0.499,0.598,0.723,
+-    0.823,0.947,1.072,1.171,1.296,1.421,0.773,0.773,1.022,1.147,1.271,
++    0.823,0.947,1.072,1.171,1.296,1.421,0.773,0.897,1.022,1.147,1.271,
+     1.371,1.471,1.570,1.670,1.770,1.869,1.969,2.069,2.168,2.268,1.371,
+     1.421,1.471,1.520,1.570,1.620,1.670,1.720,1.770,1.820,1.869,1.919,
+     1.969,2.019,2.069,2.119,2.168,2.218,2.268,2.318,2.368,2.418,2.493,

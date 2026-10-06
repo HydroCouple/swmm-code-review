@@ -1,0 +1,105 @@
+NUM-36: send the groundwater volume the aquifer released, not a trapezoid
+
+gwater_getGroundwater() advances the aquifer with the adaptive ODE solver,
+in which the lateral GW flow varies continuously, but then keeps only the
+end-of-step rate: routing interpolates between the previous and the new
+end-of-step rate (from 0 on the first step), and the mass balance books
+their trapezoid. For a curved recession that volume differs from what left
+the aquifer, by +13.7 % with a 1-day DRY_STEP. Integrate the outflow volume
+as a third ODE component and use its step-average rate as both the old and
+the new GW flow, so routing, the GW mass balance and the GW statistics all
+receive the volume that the aquifer state lost.
+
+The third variable is the total aquifer depth minus the outflow volume, so
+the solver's relative error test holds it to the accuracy of the zone
+depths; a variable starting at 0 would make the solver give up where GW
+flow begins.
+
+Requires: IO-46
+Requires: IO-47
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-36_swmm530.patch
+
+diff --git a/src/legacy/engine/gwater.c b/src/legacy/engine/gwater.c
+index d511143..45034e2 100644
+--- a/src/legacy/engine/gwater.c
++++ b/src/legacy/engine/gwater.c
+@@ -490,7 +490,8 @@ void gwater_getGroundwater(int j, double evap, double infil, double tStep)
+ //
+ {
+     int    n;                          // node exchanging groundwater
+-    double x[2];                       // upper moisture content & lower depth 
++    double x[3];                       // upper moisture content, lower depth
++                                       // & TotalDepth - GW outflow volume
+     double vUpper;                     // upper vol. available for percolation
+     double nodeFlow;                   // max. possible GW flow from node
+ 
+@@ -555,6 +556,11 @@ void gwater_getGroundwater(int j, double evap, double infil, double tStep)
+     x[THETA] = GW->theta;
+     x[LOWERDEPTH] = GW->lowerDepth;
+ 
++    // --- 3rd variable is TotalDepth minus the lateral GW outflow volume
++    //     (counted down from TotalDepth so that the ODE solver's relative
++    //     error test holds it to the same accuracy as the zone depths)
++    x[2] = TotalDepth;
++
+     // --- set limit on percolation rate from upper to lower GW zone
+     vUpper = (TotalDepth - x[LOWERDEPTH]) * (x[THETA] - A.fieldCapacity);
+     vUpper = MAX(0.0, vUpper); 
+@@ -573,7 +579,7 @@ void gwater_getGroundwater(int j, double evap, double infil, double tStep)
+     
+     // --- integrate eqns. for d(Theta)/dt and d(LowerDepth)/dt
+     //     NOTE: ODE solver must have been initialized previously
+-    odesolve_integrate(x, 2, 0, tStep, GWTOL, tStep, getDxDt);
++    odesolve_integrate(x, 3, 0, tStep, GWTOL, tStep, getDxDt);
+     
+     // --- keep state variables within allowable bounds
+     x[THETA] = MAX(x[THETA], A.wiltingPoint);
+@@ -592,8 +598,11 @@ void gwater_getGroundwater(int j, double evap, double infil, double tStep)
+     GW->theta = x[THETA];
+     GW->lowerDepth  = x[LOWERDEPTH];
+     getFluxes(GW->theta, GW->lowerDepth);
+-    GW->oldFlow = GW->newFlow;
+-    GW->newFlow = GWFlow;
++
++    // --- GW flow sent to the node over the step is the average rate
++    //     of the outflow volume integrated by the ODE solver
++    GW->oldFlow = (TotalDepth - x[2]) / tStep;
++    GW->newFlow = GW->oldFlow;
+     GW->evapLoss = UpperEvap + LowerEvap;
+ 
+     //--- find max. infiltration volume (as depth over
+@@ -606,7 +615,7 @@ void gwater_getGroundwater(int j, double evap, double infil, double tStep)
+     updateMassBal(Area, tStep);
+ 
+     // --- update GW statistics 
+-    stats_updateGwaterStats(j, infil, GW->evapLoss, GWFlow, LowerLoss,
++    stats_updateGwaterStats(j, infil, GW->evapLoss, GW->newFlow, LowerLoss,
+         GW->theta, GW->lowerDepth + GW->bottomElev, tStep);
+ }
+ 
+@@ -716,6 +725,9 @@ void  getDxDt(double t, double* x, double* dxdt)
+         dxdt[LOWERDEPTH] = qLower / denom;
+     else
+         dxdt[LOWERDEPTH] = 0.0;
++
++    // --- 3rd variable decreases by the lateral GW outflow
++    dxdt[2] = -GWFlow;
+ }
+ 
+ //=============================================================================
+diff --git a/src/legacy/engine/runoff.c b/src/legacy/engine/runoff.c
+index 76a3749..a9adb26 100644
+--- a/src/legacy/engine/runoff.c
++++ b/src/legacy/engine/runoff.c
+@@ -471,6 +471,9 @@ void  runoff_readFromFile(void)
+             if ( Subcatch[j].area > 0.0 )
+                 gw->newFlow = SubcatchResults[SUBCATCH_GW_FLOW] / UCF(FLOW) /
+                               Subcatch[j].area;
++            // --- the saved flow is the step's average rate, held over
++            //     the step, as gwater_getGroundwater() delivers it
++            gw->oldFlow    = gw->newFlow;
+             gw->lowerDepth = SubcatchResults[SUBCATCH_GW_ELEV] / UCF(LENGTH) -
+                              gw->bottomElev;
+             gw->theta      = SubcatchResults[SUBCATCH_SOIL_MOIST];

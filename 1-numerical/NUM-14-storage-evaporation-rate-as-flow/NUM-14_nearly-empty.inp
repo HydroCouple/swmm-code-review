@@ -1,0 +1,37 @@
+[TITLE]
+NUM-14: a 1000 ft2 storage unit holding 5e-5 ft3 (below SWMM's FUDGE of
+1e-4 ft3), no inflow, constant evaporation 1 in/day, Fevap 1.
+
+[OPTIONS]
+FLOW_UNITS           CFS
+FLOW_ROUTING         DYNWAVE
+START_DATE           01/01/2020
+START_TIME           00:00:00
+REPORT_START_DATE    01/01/2020
+REPORT_START_TIME    00:00:00
+END_DATE             01/01/2020
+END_TIME             00:10:00
+REPORT_STEP          00:05:00
+WET_STEP             00:05:00
+DRY_STEP             00:05:00
+ROUTING_STEP         10
+
+[EVAPORATION]
+CONSTANT  1.0
+
+[STORAGE]
+;;Name Elev MaxDepth InitDepth  Shape      A1 A2 A0   Ysur Fevap
+S1     100  10       0.00000005 FUNCTIONAL 0  0  1000 0    1
+
+[OUTFALLS]
+O1     90   FREE
+
+[CONDUITS]
+;;Outlet at 5 ft: never reached
+C1     S1   O1  100  0.013 5 0
+
+[XSECTIONS]
+C1     CIRCULAR 0.5 0 0 0 1
+
+[REPORT]
+NODES ALL

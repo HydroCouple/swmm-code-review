@@ -1,0 +1,90 @@
+IO-50: report a continuity error from NaN totals as NaN, not 0.000
+
+The continuity tables in DefaultReportPlugin (runoff quality, groundwater,
+flow routing, quality routing), the runoff/routing/groundwater error
+functions of SimulationContext::MassBalance and
+swmm_get_quality_continuity_error() copy the legacy three-branch formula
+and return 0 when the totals are NaN. Return NaN instead. Finite ledgers
+are unchanged.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-50_swmm600.patch
+
+diff --git a/src/engine/core/SimulationContext.hpp b/src/engine/core/SimulationContext.hpp
+index 4038a9e..26a5114 100644
+--- a/src/engine/core/SimulationContext.hpp
++++ b/src/engine/core/SimulationContext.hpp
+@@ -1335,6 +1335,7 @@ struct SimulationContext {
+                                runoff_lid_drain +
+                                runoff_final_store + runoff_snowremov +
+                                runoff_final_snow;
++            if (std::isnan(total_in) || std::isnan(total_out)) return std::nan("");
+             return (total_in > 0.0) ? (total_in - total_out) / total_in : 0.0;
+         }
+ 
+@@ -1348,6 +1349,7 @@ struct SimulationContext {
+                                routing_outflow +
+                                routing_evap_loss + routing_seep_loss +
+                                routing_final_storage;
++            if (std::isnan(total_in) || std::isnan(total_out)) return std::nan("");
+             return (total_in > 0.0) ? (total_in - total_out) / total_in : 0.0;
+         }
+ 
+@@ -1356,6 +1358,7 @@ struct SimulationContext {
+             double total_in  = gw_infil + gw_init_storage;
+             double total_out = gw_upper_evap + gw_lower_evap + gw_lower_perc +
+                                gw_lateral_flow + gw_final_storage;
++            if (std::isnan(total_in) || std::isnan(total_out)) return std::nan("");
+             return (total_in > 0.0) ? (total_in - total_out) / total_in : 0.0;
+         }
+     } mass_balance;
+diff --git a/src/engine/core/openswmm_massbalance_impl.cpp b/src/engine/core/openswmm_massbalance_impl.cpp
+index 8ccaf0f..193edf9 100644
+--- a/src/engine/core/openswmm_massbalance_impl.cpp
++++ b/src/engine/core/openswmm_massbalance_impl.cpp
+@@ -99,6 +99,8 @@ SWMM_ENGINE_API int swmm_get_quality_continuity_error(SWMM_Engine engine,
+         *error = (in_total - out_total) / in_total;
+     } else if (out_total > 0.0) {
+         *error = (in_total - out_total) / out_total;
++    } else if (std::isnan(in_total) || std::isnan(out_total)) {
++        *error = std::nan("");
+     } else {
+         *error = 0.0;
+     }
+diff --git a/src/engine/plugins/DefaultReportPlugin.cpp b/src/engine/plugins/DefaultReportPlugin.cpp
+index 36a8dbb..362f119 100644
+--- a/src/engine/plugins/DefaultReportPlugin.cpp
++++ b/src/engine/plugins/DefaultReportPlugin.cpp
+@@ -1025,6 +1025,7 @@ void DefaultReportPlugin::write_results(std::FILE* f,
+             if (std::fabs(in_ - out_) < 0.001) err = 0.0;
+             else if (in_ > 0.0)  err = 100.0 * (1.0 - out_ / in_);
+             else if (out_ > 0.0) err = 100.0 * (in_ / out_ - 1.0);
++            else if (std::isnan(in_) || std::isnan(out_)) err = std::nan("");
+             max_err = std::max(max_err, err);
+             auto& v = vals[static_cast<std::size_t>(p)];
+             v = { at(mb.qual_init_buildup, p), at(mb.qual_surface_buildup, p),
+@@ -1124,6 +1125,8 @@ void DefaultReportPlugin::write_results(std::FILE* f,
+             pctError = 100.0 * (1.0 - totalOut / totalIn);
+         else if (totalOut > 0.0)
+             pctError = 100.0 * (totalIn / totalOut - 1.0);
++        else if (std::isnan(totalIn) || std::isnan(totalOut))
++            pctError = std::nan("");
+ 
+         std::fprintf(f, "\n  Continuity Error (%%) .....%14.3f", pctError);
+ 
+@@ -1202,6 +1205,7 @@ void DefaultReportPlugin::write_results(std::FILE* f,
+             if (std::fabs(tin - tout) < 1.0)   pct = 0.0;
+             else if (std::fabs(tin) > 0.0)     pct = 100.0 * (1.0 - tout / tin);
+             else if (std::fabs(tout) > 0.0)    pct = 100.0 * (tin / tout - 1.0);
++            else if (std::isnan(tin) || std::isnan(tout)) pct = std::nan("");
+             std::fprintf(f, "\n  Continuity Error (%%) .....%14.3f", pct);
+         }
+     }
+@@ -1469,6 +1473,7 @@ void DefaultReportPlugin::write_results(std::FILE* f,
+             if (std::fabs(in_ - out_) < 0.001) err = 0.0;
+             else if (in_ > 0.0)  err = 100.0 * (1.0 - out_ / in_);
+             else if (out_ > 0.0) err = 100.0 * (in_ / out_ - 1.0);
++            else if (std::isnan(in_) || std::isnan(out_)) err = std::nan("");
+             if (std::fabs(err) > std::fabs(max_err)) max_err = err;
+             const MassUnits mu = (static_cast<std::size_t>(p) < ctx.pollutants.units.size())
+                 ? ctx.pollutants.units[static_cast<std::size_t>(p)] : MassUnits::MG_PER_L;

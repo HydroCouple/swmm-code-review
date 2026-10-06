@@ -1,0 +1,72 @@
+[TITLE]
+IO-32: on-grade 2 ft x 2 ft P_BAR-50x100 grates on an 8% street without a
+gutter depression (Sx 2%, n 0.016), carrying 6 cfs (street 1) and 12 cfs
+(street 2).
+
+[OPTIONS]
+FLOW_UNITS CFS
+FLOW_ROUTING DYNWAVE
+LINK_OFFSETS DEPTH
+START_DATE 07/27/2020
+START_TIME 00:00:00
+END_DATE 07/27/2020
+END_TIME 03:00:00
+REPORT_STEP 00:15:00
+WET_STEP 00:05:00
+DRY_STEP 01:00:00
+ROUTING_STEP 0:00:05
+
+[JUNCTIONS]
+;;Name  Elev  MaxDepth  InitDepth  SurDepth  Aponded
+U1      100   0         0          0         0
+B1       68   0         0          0         0
+C1        2   0         0          0         0
+U2      100   0         0          0         0
+B2       68   0         0          0         0
+C2        2   0         0          0         0
+
+[OUTFALLS]
+O1  36  FREE NO
+X1   0  FREE NO
+O2  36  FREE NO
+X2   0  FREE NO
+
+[CONDUITS]
+;;Name  From  To  Length  N      InOff  OutOff  InitQ  MaxQ
+S1a     U1    B1  400     0.016  0      0       0      0
+S1b     B1    O1  400     0.016  0      0       0      0
+P1      C1    X1  400     0.01   0      0       0      0
+S2a     U2    B2  400     0.016  0      0       0      0
+S2b     B2    O2  400     0.016  0      0       0      0
+P2      C2    X2  400     0.01   0      0       0      0
+
+[XSECTIONS]
+S1a  STREET    Street1  0  0  0  1
+S1b  STREET    Street1  0  0  0  1
+P1   CIRCULAR  2        0  0  0  1
+S2a  STREET    Street1  0  0  0  1
+S2b  STREET    Street1  0  0  0  1
+P2   CIRCULAR  2        0  0  0  1
+
+[STREETS]
+;;Name   Tcrown  Hcurb  Sx  nRoad  a  W  Sides
+Street1  20      0.5    2   0.016  0  0  1
+
+[INLETS]
+;;Name  Type   Length  Width  GrateType
+Grate   GRATE  2       2      P_BAR-50x100
+
+[INLET_USAGE]
+;;Link  Inlet  CaptureNode
+S1a     Grate  C1
+S2a     Grate  C2
+
+[INFLOWS]
+;;Node  Param  TSeries  Type  Mfactor  Sfactor  Baseline
+U1      FLOW   ""       FLOW  1.0      1.0      6
+U2      FLOW   ""       FLOW  1.0      1.0      12
+
+[REPORT]
+INPUT NO
+NODES ALL
+LINKS ALL

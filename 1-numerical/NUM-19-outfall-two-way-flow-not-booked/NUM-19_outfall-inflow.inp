@@ -1,0 +1,46 @@
+[TITLE]
+NUM-19: a FIXED-stage outfall feeds the network and has a 1 cfs FLOW inflow
+
+[OPTIONS]
+FLOW_UNITS           CFS
+FLOW_ROUTING         DYNWAVE
+START_DATE           01/01/2020
+START_TIME           00:00:00
+REPORT_START_DATE    01/01/2020
+REPORT_START_TIME    00:00:00
+END_DATE             01/01/2020
+END_TIME             12:00:00
+REPORT_STEP          00:15:00
+WET_STEP             00:05:00
+DRY_STEP             01:00:00
+ROUTING_STEP         5
+
+[JUNCTIONS]
+;;Name  Elev  MaxDepth InitDepth SurDepth Aponded
+J1      99    10        0        0        0
+
+;; OHI's stage (102 ft) is 2 ft above its invert, so a steady flow runs from
+;; OHI through C1 and C2 to the free outfall OLO.
+[OUTFALLS]
+;;Name  Elev  Type  Stage Gated
+OHI     100   FIXED 102   NO
+OLO     95    FREE        NO
+
+[CONDUITS]
+;;Name From To Length Rough InOff OutOff InitFlow
+C1      OHI  J1  400   0.013 0     0      0
+C2      J1   OLO 400   0.013 0     0      0
+
+[XSECTIONS]
+C1      CIRCULAR 2 0 0 0 1
+C2      CIRCULAR 2 0 0 0 1
+
+;; A 1 cfs inflow at OHI itself (e.g. a pipe that discharges straight to the
+;; receiving water). OHI then both receives flow and sends flow.
+[INFLOWS]
+;;Node Param TSeries Type Mfactor Sfactor Baseline
+OHI    FLOW  ""      FLOW 1.0     1.0     1.0
+
+[REPORT]
+NODES ALL
+LINKS ALL

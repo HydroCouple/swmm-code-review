@@ -1,0 +1,42 @@
+IO-42: refuse a legacy hot start file with data left over; name short reads
+
+HotStartManager::apply_legacy_routing() checks each read, but a short read
+returned 1 without an error text, so the run stopped with "USE HOTSTART: "
+and nothing else. It also never checked that the file ends where the model's
+records end, so a file saved from a model with a storage unit where this model
+has a junction (one float more) was applied with every later value shifted.
+Set a message that covers every short read, and refuse a file with data left
+over after the link records. Files that match the model are read as before.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-42_swmm600.patch
+
+diff --git a/src/engine/core/HotStartManager.cpp b/src/engine/core/HotStartManager.cpp
+index 29c8c0d..f8cdd3e 100644
+--- a/src/engine/core/HotStartManager.cpp
++++ b/src/engine/core/HotStartManager.cpp
+@@ -1317,6 +1317,10 @@ int HotStartManager::apply_legacy_routing(
+         }
+     }
+ 
++    // --- message for every short read below that does not set its own ---
++    tl_last_io_error = "Hotstart file '" + path +
++        "' ended before all records the model needs were read";
++
+     // --- header object counts (legacy initializeFromHotstartFile) ---
+     int32_t nSub = 0, nLand = 0, nNodes = 0, nLinks = 0, nPollut = 0, flowUnits = 0;
+     if (version >= 2) { if (!read_pod(file, nSub))  return 1; } else nSub = ctx.n_subcatches();
+@@ -1447,6 +1451,13 @@ int HotStartManager::apply_legacy_routing(
+         for (int j = 0; j < nPollut; ++j) { float q = 0.0f; if (!read_pod(file, q)) return 1; }
+     }
+ 
++    // --- data left over means the file does not match the model's layout ---
++    if (file.peek() != std::char_traits<char>::eof()) {
++        tl_last_io_error = "Hotstart file '" + path +
++            "' holds more data than the model's nodes and links need";
++        return 1;
++    }
++
+     (void)flowUnits;
+     (void)nLand;
+     (void)warn_cb;

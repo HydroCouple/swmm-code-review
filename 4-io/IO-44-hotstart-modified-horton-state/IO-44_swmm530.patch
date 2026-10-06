@@ -1,0 +1,32 @@
+IO-44: save and restore Modified Horton's cumulative infiltration Fmh
+
+Commit 353f8fe2 made modHorton_getInfil() limit infiltration with a new
+accumulator, THorton.Fmh, but horton_getState() and horton_setState() still
+copy only tp and Fe. A run started from a hot start file therefore begins with
+Fmh = 0 and can infiltrate the full Fmax again. Store Fmh in the third of the
+six infiltration slots that saveRunoff() writes (always 0 until now), so the
+file layout does not change; files written before this fix restore Fmh = 0,
+which is the current behaviour.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-44_swmm530.patch
+
+diff --git a/src/legacy/engine/infil.c b/src/legacy/engine/infil.c
+index dc6a51e..49dee85 100644
+--- a/src/legacy/engine/infil.c
++++ b/src/legacy/engine/infil.c
+@@ -376,12 +376,14 @@ void horton_getState(THorton *infil, double x[])
+ {
+     x[0] = infil->tp;
+     x[1] = infil->Fe;
++    x[2] = infil->Fmh;
+ }
+ 
+ void horton_setState(THorton *infil, double x[])
+ {
+     infil->tp = x[0];
+     infil->Fe = x[1];
++    infil->Fmh = x[2];
+ }
+ 
+ //=============================================================================

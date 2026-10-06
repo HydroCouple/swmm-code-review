@@ -1,0 +1,30 @@
+BND-18: clear the averages of periods that fall before REPORT_START
+
+With [REPORT] AVERAGES YES, output_saveResults() returned for report times
+before REPORT_START without saving, and so without the call to
+output_initAvgResults() that output_saveAvgResults() makes. The first saved
+period then averaged every routing step since START. Re-initialize the
+averages when a period is skipped.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply BND-18_swmm530.patch
+
+diff --git a/src/legacy/engine/output.c b/src/legacy/engine/output.c
+index f57370e..9d162a9 100644
+--- a/src/legacy/engine/output.c
++++ b/src/legacy/engine/output.c
+@@ -478,7 +478,13 @@ void output_saveResults(double reportTime)
+     REAL8 date;
+ 
+     // --- initialize system-wide results
+-    if ( reportDate < ReportStart ) return;
++    if ( reportDate < ReportStart )
++    {
++        // --- periods before ReportStart are not saved, so start the
++        //     averages of the first saved period afresh
++        if ( RptFlags.averages ) output_initAvgResults();
++        return;
++    }
+     for (i=0; i<MAX_SYS_RESULTS; i++) SysResults[i] = 0.0f;
+ 
+     // --- save date corresponding to this elapsed reporting time

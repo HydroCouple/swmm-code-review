@@ -1,0 +1,39 @@
+IO-07: do not treat a ';' inside a quoted token as a comment
+
+getTokens() cut the line at the first ';' before it looked for quoted
+tokens, so a quoted file name containing ';' (TS1 FILE "flow;v2.dat") was
+cut short and the file could not be opened (ERROR 361). The comment is now
+found by scanning the line and skipping over a quoted token, i.e. a '"' at
+the start of a token with a closing '"' later on the line, which is the same
+rule the tokenizer uses. A line without such a quoted token is cut at its
+first ';' exactly as before.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-07_swmm530.patch
+
+diff --git a/src/legacy/engine/input.c b/src/legacy/engine/input.c
+index 5a58319..746ba42 100644
+--- a/src/legacy/engine/input.c
++++ b/src/legacy/engine/input.c
+@@ -884,9 +884,18 @@ int getTokens(char *s)
+     for (n = 0; n < MAXTOKS; n++) Tok[n] = NULL;
+     n = 0;
+ 
+-    // --- truncate s at start of comment 
+-    c = strchr(s,';');
+-    if (c) *c = '\0';
++    // --- truncate s at start of comment (a ';' inside a quoted token,
++    //     e.g. a file name, is part of the token)
++    for (c = s; *c; c++)
++    {
++        if ( *c == '"' && (c == s || strchr(SEPSTR, c[-1])) &&
++             strchr(c+1, '"') ) c = strchr(c+1, '"');
++        else if ( *c == ';' )
++        {
++            *c = '\0';
++            break;
++        }
++    }
+     len = (int)strlen(s);
+ 
+     // --- scan s for tokens until nothing left

@@ -1,0 +1,42 @@
+[TITLE]
+NUM-17: a storage unit drains through a 2-barrel conduit (KINWAVE)
+
+[OPTIONS]
+FLOW_UNITS           CFS
+FLOW_ROUTING         KINWAVE
+START_DATE           01/01/2020
+START_TIME           00:00:00
+REPORT_START_DATE    01/01/2020
+REPORT_START_TIME    00:00:00
+END_DATE             01/01/2020
+END_TIME             12:00:00
+REPORT_STEP          00:15:00
+WET_STEP             00:05:00
+DRY_STEP             01:00:00
+ROUTING_STEP         30
+
+[STORAGE]
+;;Name Elev MaxDepth InitDepth Shape     Coeff Expon Const SurDepth Fevap
+S1     100  6        0         FUNCTIONAL 0     0     5000  0        0
+
+[OUTFALLS]
+;;Name  Elev  Type  Stage Gated
+O1      96    FREE        NO
+
+;; Two 2-ft barrels at 1 % slope: about 22.6 cfs each when full, so together
+;; they carry the 30 cfs inflow at 15 cfs each, well below full.
+[CONDUITS]
+;;Name From To Length Rough InOff OutOff InitFlow
+C1      S1   O1  400   0.013 0     0      0
+
+[XSECTIONS]
+;;Link  Shape    Geom1 Geom2 Geom3 Geom4 Barrels
+C1      CIRCULAR 2     0     0     0     2
+
+[INFLOWS]
+;;Node Param TSeries Type Mfactor Sfactor Baseline
+S1     FLOW  ""      FLOW 1.0     1.0     30
+
+[REPORT]
+NODES ALL
+LINKS ALL

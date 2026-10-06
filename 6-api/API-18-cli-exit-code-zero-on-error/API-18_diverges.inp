@@ -1,0 +1,32 @@
+[TITLE]
+API-18: 2e9 cfs into a 1000 ft x 20000 ft channel; 6.0.0 stops with "the routing solution diverged"
+
+[OPTIONS]
+FLOW_UNITS           CFS
+FLOW_ROUTING         DYNWAVE
+START_DATE           01/01/2020
+START_TIME           00:00:00
+REPORT_START_DATE    01/01/2020
+REPORT_START_TIME    00:00:00
+END_DATE             01/01/2020
+END_TIME             00:30:00
+ROUTING_STEP         0:00:05
+REPORT_STEP          00:05:00
+
+[JUNCTIONS]
+J1   100   2000   0   0   0
+
+[OUTFALLS]
+O1   50    FREE   NO
+
+[CONDUITS]
+C1   J1   O1   1000   0.013   0   0   0   0
+
+[XSECTIONS]
+C1   RECT_OPEN   1000   20000   0   0   1
+
+[INFLOWS]
+J1   FLOW   ""   FLOW   1.0   1.0   2.0e9
+
+[REPORT]
+INPUT NO

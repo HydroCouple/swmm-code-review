@@ -1,0 +1,82 @@
+[TITLE]
+API-04 US units: S1 drains to J1; extra inflow floods J1 for a while; C1, C2 to outfall O1
+
+[OPTIONS]
+FLOW_UNITS           CFS
+INFILTRATION         HORTON
+FLOW_ROUTING         DYNWAVE
+START_DATE           01/01/2020
+START_TIME           00:00:00
+REPORT_START_DATE    01/01/2020
+REPORT_START_TIME    00:00:00
+END_DATE             01/01/2020
+END_TIME             06:00:00
+WET_STEP             00:01:00
+DRY_STEP             00:05:00
+ROUTING_STEP         0:00:30
+REPORT_STEP          00:15:00
+
+[RAINGAGES]
+;; 1.0 in/hr for 15 min at 1:00 and 0.5 in/hr for 15 min at 2:00 = 0.375 in
+G1   INTENSITY 0:15 1.0 TIMESERIES TS1
+
+[SUBCATCHMENTS]
+S1   G1   J1   10   50   500   0.5   0
+
+[SUBAREAS]
+S1   0.01  0.1  0.05  0.05  25  OUTLET
+
+[INFILTRATION]
+S1   3.0  0.5  4  7  0
+
+[POLLUTANTS]
+TSS  MG/L  0  0  0  0  NO
+
+[LANDUSES]
+RES
+
+[COVERAGES]
+S1  RES  100
+
+[BUILDUP]
+RES  TSS  POW  50  5  0.5  AREA
+
+[WASHOFF]
+RES  TSS  EXP  0.1  1
+
+[JUNCTIONS]
+;;   invert  maxDepth
+J1   100     3        0   0   0
+J2   99      10       0   0   0
+
+[OUTFALLS]
+O1   97   FREE   NO
+
+[CONDUITS]
+C1   J1   J2   400   0.013   0   0   0   0
+C2   J2   O1   400   0.013   0   0   0   0
+
+[XSECTIONS]
+C1   CIRCULAR   1.5   0   0   0   1
+C2   CIRCULAR   1.5   0   0   0   1
+
+[INFLOWS]
+J1   FLOW   TSQ   FLOW   1.0   1.0
+
+[TIMESERIES]
+TS1   0:00   0
+TS1   1:00   1.0
+TS1   2:00   0.5
+TS1   3:00   0
+;; extra inflow at J1, 12 cfs peak at 1:30
+TSQ   0:00   0
+TSQ   0:30   0
+TSQ   1:30   12
+TSQ   2:30   0
+
+[REPORT]
+INPUT NO
+CONTROLS NO
+SUBCATCHMENTS ALL
+NODES ALL
+LINKS ALL

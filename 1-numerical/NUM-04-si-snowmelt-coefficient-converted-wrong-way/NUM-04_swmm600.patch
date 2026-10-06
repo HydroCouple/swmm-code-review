@@ -1,0 +1,34 @@
+NUM-04: divide SI snow melt coefficients by 1.8 instead of multiplying
+
+The snow pack parameter transfer in SWMMEngine.cpp copied legacy
+setMeltParams(): Cmin/Cmax in mm/hr per deg C were multiplied by
+UCF(TEMPERATURE) = 1.8 on the way to ft/sec per deg F, where they must be
+divided by it. SI packs melted 3.24 times faster than specified. US models
+are unchanged. Same change as NUM-04_swmm530.patch.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-04_swmm600.patch
+
+diff --git a/src/engine/core/SWMMEngine.cpp b/src/engine/core/SWMMEngine.cpp
+index 839529d..2850e68 100644
+--- a/src/engine/core/SWMMEngine.cpp
++++ b/src/engine/core/SWMMEngine.cpp
+@@ -8648,12 +8648,13 @@ void SWMMEngine::initHydrology() noexcept {
+                 const auto& p = *surfaces[k];
+                 // p[0]=Cmin, p[1]=Cmax, p[2]=Tbase, p[3]=FWF, p[4]=SD0, p[5]=FW0, p[6]=SNN0
+                 // legacy setMeltParams (snow.c): the melt coefficients are
+-                // per DEGREE, so an SI deck's mm/hr-degC also carries
+-                // UCF(TEMPERATURE) = 1.8; the initial free water is capped
+-                // at FWF x SD0; ATI starts at the base temperature.
+-                soa.dhmin[idx]  = p[0] * ucf::Ucf[ucf::TEMPERATURE][unit_sys_snow]
++                // per DEGREE, so an SI deck's mm/hr-degC is divided by
++                // UCF(TEMPERATURE) = 1.8 to give a coefficient per deg F;
++                // the initial free water is capped at FWF x SD0; ATI starts
++                // at the base temperature.
++                soa.dhmin[idx]  = p[0] / ucf::Ucf[ucf::TEMPERATURE][unit_sys_snow]
+                                        / ucf::Ucf[ucf::RAINFALL][unit_sys_snow];
+-                soa.dhmax[idx]  = p[1] * ucf::Ucf[ucf::TEMPERATURE][unit_sys_snow]
++                soa.dhmax[idx]  = p[1] / ucf::Ucf[ucf::TEMPERATURE][unit_sys_snow]
+                                        / ucf::Ucf[ucf::RAINFALL][unit_sys_snow];
+                 soa.tbase[idx]  = p[2];
+                 if (unit_sys_snow == 1) // SI: convert °C to °F

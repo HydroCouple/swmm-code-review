@@ -1,0 +1,48 @@
+NUM-52: make the PID controller a plain velocity-form PID (no error reset, no dead band)
+
+ControlEngine::computePIDSetting() zeroed the stored errors e1 and e2
+whenever the error had not changed by 0.0001 since the last evaluation. With a steady error the next
+update then used e1 = 0, so the proportional term added kp*e (and the
+derivative term kd*e/dt) at every evaluation: a P-only controller with a
+constant error drove its link to 0 or 1 at a rate set by the routing step.
+The reset existed to unstick the controller after the 0.0001 dead band on
+each update had thrown away small increments, which in the velocity form are
+lost for good (a PI controller with a small steady error never removes it).
+Remove both, so the setting moves by kp*[(e0 - e1) + e0*dt/ki + kd*(...)/dt]
+at every evaluation as the equation says.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-52_swmm600.patch
+
+diff --git a/src/engine/controls/Controls.cpp b/src/engine/controls/Controls.cpp
+index 88369ca..113cb20 100644
+--- a/src/engine/controls/Controls.cpp
++++ b/src/engine/controls/Controls.cpp
+@@ -637,7 +637,6 @@ double ControlEngine::computePIDSetting(PIDState& pid, double control_value,
+     // extran3-bottom-orifice-pid drifted from period 41).
+     double dt_min = (dt / constants::SEC_PER_DAY) * 1440.0;
+     constexpr double TINY = 1.0e-6;
+-    constexpr double tolerance = 0.0001;
+ 
+     // Relative error (matching legacy controls.c lines 1668-1677)
+     double e0 = pid.setpoint - control_value;
+@@ -648,19 +647,11 @@ double ControlEngine::computePIDSetting(PIDState& pid, double control_value,
+             e0 = e0 / control_value;
+     }
+ 
+-    // Anti-windup: reset previous errors if controller gets stuck
+-    // (matching legacy controls.c lines 1679-1683)
+-    if (std::fabs(e0 - pid.e1) < tolerance) {
+-        pid.e2 = 0.0;
+-        pid.e1 = 0.0;
+-    }
+-
+     // Recursive PID (matching legacy controls.c lines 1685-1695)
+     double p = e0 - pid.e1;
+     double i = (pid.ki != 0.0) ? e0 * dt_min / pid.ki : 0.0;
+     double d = (dt_min > 0.0) ? pid.kd * (e0 - 2.0 * pid.e1 + pid.e2) / dt_min : 0.0;
+     double update = pid.kp * (p + i + d);
+-    if (std::fabs(update) < tolerance) update = 0.0;
+ 
+     double setting = current_setting + update;
+ 

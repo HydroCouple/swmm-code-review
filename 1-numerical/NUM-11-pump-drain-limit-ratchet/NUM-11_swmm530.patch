@@ -1,0 +1,33 @@
+NUM-11: floor the wet-well area at MinSurfArea in the pump drain limit
+
+getModPumpFlow() stops a Type2/3/4 pump from drawing its non-storage inlet
+node below empty by predicting y = oldDepth + netFlowVolume / newSurfArea.
+newSurfArea is only what the node's links have added so far, without the
+MinSurfArea floor setNodeDepth() applies; for a junction fed by a free-
+falling conduit it is 0, so any net withdrawal gives y = -inf and the pump
+is pinned to the node inflow at any depth: the wet well never drains. Use
+MAX(newSurfArea, MinSurfArea), the area the depth update itself uses.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-11_swmm530.patch
+
+diff --git a/src/legacy/engine/dynwave.c b/src/legacy/engine/dynwave.c
+index 972da8c..93f9f21 100644
+--- a/src/legacy/engine/dynwave.c
++++ b/src/legacy/engine/dynwave.c
+@@ -482,12 +482,14 @@ double getModPumpFlow(int i, double q, double dt)
+ 
+       // --- for other types of pumps, if pumping rate would make depth
+       //     at upstream node negative, then set pumping rate = inflow
++      //     (using the same minimum surface area as setNodeDepth)
+       case TYPE2_PUMP:
+       case TYPE4_PUMP:
+       case TYPE3_PUMP:
+          newNetInflow = Node[j].inflow - Node[j].outflow - q;
+          netFlowVolume = 0.5 * (Node[j].oldNetInflow + newNetInflow ) * dt;
+-         y = Node[j].oldDepth + netFlowVolume / Xnode[j].newSurfArea;
++         y = Node[j].oldDepth + netFlowVolume /
++             MAX(Xnode[j].newSurfArea, MinSurfArea);
+          if ( y <= 0.0 ) return Node[j].inflow;
+     }
+     return q;

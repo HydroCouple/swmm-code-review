@@ -1,0 +1,25 @@
+IO-60: report a 0 % LID continuity error for a unit with no water
+
+lid_writeWaterBalance() set the error to 100 % whenever a unit's initial
+storage plus inflow was zero, so a LID unit that received nothing and held
+nothing (dry period, no contributing area) was reported with a 100 %
+continuity error although its balance is exactly zero. Report 0 % in that
+case, and -100 % if such a unit somehow had outflow, the value the system
+continuity tables (massbal.c) give for outflow without inflow.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-60_swmm530.patch
+
+diff --git a/src/legacy/engine/lid.c b/src/legacy/engine/lid.c
+index e2ac45a..eacc874 100644
+--- a/src/legacy/engine/lid.c
++++ b/src/legacy/engine/lid.c
+@@ -2003,7 +2003,7 @@ void lid_writeWaterBalance()
+                       lidUnit->waterBalance.surfFlow +
+                       lidUnit->waterBalance.drainFlow;
+             if ( inflow > 0.0 ) err = (inflow - outflow) / inflow;
+-            else                err = 1.0;
++            else                err = (outflow > 0.0) ? -1.0 : 0.0;
+             fprintf(Frpt.file, "  %10.2f", err*100.0);
+             lidList = lidList->nextLidUnit;
+         }

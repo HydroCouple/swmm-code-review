@@ -1,0 +1,40 @@
+[TITLE]
+IO-27: GHCN climate file in tenths of a degree C (TMAX 250 = 25 C, TMIN 150 = 15 C), SI units, no Units token
+
+[OPTIONS]
+FLOW_UNITS       CMS
+INFILTRATION     HORTON
+FLOW_ROUTING     KINWAVE
+START_DATE       01/01/2020
+START_TIME       00:00:00
+END_DATE         01/02/2020
+END_TIME         00:00:00
+REPORT_STEP      01:00:00
+WET_STEP         00:15:00
+DRY_STEP         01:00:00
+ROUTING_STEP     600
+
+[TEMPERATURE]
+;no Units token after the file name: the input reference gives C10 as the default
+FILE IO-27_ghcnd.txt
+;divide temp, ATI weight, neg. melt ratio, elevation, latitude 40 N, longitude corr.
+SNOWMELT 1.1111 0.5 0.6 0 40 0
+
+[RAINGAGES]
+G1 INTENSITY 1:00 1.0 TIMESERIES TS1
+
+[TIMESERIES]
+TS1 01/01/2020 00:00 0.0
+
+[SUBCATCHMENTS]
+;Name Gage Outlet Area %Imperv Width Slope CurbLen
+S1    G1   O1     1    50      100   1     0
+
+[SUBAREAS]
+S1 0.01 0.1 0 0 0 OUTLET
+
+[INFILTRATION]
+S1 0 0 4 7 0
+
+[OUTFALLS]
+O1 0 FREE

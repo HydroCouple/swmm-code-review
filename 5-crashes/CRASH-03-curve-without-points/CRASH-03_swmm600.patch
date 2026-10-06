@@ -1,0 +1,31 @@
+CRASH-03: reject a curve or time series without data, as legacy does
+
+6.0.0 does not crash on a curve or inline time series without data, but
+accepts it silently: a storage node runs with an empty storage curve, an
+inflow with an empty series. The legacy table check (with the CRASH-03 fix)
+rejects such tables with ERROR 171 (curve) or 173 (time series). Add the
+same test to the table sequence check in resolve_cross_references(), which
+mirrors legacy table_validate(). File-based series are loaded separately
+and are not affected.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply CRASH-03_swmm600.patch
+
+diff --git a/src/engine/input/PostParseResolver.cpp b/src/engine/input/PostParseResolver.cpp
+index 807f527..f87ff4e 100644
+--- a/src/engine/input/PostParseResolver.cpp
++++ b/src/engine/input/PostParseResolver.cpp
+@@ -3531,6 +3531,13 @@ void resolve_cross_references(SimulationContext& ctx) {
+     // -------------------------------------------------------------------------
+     for (const auto& tbl : ctx.tables.tables) {
+         const bool is_ts = (tbl.type == TableType::TIMESERIES);
++        // A curve or inline time series with no data at all is rejected
++        // like legacy table_validate does (ERROR 171 / 173).
++        if (tbl.x.empty() && tbl.file_path.empty()) {
++            ctx.errors.push_back(format_error(
++                is_ts ? ERR_TIMESERIES_SEQUENCE : ERR_CURVE_SEQUENCE, tbl.id));
++            continue;
++        }
+         for (std::size_t k = 1; k < tbl.x.size(); ++k) {
+             if (tbl.x[k] - tbl.x[k - 1] <= 0.0) {
+                 ctx.errors.push_back(format_error(

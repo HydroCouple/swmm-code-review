@@ -1,0 +1,67 @@
+[TITLE]
+NUM-31: outfall O1 re-routed onto subcatchment S2 while the runoff step changes from WET to DRY
+
+[OPTIONS]
+;; S1 (1 ac roof, n = 0, no depression storage) drains into storage unit ST1
+;; and stops producing runoff as soon as the rain stops at 1:00, so the runoff
+;; step switches from the 5-min WET_STEP to the 1-hour DRY_STEP. ST1 keeps
+;; draining through outlet OL1 to outfall O1 for many hours, and O1's flow is routed
+;; onto S2, a 1 ac pervious subcatchment that infiltrates everything it gets.
+;; No evaporation, no ponding on S2, so the runoff continuity error must be ~0.
+FLOW_UNITS           CFS
+INFILTRATION         HORTON
+FLOW_ROUTING         KINWAVE
+START_DATE           06/01/2020
+START_TIME           00:00:00
+REPORT_START_DATE    06/01/2020
+REPORT_START_TIME    00:00:00
+END_DATE             06/03/2020
+END_TIME             00:00:00
+WET_STEP             00:05:00
+DRY_STEP             01:00:00
+REPORT_STEP          00:15:00
+ROUTING_STEP         0:00:30
+
+[EVAPORATION]
+CONSTANT         0.0
+
+[RAINGAGES]
+;;Name  Format     Interval  SCF  Source
+G1      INTENSITY  1:00      1.0  TIMESERIES  R1
+
+[SUBCATCHMENTS]
+;;Name  Gage  Outlet  Area  %Imperv  Width  %Slope  CurbLen
+S1      G1    ST1     1.0   100      200    1.0     0
+S2      G1    O2      1.0   0        200    1.0     0
+
+[SUBAREAS]
+;;Subcatch  N-Imperv  N-Perv  S-Imperv  S-Perv  PctZero  RouteTo
+S1          0.0       0.1     0.0       0.05    0        OUTLET
+S2          0.01      0.1     0.05      0.05    0        OUTLET
+
+[INFILTRATION]
+;;Subcatch  MaxRate  MinRate  Decay  DryTime  MaxInfil
+S1          10.0     10.0     4      7        0
+S2          10.0     10.0     4      7        0
+
+[STORAGE]
+;;Name  Elev  MaxDepth  InitDepth  Shape       Coeff  Expon  Const  Fevap  Psi
+ST1     0     20        0          FUNCTIONAL  0      0      2000   0      0
+
+[OUTLETS]
+;;Name  From  To  Offset  Type              Coeff  Expon  Gated
+OL1     ST1   O1  0       FUNCTIONAL/DEPTH  0.05   0.5    NO
+
+[OUTFALLS]
+;;Name  Elev  Type  Gated  RouteTo
+O1      0     FREE  NO     S2
+O2      0     FREE
+
+[TIMESERIES]
+;; 1 in/hr for one hour
+R1   0:00   1.0
+R1   1:00   0.0
+
+[REPORT]
+SUBCATCHMENTS ALL
+NODES ALL

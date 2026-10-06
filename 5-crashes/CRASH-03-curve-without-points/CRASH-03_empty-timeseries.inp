@@ -1,0 +1,40 @@
+[TITLE]
+CRASH-03: a time series whose only line has a date and a time but no value
+
+[OPTIONS]
+FLOW_UNITS           CFS
+FLOW_ROUTING         DYNWAVE
+START_DATE           01/01/2020
+START_TIME           00:00:00
+END_DATE             01/01/2020
+END_TIME             01:00:00
+REPORT_STEP          00:15:00
+ROUTING_STEP         10
+
+[JUNCTIONS]
+;;Name  Elev  MaxDepth  InitDepth  SurDepth  Aponded
+J1      100   5         0          0         0
+
+[OUTFALLS]
+;;Name  Elev  Type
+O1      99    FREE
+
+[CONDUITS]
+;;Name  From  To  Length  Roughness  InOffset  OutOffset  InitFlow
+C1      J1    O1  400     0.013      0         0         0
+
+[XSECTIONS]
+;;Link  Shape     Geom1  Geom2  Geom3  Geom4  Barrels
+C1      CIRCULAR  1.5    0      0      0      1
+
+[INFLOWS]
+;;Node  Constituent  Tseries  Type  Mfactor  Sfactor
+J1      FLOW         TS1      FLOW  1.0      1.0
+
+[TIMESERIES]
+;; The value after the time is missing, so TS1 gets no entries.
+;;Name  Date        Time   Value
+TS1     01/01/2020  00:00
+
+[REPORT]
+NODES ALL

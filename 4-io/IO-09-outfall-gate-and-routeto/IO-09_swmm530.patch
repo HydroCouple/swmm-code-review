@@ -1,0 +1,34 @@
+IO-09: read an outfall's Gated column also when a RouteTo column follows it
+
+outfall_readParams() parsed the Gated token only when it was the last token
+on the line (ntoks == n) and the RouteTo subcatchment only when exactly one
+more token followed (ntoks == n+1). A line with both, such as
+"O1 99 FIXED 102 YES S1", therefore never looked at the Gated token: the flap
+gate stayed at its default NO, and any text in that column was accepted.
+Test the token count with >= so each optional column is read whenever it is
+present.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-09_swmm530.patch
+
+diff --git a/src/legacy/engine/node.c b/src/legacy/engine/node.c
+index 070db5a..666ff50 100644
+--- a/src/legacy/engine/node.c
++++ b/src/legacy/engine/node.c
+@@ -1375,14 +1375,14 @@ int outfall_readParams(int j, int k, char* tok[], int ntoks)
+           Tseries[m].refersTo = TIMESERIES_OUTFALL;
+         }
+     }
+-    if ( ntoks == n )
++    if ( ntoks >= n )
+     {
+         m = findmatch(tok[n-1], NoYesWords);               // flap gate
+         if ( m < 0 ) return error_setInpError(ERR_KEYWORD, tok[n-1]);
+         x[5] = m;
+     }
+ 
+-    if ( ntoks == n+1)
++    if ( ntoks >= n+1 )
+     {
+         m = project_findObject(SUBCATCH, tok[n]);
+         if ( m < 0 ) return error_setInpError(ERR_NAME, tok[n]);

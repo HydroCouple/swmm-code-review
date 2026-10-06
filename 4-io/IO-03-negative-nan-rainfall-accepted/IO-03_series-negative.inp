@@ -1,0 +1,45 @@
+[TITLE]
+IO-03: a rain gage time series with a negative value
+
+[OPTIONS]
+FLOW_UNITS       CFS
+INFILTRATION     HORTON
+FLOW_ROUTING     KINWAVE
+START_DATE       01/01/2020
+START_TIME       00:00:00
+END_DATE         01/01/2020
+END_TIME         06:00:00
+REPORT_STEP      00:15:00
+WET_STEP         00:05:00
+DRY_STEP         01:00:00
+ROUTING_STEP     60
+
+[RAINGAGES]
+;;Name  Format     Interval  SCF  Source
+G1      INTENSITY  1:00      1.0  TIMESERIES  RAIN
+
+[TIMESERIES]
+;; 0.5 in/hr, then -2.0 in/hr for an hour, then 0.5 in/hr
+RAIN  0:00  0.5
+RAIN  1:00  -2.0
+RAIN  2:00  0.5
+RAIN  3:00  0.0
+
+[SUBCATCHMENTS]
+;;Name  Gage  Outlet  Area  %Imperv  Width  %Slope  CurbLen
+S1      G1    O1      10    50       500    1       0
+
+[SUBAREAS]
+;;Subcatch  N-Imperv  N-Perv  S-Imperv  S-Perv  PctZero  RouteTo
+S1          0.01      0.1     0.05      0.05    25       OUTLET
+
+[INFILTRATION]
+;;Subcatch  MaxRate  MinRate  Decay  DryTime  MaxInfil
+S1          3.0      0.5      4      7        0
+
+[OUTFALLS]
+;;Name  Elev  Type
+O1      0     FREE
+
+[REPORT]
+SUBCATCHMENTS ALL

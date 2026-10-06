@@ -1,0 +1,91 @@
+IO-28: finish every transect, whatever line or section follows it
+
+A transect's geometry tables and roughness are built by transect_validate(),
+which was only called for the previous transect when an NC line was read and
+for the last one when a known section header followed [TRANSECTS]. A transect
+followed by an X1 line (the NC line is optional after the first one), by the
+end of the file, or by an unknown section was never built, and every conduit
+using it failed with ERROR 113/119. Also call it from the X1 branch, from the
+unknown-section branch and after the read loop. A flag that setParams() clears
+and transect_validate() sets makes sure each transect is built only once, and
+the section-end calls use the number of transects read so far (Mobjects), not
+the total (Nobjects), so a second [TRANSECTS] section no longer builds the
+first section's last transect into another transect's slot.
+
+Requires: NUM-23
+Requires: NUM-24
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-28_swmm530.patch
+
+diff --git a/src/legacy/engine/input.c b/src/legacy/engine/input.c
+index 5a58319..fcda09e 100644
+--- a/src/legacy/engine/input.c
++++ b/src/legacy/engine/input.c
+@@ -216,7 +216,7 @@ int input_readData()
+                 // --- SPECIAL CASE FOR TRANSECTS
+                 //     finish processing the last set of transect data
+                 if ( sect == s_TRANSECT )
+-                    transect_validate(Nobjects[TRANSECT]-1);
++                    transect_validate(Mobjects[TRANSECT]-1);
+ 
+                 // --- begin a new input section
+                 sect = newsect;
+@@ -230,6 +230,8 @@ int input_readData()
+                     "\n  WARNING: Unknown section '%s' at line %ld will be skipped.", Tok[0], lineCount);
+                 report_writeLine(warnMsg);
+                 report_invokeWarningCallback(warnMsg);
++                if ( sect == s_TRANSECT )
++                    transect_validate(Mobjects[TRANSECT]-1);
+                 sect = -1;
+                 continue;
+             }
+@@ -251,6 +253,9 @@ int input_readData()
+         if (errsum > MAXERRS) break;
+     }   /* End of while */
+ 
++    // --- finish processing transect data that ends the file
++    if ( sect == s_TRANSECT ) transect_validate(Mobjects[TRANSECT]-1);
++
+     // --- check for errors
+     if (errsum > 0)  ErrorCode = ERR_INPUT;
+     return ErrorCode;
+diff --git a/src/legacy/engine/transect.c b/src/legacy/engine/transect.c
+index a07ce25..12e1da0 100644
+--- a/src/legacy/engine/transect.c
++++ b/src/legacy/engine/transect.c
+@@ -45,6 +45,7 @@ static double  Xfactor;                // multiplier for station spacing
+ static double  Yfactor;                // factor added to station elevations
+ static double  Lfactor;                // main channel/flood plain length
+ static int     LastSlice;              // slice that ends the last sub-section
++static int     Validated;              // TRUE if current transect validated
+ 
+ //-----------------------------------------------------------------------------
+ //  External functions (declared in funcs.h)   
+@@ -150,6 +151,9 @@ int transect_readParams(int* count, char* tok[], int ntoks)
+       // --- X1 line: identifies start of next transect
+       case 1:
+ 
++        // --- finish processing the previous transect (if no NC line did)
++        transect_validate(index - 1);
++
+         // --- check that transect was already added to project
+         //     (by input_countObjects)
+         if ( ntoks < 10 ) return error_setInpError(ERR_ITEMS, "");
+@@ -207,6 +211,8 @@ void  transect_validate(int j)
+ 
+     // --- check for valid transect data
+     if ( j < 0 || j >= Ntransects ) return;
++    if ( Validated ) return;
++    Validated = TRUE;
+     if ( Nstations < 2 ) 
+     {
+         report_writeErrorMsg(ERR_TRANSECT_TOO_FEW, Transect[j].ID);
+@@ -386,6 +392,7 @@ int  setParams(int j, char* id, double x[])
+     Xrightbank = x[4] * Xfactor / UCF(LENGTH);   // adjusted right bank
+     Yfactor = x[9] / UCF(LENGTH);                // elevation offset
+     Nstations = 0;
++    Validated = FALSE;
+     return 0;
+ }
+ 

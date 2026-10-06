@@ -1,0 +1,54 @@
+IO-58: leave the initial stored volume out of "Total Inflow Volume"
+
+massbal_open() starts each node's inflow accumulator NodeInflow[j] at the
+node's initial volume, so that the per-node balance (NodeOutflow includes
+the final volume) closes. writeNodeFlows() printed the same accumulator as
+the Node Inflow Summary's "Total Inflow Volume", which the manual defines
+as lateral inflow plus inflow from connecting links. Keep the node's
+initial volume in its statistics and subtract it from the printed column.
+The flow balance error, the node continuity ranking and the storage loss
+percentages still use NodeInflow and do not change.
+
+Requires: BND-19
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-58_swmm530.patch
+
+diff --git a/src/legacy/engine/objects.h b/src/legacy/engine/objects.h
+index 64a1952..ba7732d 100644
+--- a/src/legacy/engine/objects.h
++++ b/src/legacy/engine/objects.h
+@@ -1011,6 +1011,7 @@ typedef struct
+    double        timeSurcharged;
+    double        timeCourantCritical;
+    double        totLatFlow;
++   double        initVolume;
+    double        maxLatFlow;
+    double        maxInflow;
+    double        maxOverflow;
+diff --git a/src/legacy/engine/stats.c b/src/legacy/engine/stats.c
+index a1ce9d4..aae8f91 100644
+--- a/src/legacy/engine/stats.c
++++ b/src/legacy/engine/stats.c
+@@ -177,6 +177,7 @@ int stats_open()
+         NodeStats[j].timeSurcharged = 0.0;
+         NodeStats[j].timeCourantCritical = 0.0;
+         NodeStats[j].totLatFlow = 0.0;
++        NodeStats[j].initVolume = Node[j].newVolume;
+         NodeStats[j].maxLatFlow = 0.0;
+         NodeStats[j].maxInflow = 0.0;
+         NodeStats[j].maxOverflow = 0.0;
+diff --git a/src/legacy/engine/statsrpt.c b/src/legacy/engine/statsrpt.c
+index 1df8eb9..e7696a0 100644
+--- a/src/legacy/engine/statsrpt.c
++++ b/src/legacy/engine/statsrpt.c
+@@ -390,7 +390,8 @@ void writeNodeFlows()
+         fprintf(Frpt.file, "  %4d  %02d:%02d", days1, hrs1, mins1);
+         fprintf(Frpt.file, "%12.3g", NodeStats[j].totLatFlow * Vcf);
+         fprintf(Frpt.file, "%12.3g",
+-            (NodeInflow[j] - NodeStats[j].inflowBeforeRpt) * Vcf);
++            (NodeInflow[j] - NodeStats[j].inflowBeforeRpt -
++             (ReportStart > StartDateTime ? 0.0 : NodeStats[j].initVolume)) * Vcf);
+         if ( fabs(NodeOutflow[j]) < 1.0 )
+             fprintf(Frpt.file, "%12.3f %s",
+                 (NodeInflow[j]-NodeOutflow[j])*Vcf*1.0e6,

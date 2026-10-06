@@ -1,0 +1,48 @@
+[TITLE]
+NUM-45: MASS-type pollutant loads at two junctions that never receive water.
+J2 gets 10 mg/s and J3 100 mg/s of P1; neither has any flow inflow, so both
+stay dry (depth 0, inflow 0) for the whole run.
+
+[OPTIONS]
+FLOW_UNITS           CFS
+INFILTRATION         HORTON
+FLOW_ROUTING         DYNWAVE
+START_DATE           01/01/2020
+START_TIME           00:00:00
+REPORT_START_DATE    01/01/2020
+REPORT_START_TIME    00:00:00
+END_DATE             01/01/2020
+END_TIME             02:00:00
+DRY_STEP             00:05:00
+WET_STEP             00:05:00
+ROUTING_STEP         10
+REPORT_STEP          00:15:00
+
+[JUNCTIONS]
+;;Name  Elev  MaxDepth  InitDepth  SurDepth  Aponded
+J2      0     5         0          0         0
+J3      0     5         0          0         0
+
+[OUTFALLS]
+O2   0   FREE
+O3   0   FREE
+
+[CONDUITS]
+C2  J2   O2  400  0.013  0  0  0
+C3  J3   O3  400  0.013  0  0  0
+
+[XSECTIONS]
+C2  CIRCULAR  1  0  0  0  1
+C3  CIRCULAR  1  0  0  0  1
+
+[POLLUTANTS]
+P1  MG/L  0  0  0  0  NO  *  0  0  0
+
+[INFLOWS]
+;;Node Param TimeSeries Type Mfactor Sfactor Baseline
+J2  P1  ""  MASS  1.0  1.0  10
+J3  P1  ""  MASS  1.0  1.0  100
+
+[REPORT]
+NODES ALL
+LINKS ALL

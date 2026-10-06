@@ -1,0 +1,28 @@
+BND-02: look up a TIDAL outfall's curve at the hour of the day
+
+setAllOutfallDepths() looked up a tidal curve (stage versus hour of the
+day) at the hours elapsed since the start of the run, as legacy did, so
+every run that does not start at midnight got a tide shifted by its start
+time. Add the start time of day before taking the hour, as the 5.3.0 patch
+does. Runs that start at midnight add exactly 0 and are unchanged.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply BND-02_swmm600.patch
+
+diff --git a/src/engine/hydraulics/Outfall.cpp b/src/engine/hydraulics/Outfall.cpp
+index 3fd3a23..ef37acb 100644
+--- a/src/engine/hydraulics/Outfall.cpp
++++ b/src/engine/hydraulics/Outfall.cpp
+@@ -335,7 +335,11 @@ void setAllOutfallDepths(SimulationContext& ctx, double dt_routing) {
+                     //         stage = table_lookup(&Curve[k], x) / UCF(LENGTH);
+                     auto& curve = ctx.tables.tables[static_cast<std::size_t>(curve_idx)];
+                     double x = curve.x.empty() ? 0.0 : curve.x[0];
+-                    x += (elapsed_days - std::floor(elapsed_days)) * 24.0;
++                    // The curve gives stage by hour of the day, so add the
++                    // time of day at which the simulation starts.
++                    const double day = elapsed_days +
++                        (ctx.options.start_date - std::floor(ctx.options.start_date));
++                    x += (day - std::floor(day)) * 24.0;
+                     stage = table_lookup_cursor(curve, x) / ucf_len;
+                 }
+                 yCrit = std::min(yCrit, yNorm);

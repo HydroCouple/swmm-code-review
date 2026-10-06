@@ -1,0 +1,45 @@
+CON-02: do not let MinSurfArea override a smaller storage unit's own area
+
+setNodeDepth() floored every node's surface area at MinSurfArea (12.566 ft2
+by default) before dy = dV / surfArea, storage units included, while their
+volume is node_getVolume() of their own area curve. For a storage unit
+smaller than MinSurfArea the depth rose as if it had 12.566 ft2 and the
+booked volume lost the difference. For a storage unit, cap the floor at its
+own area at full depth: a unit smaller than MinSurfArea uses its real area,
+and a curve that starts at zero area keeps the MinSurfArea floor until its
+area exceeds it, as before. Junctions and storage units at least
+MinSurfArea in size are unchanged.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply CON-02_swmm530.patch
+
+diff --git a/src/legacy/engine/dynwave.c b/src/legacy/engine/dynwave.c
+index 972da8c..404988f 100644
+--- a/src/legacy/engine/dynwave.c
++++ b/src/legacy/engine/dynwave.c
+@@ -652,6 +652,8 @@ void setNodeDepth(int i, double dt)
+     double  denom;                     // denominator term
+     double  corr;                      // correction factor
+     double  f;                         // relative surcharge depth
++    double  aMin;                      // min. surface area (ft2)
++    double  aFull;                     // storage unit area at full depth (ft2)
+ 
+     // --- see if node can pond water above it
+     canPond = (AllowPonding && Node[i].pondedArea > 0.0);
+@@ -663,7 +665,15 @@ void setNodeDepth(int i, double dt)
+     yLast = Node[i].newDepth;
+     Node[i].overflow = 0.0;
+     surfArea = Xnode[i].newSurfArea;
+-    surfArea = MAX(surfArea, MinSurfArea);
++    aMin = MinSurfArea;
++
++    // --- MinSurfArea does not override a smaller storage unit's own area
++    if ( Node[i].type == STORAGE )
++    {
++        aFull = node_getSurfArea(i, Node[i].fullDepth);
++        if ( aFull > 0.0 ) aMin = MIN(aMin, aFull);
++    }
++    surfArea = MAX(surfArea, aMin);
+     
+     // --- determine average net flow volume into node over the time step
+     dQ = Node[i].inflow - Node[i].outflow;

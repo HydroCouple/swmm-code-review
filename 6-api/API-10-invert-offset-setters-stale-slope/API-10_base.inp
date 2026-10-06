@@ -1,0 +1,46 @@
+[TITLE]
+API-10 two conduits, kinematic wave; C1 (slope 0.0025) floods J1 at the 6.5 cfs peak
+
+[OPTIONS]
+FLOW_UNITS           CFS
+FLOW_ROUTING         KINWAVE
+START_DATE           01/01/2020
+START_TIME           00:00:00
+REPORT_START_DATE    01/01/2020
+REPORT_START_TIME    00:00:00
+END_DATE             01/01/2020
+END_TIME             04:00:00
+DRY_STEP             00:05:00
+ROUTING_STEP         0:00:30
+REPORT_STEP          00:15:00
+
+[JUNCTIONS]
+;;   invert  maxDepth  initDepth  surDepth  pondedArea
+J1   100     10        0          0         0
+J2   99      10        0          0         0
+
+[OUTFALLS]
+O1   97   FREE   NO
+
+[CONDUITS]
+;;   from  to   length  n      offset1  offset2
+C1   J1    J2   400     0.013  0        0
+C2   J2    O1   400     0.013  0        0
+
+[XSECTIONS]
+C1   CIRCULAR   1.5   0   0   0   1
+C2   CIRCULAR   1.5   0   0   0   1
+
+[INFLOWS]
+J1   FLOW   TSQ   FLOW   1.0   1.0
+
+[TIMESERIES]
+;; triangular hydrograph, 6.5 cfs peak at 1:00
+TSQ   0:00   0
+TSQ   1:00   6.5
+TSQ   2:00   0
+
+[REPORT]
+INPUT NO
+CONTROLS NO
+LINKS ALL

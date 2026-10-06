@@ -1,0 +1,27 @@
+CON-22: evaluate a STATUS premise as ON/OPEN when the link's setting is above 0
+
+getVariableValue() returned the raw link setting for the STATUS
+attribute, and the rule's ON/OPEN parses to 1 and OFF/CLOSED to 0, so
+"PUMP P1 STATUS = ON" was false (and so was "= OFF") for a pump running at
+any speed setting other than 1, e.g. after a "PUMP P1 SETTING = 0.5" action
+or under a curve, time series or PID action. Return 1 for a positive setting
+and 0 otherwise. Conduit settings are always 0 or 1, so conduits are
+unaffected.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply CON-22_swmm530.patch
+
+diff --git a/src/legacy/engine/controls.c b/src/legacy/engine/controls.c
+index e423886..f4ac068 100644
+--- a/src/legacy/engine/controls.c
++++ b/src/legacy/engine/controls.c
+@@ -1865,7 +1865,8 @@ double getVariableValue(struct TVariable v)
+             (Link[j].type != CONDUIT && Link[j].type != PUMP))
+             return MISSING;
+         else
+-            return Link[j].setting;
++            // --- a link with any positive setting is ON/OPEN
++            return (Link[j].setting > 0.0) ? 1.0 : 0.0;
+ 
+     case r_SETTING:
+         if (j < 0 || (Link[j].type != PUMP &&

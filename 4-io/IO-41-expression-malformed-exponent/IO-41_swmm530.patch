@@ -1,0 +1,33 @@
+IO-41: reject a malformed number in a math expression
+
+getNumber() detected an exponent marker with no digits ("5e", "2.5E+") in a
+local flag and returned 0 without setting the parser's error flag, and it
+read a decimal point with no digits (".") as atof(".") = 0. The expression
+was accepted with 0 in place of the constant. Set Err in both cases, so the
+expression is rejected with ERROR 233 like any other syntax error.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-41_swmm530.patch
+
+diff --git a/src/legacy/engine/mathexpr.c b/src/legacy/engine/mathexpr.c
+index c39dff7..910283b 100644
+--- a/src/legacy/engine/mathexpr.c
++++ b/src/legacy/engine/mathexpr.c
+@@ -243,8 +243,15 @@ double getNumber()
+         }
+     }
+     Pos--;
+-    if (errflag) return 0;
+-    else return atof(sNumber);
++
++    /* --- a number with no digits (".") or no exponent digits ("5e")
++           is an error */
++    if (errflag || !(isDigit(sNumber[0]) || isDigit(sNumber[1])))
++    {
++        Err = 1;
++        return 0;
++    }
++    return atof(sNumber);
+ }
+ 
+ //=============================================================================

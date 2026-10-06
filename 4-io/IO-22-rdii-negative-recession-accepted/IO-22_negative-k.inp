@@ -1,0 +1,46 @@
+[TITLE]
+IO-22: RDII unit hydrograph with a negative recession limb ratio K = -0.5
+
+[OPTIONS]
+FLOW_UNITS       CFS
+INFILTRATION     HORTON
+FLOW_ROUTING     KINWAVE
+START_DATE       01/01/2020
+START_TIME       00:00:00
+END_DATE         01/01/2020
+END_TIME         06:00:00
+REPORT_STEP      00:15:00
+WET_STEP         00:15:00
+DRY_STEP         01:00:00
+ROUTING_STEP     60
+
+[RAINGAGES]
+;;Name  Format  Interval  SCF  Source      Series
+G1      VOLUME  1:00      1.0  TIMESERIES  TS1
+
+[TIMESERIES]
+;; 1.0 in in the first hour
+TS1  01/01/2020  00:00  1.0
+TS1  01/01/2020  01:00  0.0
+
+[HYDROGRAPHS]
+;; R = 0.1, T = 1 h, K = -0.5: base time T*(1+K) = 0.5 h is shorter than
+;; the time to peak. IO-22_test.c rewrites K to -1, -2 and +0.5.
+UH1  G1
+UH1  ALL  SHORT  0.1  1  -0.5
+
+[RDII]
+;;Node  UHgroup  SewerArea(ac)
+J1      UH1      100
+
+[JUNCTIONS]
+J1  0  10
+
+[OUTFALLS]
+O1  -1  FREE
+
+[CONDUITS]
+C1  J1  O1  100  0.01  0  0
+
+[XSECTIONS]
+C1  CIRCULAR  2  0  0  0  1

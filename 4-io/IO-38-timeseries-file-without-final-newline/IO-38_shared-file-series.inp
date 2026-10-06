@@ -1,0 +1,84 @@
+[TITLE]
+IO-38: a series from an external file read by an EXT buildup function and by a node inflow
+
+[OPTIONS]
+FLOW_UNITS           CFS
+INFILTRATION         HORTON
+FLOW_ROUTING         KINWAVE
+START_DATE           01/01/2020
+START_TIME           00:00:00
+END_DATE             01/01/2020
+END_TIME             02:00:00
+REPORT_STEP          00:15:00
+WET_STEP             00:18:00
+DRY_STEP             00:18:00
+ROUTING_STEP         60
+
+[RAINGAGES]
+;;Name  Format     Interval  SCF  Source
+G1      INTENSITY  3:00      1.0  TIMESERIES  RAIN
+
+[SUBCATCHMENTS]
+;;Name  Gage  Outlet  Area  %Imperv  Width  %Slope  CurbLen
+S1      G1    J1      10    100      500    0.5     0
+
+[SUBAREAS]
+;;Subcatch  N-Imperv  N-Perv  S-Imperv  S-Perv  PctZero  RouteTo
+S1          0.01      0.1     0.05      0.05    100      OUTLET
+
+[INFILTRATION]
+;;Subcatch  MaxRate  MinRate  Decay  DryTime  MaxInfil
+S1          3.0      0.5      4      7        0
+
+[POLLUTANTS]
+;;Name  Units  Crain  Cgw  Crdii  Kdecay
+P1      MG/L   0      0    0      0
+
+[LANDUSES]
+L1
+
+[COVERAGES]
+S1  L1  100
+
+[BUILDUP]
+;; The buildup rate is read from FLW at the END of each 18-minute runoff
+;; step. The lookup at 1:30 runs past the file's last entry (1:25) and
+;; reaches end-of-file while the routing clock is still at 1:12.
+;;LandUse  Pollutant  Function  Cmax  Scale  Tseries  Normalizer
+L1         P1         EXT       1000  1.0    FLW      AREA
+
+[WASHOFF]
+L1  P1  EXP  0.1  1  0  0
+
+[JUNCTIONS]
+;;Name  Elev  MaxDepth  InitDepth  SurDepth  Aponded
+J1      100   5         0          0         0
+
+[OUTFALLS]
+;;Name  Elev  Type
+O1      99    FREE
+
+[CONDUITS]
+;;Name  From  To  Length  Roughness  InOffset  OutOffset  InitFlow
+C1      J1    O1  400     0.013      0         0         0
+
+[XSECTIONS]
+;;Link  Shape     Geom1  Geom2  Geom3  Geom4  Barrels
+C1      CIRCULAR  3      0      0      0      1
+
+[INFLOWS]
+;; FLW is read again at the START of each 1-minute routing step.
+;;Node  Constituent  Tseries  Type  Mfactor  Sfactor
+J1      FLOW         FLW      FLOW  1.0      1.0
+
+[TIMESERIES]
+;; No rain, so J1's lateral inflow is exactly FLW.
+RAIN  0:00  0
+RAIN  3:00  0
+;; IO-38_flow.dat ends with a line break. Its values are 5 cfs from 0:00 to
+;; 0:45 (flat, so that NUM-28 cannot change them), then 8, 10 and 0 cfs at
+;; 1:00, 1:15 and 1:25. Integral 30,450 ft3.
+FLW  FILE  "IO-38_flow.dat"
+
+[REPORT]
+NODES ALL

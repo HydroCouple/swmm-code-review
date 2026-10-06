@@ -1,0 +1,25 @@
+NUM-45: set the concentration of a dry node with no inflow to zero
+
+During a step Node[].newQual[] accumulates the node's mass inflow rate,
+which findNodeQual() divides by the inflow. When the inflow is at or below
+ZERO and the node is dry, 5.2.4 set the concentration to 0; 5.3.0 lost that
+branch (fork commit 5b87a2b5), so the node kept the accumulated load rate
+(MASS-type and API loads, sub-ZERO link loads) and reported it as mg/L.
+Restore the else branch. Wet nodes and nodes with inflow are unchanged.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-45_swmm530.patch
+
+diff --git a/src/legacy/engine/qualrout.c b/src/legacy/engine/qualrout.c
+index 1cf5ae1..ea19995 100644
+--- a/src/legacy/engine/qualrout.c
++++ b/src/legacy/engine/qualrout.c
+@@ -265,6 +265,8 @@ void findNodeQual(int j)
+                 Node[j].newQual[p] = 0.0;
+             else if (Node[j].newDepth > ZeroDepth)
+                 Node[j].newQual[p] = Node[j].oldQual[p];
++            else
++                Node[j].newQual[p] = 0.0;
+         }
+     }
+ }

@@ -1,0 +1,49 @@
+IO-55: book off-curve pump time as Low or High by the side of the curve
+
+pump_getInflow() marked a Type1, Type2, Type3 or Type5 pump that operates
+outside its curve with Link.flowClass = YES. YES is 1, which is UP_DRY in
+the flow-class enumeration, and stats_updateLinkStats() counts UP_DRY as
+"High" and DN_DRY as "Low", so all off-curve time of these pumps went to
+the High column, including time spent below the curve's first point. Set
+DN_DRY below the curve and UP_DRY above it, as the Type4 case already does.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-55_swmm530.patch
+
+diff --git a/src/legacy/engine/link.c b/src/legacy/engine/link.c
+index 31925e1..cd55ba4 100644
+--- a/src/legacy/engine/link.c
++++ b/src/legacy/engine/link.c
+@@ -1583,8 +1583,8 @@ double pump_getInflow(int j)
+         qIn = table_intervalLookup(&Curve[m], vol) / UCF(FLOW);
+ 
+         // --- check if off of pump curve
+-        if ( vol < Pump[k].xMin || vol > Pump[k].xMax )
+-            Link[j].flowClass = YES;
++        if ( vol < Pump[k].xMin ) Link[j].flowClass = DN_DRY;
++        if ( vol > Pump[k].xMax ) Link[j].flowClass = UP_DRY;
+         break;
+ 
+       case PUMP2_CURVE:
+@@ -1592,8 +1592,8 @@ double pump_getInflow(int j)
+         qIn = table_intervalLookup(&Curve[m], depth) / UCF(FLOW);
+ 
+         // --- check if off of pump curve
+-        if ( depth < Pump[k].xMin || depth > Pump[k].xMax )
+-            Link[j].flowClass = YES;
++        if ( depth < Pump[k].xMin ) Link[j].flowClass = DN_DRY;
++        if ( depth > Pump[k].xMax ) Link[j].flowClass = UP_DRY;
+         break;
+ 
+       case PUMP3_CURVE:
+@@ -1610,8 +1610,8 @@ double pump_getInflow(int j)
+               UCF(LENGTH) / UCF(FLOW) / s;
+ 
+           // --- check if off of pump curve
+-          if (head < Pump[k].xMin || head > Pump[k].xMax)
+-              Link[j].flowClass = YES;
++          if (head < Pump[k].xMin) Link[j].flowClass = DN_DRY;
++          if (head > Pump[k].xMax) Link[j].flowClass = UP_DRY;
+           break;
+ 
+       case PUMP4_CURVE:

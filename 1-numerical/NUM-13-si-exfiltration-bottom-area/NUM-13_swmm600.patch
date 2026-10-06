@@ -1,0 +1,44 @@
+NUM-13: convert the seepage bottom area of non-tabular storage shapes
+
+exfil_initState() converted the bottom and bank areas of a TABULAR storage
+unit from user units to ft2, but set the bottom area of FUNCTIONAL,
+CYLINDRICAL, CONICAL and PYRAMIDAL units straight from their coefficients,
+which are kept in user units. Under SI a bottom of 100 m2 was used as
+100 ft2 (10.8 times too small) and the rest of the surface area was
+treated as bank. With Green-Ampt seepage the bank sees half the head, so a
+vertical-walled 100 m2 basin lost 21 percent less water than the same basin
+described as TABULAR or in US units. Divide the bottom area by
+UCF(LENGTH)^2 as the TABULAR case does. US models are unchanged.
+The stale "PARITY QUIRK" comment in ExfilSolver::init() is updated.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-13_swmm600.patch
+
+diff --git a/src/engine/hydraulics/Exfiltration.cpp b/src/engine/hydraulics/Exfiltration.cpp
+index a626482..d5d234e 100644
+--- a/src/engine/hydraulics/Exfiltration.cpp
++++ b/src/engine/hydraulics/Exfiltration.cpp
+@@ -171,11 +171,8 @@ void ExfilSolver::init(SimulationContext& ctx) {
+             //     Legacy: exfil_initState() FUNCTIONAL case (exfil.c:134-141)
+             //     Bottom area: at depth=0, area = A*0^B + C = C
+             //     Exception: if B==0 (exponent is zero), area = A*1 + C = A+C
+-            //     PARITY QUIRK: legacy does NOT unit-convert the FUNCTIONAL
+-            //     bottom area (its /UCF at exfil.c:126-129 is inside the
+-            //     TABULAR case only), so the raw USER-unit coefficients are
+-            //     used directly — storage coefficients stay user-unit
+-            //     end-to-end (see PostParseResolver), matching this quirk.
++            //     Storage coefficients stay in USER units end-to-end (see
++            //     PostParseResolver), so the bottom area is converted below.
+             double a_coeff = (sr >= 0) ? ctx.node_subtypes.storages.a[static_cast<size_t>(sr)] : 0.0;
+             double b_coeff = (sr >= 0) ? ctx.node_subtypes.storages.b[static_cast<size_t>(sr)] : 0.0;
+             double c_coeff = (sr >= 0) ? ctx.node_subtypes.storages.c[static_cast<size_t>(sr)] : 0.0;
+@@ -197,7 +194,8 @@ void ExfilSolver::init(SimulationContext& ctx) {
+             } else if (b_coeff == 0.0) {
+                 btm += a_coeff;
+             }
+-            soa_.btm_area[uk] = btm;
++            const double ucf_len = ucf::UCF(ucf::LENGTH, ctx.options);
++            soa_.btm_area[uk] = btm / (ucf_len * ucf_len);
+ 
+             // For functional/cylindrical/conical/pyramidal shapes,
+             // bank seepage extends from depth 0 to infinity (BIG)

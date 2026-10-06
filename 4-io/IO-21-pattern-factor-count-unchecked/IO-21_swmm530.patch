@@ -1,0 +1,72 @@
+IO-21: reject a time pattern with the wrong number of factors
+
+inflow_readDwfPattern() stored whatever factors a [PATTERNS] entry held and
+silently stopped after 24, and nothing compared the count with the 12, 7, 24
+or 24 factors a MONTHLY, DAILY, HOURLY or WEEKEND pattern needs; a missing
+factor kept its default of 1.0. Report a 25th factor as an input error at the
+line where it appears, and check every pattern's count in project_validate().
+Adds error 237, "wrong number of factors for Time Pattern %s".
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-21_swmm530.patch
+
+diff --git a/src/legacy/engine/error.h b/src/legacy/engine/error.h
+index 2bcea19..eaaa89f 100644
+--- a/src/legacy/engine/error.h
++++ b/src/legacy/engine/error.h
+@@ -190,6 +190,8 @@ enum ErrorType {
+       ERR_MATH_EXPR            = 233,
+       /*! \brief Infiltration parameters error */
+       ERR_INFIL_PARAMS         = 235,
++      /*! \brief Time pattern has wrong number of factors */
++      ERR_PATTERN_FACTORS      = 237,
+ 
+ // ... File Name/Opening Errors
+       /*! \brief File name error */
+diff --git a/src/legacy/engine/error.txt b/src/legacy/engine/error.txt
+index 801d96b..0e11e46 100644
+--- a/src/legacy/engine/error.txt
++++ b/src/legacy/engine/error.txt
+@@ -78,6 +78,7 @@ ERR(229,"\n  ERROR 229: Transect %s has invalid overbank locations.")
+ ERR(231,"\n  ERROR 231: Transect %s has no depth.")
+ ERR(233,"\n  ERROR 233: invalid math expression ")
+ ERR(235,"\n  ERROR 235: invalid infiltration parameters.")
++ERR(237,"\n  ERROR 237: wrong number of factors for Time Pattern %s ")
+ 
+ ERR(301,"\n  ERROR 301: files share same names.")
+ ERR(303,"\n  ERROR 303: cannot open input file.")
+diff --git a/src/legacy/engine/inflow.c b/src/legacy/engine/inflow.c
+index 741e3da..3d8ab12 100644
+--- a/src/legacy/engine/inflow.c
++++ b/src/legacy/engine/inflow.c
+@@ -429,6 +429,9 @@ int inflow_readDwfPattern(char* tok[], int ntoks)
+         Pattern[j].count++;
+         n++;
+     }
++
++    // --- more than 24 factors cannot be stored
++    if ( ntoks > n ) return error_setInpError(ERR_PATTERN_FACTORS, tok[0]);
+     return 0;
+ }
+ 
+diff --git a/src/legacy/engine/project.c b/src/legacy/engine/project.c
+index d24c17f..569e7cd 100644
+--- a/src/legacy/engine/project.c
++++ b/src/legacy/engine/project.c
+@@ -214,6 +214,16 @@ void project_validate()
+         if ( err ) report_writeTseriesErrorMsg(err, &Tseries[i]);
+     }
+ 
++    // --- check that each time pattern has the number of factors its
++    //     type requires (12 monthly, 7 daily, 24 hourly or weekend)
++    for ( i=0; i<Nobjects[TIMEPATTERN]; i++ )
++    {
++        j = Pattern[i].type;
++        if ( j >= 0 && Pattern[i].count != (j == MONTHLY_PATTERN ? 12 :
++                                            j == DAILY_PATTERN ? 7 : 24) )
++            report_writeErrorMsg(ERR_PATTERN_FACTORS, Pattern[i].ID);
++    }
++
+     // --- validate hydrology objects
+     //     (NOTE: order is important !!!!)
+     climate_validate();

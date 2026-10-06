@@ -1,0 +1,26 @@
+NUM-15: reject a FUNCTIONAL storage exponent of -1 or less
+
+A FUNCTIONAL storage unit's volume is the integral of A0 + A1*Depth^A2 from
+depth 0, which storage_getVolume() evaluates as A0*d + A1/(A2+1)*d^(A2+1).
+The integral does not exist for A2 <= -1: at -1 the code divides by zero
+and every volume is inf (continuity error NaN), below -1 it returns a finite
+number for an infinite integral. storage_readParams() only checked A0.
+Reject A2 <= -1 with ERROR 211 (invalid number) at the exponent token, as a
+negative A0 already is.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-15_swmm530.patch
+
+diff --git a/src/legacy/engine/node.c b/src/legacy/engine/node.c
+index 070db5a..222e99c 100644
+--- a/src/legacy/engine/node.c
++++ b/src/legacy/engine/node.c
+@@ -691,6 +691,8 @@ int storage_readParams(int j, int k, char* tok[], int ntoks)
+         case FUNCTIONAL:
+             // area at 0 depth can't be negative
+             if (y[2] < 0.0) return error_setInpError(ERR_NUMBER, tok[7]);
++            // volume (integral of area from 0 depth) requires exponent > -1
++            if (y[1] <= -1.0) return error_setInpError(ERR_NUMBER, tok[6]);
+             break;
+ 
+         case CYLINDRICAL: 

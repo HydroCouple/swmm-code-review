@@ -1,0 +1,33 @@
+BND-04: book the pollutant mass carried by an outfall's reverse flow
+
+removeOutflows() books the flow an outfall sends into the network as
+external inflow, but not the pollutant mass that flow carries: the reversed
+link takes the outfall's concentration (its held last value), so mass
+entered the network without appearing in the quality mass balance. Book
+-q * Node.newQual alongside the flow. The concentrations computed by the
+model do not change.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply BND-04_swmm530.patch
+
+diff --git a/src/legacy/engine/routing.c b/src/legacy/engine/routing.c
+index 9a47f4b..1aef3c1 100644
+--- a/src/legacy/engine/routing.c
++++ b/src/legacy/engine/routing.c
+@@ -1023,7 +1023,15 @@ void removeOutflows(double tStep)
+                 massbal_addOutflowQual(p, w, isFlooded);
+             }
+         }
+-        else massbal_addInflowFlow(EXTERNAL_INFLOW, -q);
++        else
++        {
++            massbal_addInflowFlow(EXTERNAL_INFLOW, -q);
++
++            // --- pollutant mass carried into the system by an outfall's
++            //     reverse flow
++            for ( p = 0; p < Nobjects[POLLUT]; p++ )
++                massbal_addInflowQual(EXTERNAL_INFLOW, p, -q * Node[i].newQual[p]);
++        }
+ 
+         // --- update mass balance with mass leaving system through negative
+         //     lateral inflows (lateral flow was previously accounted for)

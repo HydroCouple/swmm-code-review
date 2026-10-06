@@ -1,0 +1,39 @@
+[TITLE]
+BND-08: junction J1 with a bolted cover (Ymax 5 ft, Ysur 10 ft) and a ponded area
+of 1000 ft2, ALLOW_PONDING YES. 10 cfs enters J1; its 1 ft outlet pipe C1 carries
+less, so J1 must pressurize. Per the input manual, J1 ponds only once its depth
+exceeds Ymax + Ysur = 15 ft.
+
+[OPTIONS]
+FLOW_UNITS           CFS
+FLOW_ROUTING         DYNWAVE
+ALLOW_PONDING        YES
+START_DATE           01/01/2020
+START_TIME           00:00:00
+REPORT_START_DATE    01/01/2020
+REPORT_START_TIME    00:00:00
+END_DATE             01/01/2020
+END_TIME             01:00:00
+REPORT_STEP          00:05:00
+ROUTING_STEP         2
+VARIABLE_STEP        0
+
+[JUNCTIONS]
+;;Name Elev MaxDepth InitDepth SurDepth Aponded
+J1     0    5        0         10       1000
+
+[OUTFALLS]
+O1     -1   FREE
+
+[CONDUITS]
+C1     J1  O1  200  0.013  0  0  0  0
+
+[XSECTIONS]
+C1     CIRCULAR 1 0 0 0 1
+
+[INFLOWS]
+J1  FLOW  ""  FLOW 1.0 1.0 10
+
+[REPORT]
+NODES ALL
+LINKS ALL

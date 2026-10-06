@@ -1,0 +1,48 @@
+CRASH-01: clamp datetime_timeDiff() instead of overflowing an int conversion
+
+datetime_timeDiff() stored (int)floor((d1 - d2)*86400 + 0.5). When one of the
+dates is NO_DATE (1 Jan 0001), as it is for every rain gage whose series has
+ended, the value is about -6.3e10 and the conversion is undefined behaviour.
+Compute the difference in double, clamp it to the range of long, and convert
+once. Results within range are unchanged (both terms are whole numbers that
+a double holds exactly).
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply CRASH-01_swmm530.patch
+
+diff --git a/src/legacy/engine/datetime.c b/src/legacy/engine/datetime.c
+index 31eb5bc..749a0d3 100644
+--- a/src/legacy/engine/datetime.c
++++ b/src/legacy/engine/datetime.c
+@@ -17,6 +17,7 @@
+ #define _CRT_SECURE_NO_DEPRECATE
+ 
+ #include <math.h>
++#include <limits.h>
+ #include <string.h>
+ #include <stdlib.h>
+ #include <stdio.h>
+@@ -424,14 +425,19 @@ long datetime_timeDiff(DateTime date1, DateTime date2)
+     double d1 = floor(date1);
+     double d2 = floor(date2);
+     int    h, m, s;
+-    long   s1, s2, secs;
++    long   s1, s2;
++    double secs;
+     datetime_decodeTime(date1, &h, &m, &s);
+     s1 = 3600*h + 60*m + s;
+     datetime_decodeTime(date2, &h, &m, &s);
+     s2 = 3600*h + 60*m + s;
+-    secs = (int)(floor((d1 - d2)*SecsPerDay + 0.5));
+-    secs += (s1 - s2);
+-    return secs;
++    secs = floor((d1 - d2)*SecsPerDay + 0.5) + (double)(s1 - s2);
++
++    // --- a difference that does not fit in a long (e.g. one date is
++    //     NO_DATE) is clamped instead of overflowing the conversion
++    if ( secs >= (double)LONG_MAX ) return LONG_MAX;
++    if ( secs <= (double)LONG_MIN ) return LONG_MIN;
++    return (long)secs;
+ }
+ 
+ //=============================================================================

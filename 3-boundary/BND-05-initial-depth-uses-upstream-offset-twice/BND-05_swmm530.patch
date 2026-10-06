@@ -1,0 +1,24 @@
+BND-05: seed a conduit's downstream node with its outlet offset, not its inlet offset
+
+initNodeDepths() sets the initial depth of a junction without a user initial
+depth to the average water level of its connecting links, taking each link's
+level as newDepth + offset1. That is right at node1 but wrong at node2, whose
+level is newDepth + offset2. A conduit with an initial flow and an inlet
+offset therefore starts its downstream node too high by offset1 - offset2.
+Use offset2 for node2.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply BND-05_swmm530.patch
+
+diff --git a/src/legacy/engine/flowrout.c b/src/legacy/engine/flowrout.c
+index b370219..9f9e0e5 100644
+--- a/src/legacy/engine/flowrout.c
++++ b/src/legacy/engine/flowrout.c
+@@ -368,6 +368,7 @@ void initNodeDepths(void)
+         n = Link[i].node1;
+         Node[n].inflow += y;
+         Node[n].outflow += 1.0;
++        if ( Link[i].newDepth > FUDGE ) y = Link[i].newDepth + Link[i].offset2;
+         n = Link[i].node2;
+         Node[n].inflow += y;
+         Node[n].outflow += 1.0;

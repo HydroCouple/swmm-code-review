@@ -1,0 +1,59 @@
+[TITLE]
+NUM-04: degree-day melt of a 25.4 mm pack in SI units (C = 0.4572 mm/hr/degC)
+
+;; One fully pervious subcatchment carries a 25.4 mm (1 in) snow pack. The air
+;; stays at 10 degC for the whole 1-hour run and there is no rain, so the pack
+;; melts by the degree-day equation alone:
+;;   melt = C x (Ta - Tbase) x 1 h = 0.4572 x (10 - 0) x 1 = 4.572 mm
+;; NUM-04_us.inp is the same model in US units (0.01 in/hr/degF, 50 degF, 32 degF).
+
+[OPTIONS]
+FLOW_UNITS       CMS
+INFILTRATION     HORTON
+FLOW_ROUTING     KINWAVE
+START_DATE       01/01/2020
+START_TIME       00:00:00
+END_DATE         01/01/2020
+END_TIME         01:00:00
+REPORT_STEP      00:30:00
+WET_STEP         00:05:00
+DRY_STEP         00:05:00
+ROUTING_STEP     60
+
+[EVAPORATION]
+CONSTANT 0.0
+
+[TEMPERATURE]
+TIMESERIES TEMP1
+;;        Stemp  ATIwt RNM Elev Lat DTLong
+SNOWMELT  1.1111 0.5   0.6 0    40  0
+
+[RAINGAGES]
+G1 INTENSITY 1:00 1.0 TIMESERIES RAIN1
+
+[TIMESERIES]
+RAIN1 01/01/2020 00:00 0.0
+TEMP1 01/01/2020 00:00 10
+TEMP1 01/02/2020 00:00 10
+
+[SNOWPACKS]
+;;Name  Surface     Cmin   Cmax   Tbase FWF SD0  FW0 SNN0/SD100
+SP1     PLOWABLE    0.4572 0.4572 0     0   0    0   0
+SP1     IMPERVIOUS  0.4572 0.4572 0     0   0    0   0
+SP1     PERVIOUS    0.4572 0.4572 0     0   25.4 0   0
+
+[SUBCATCHMENTS]
+;;Name Gage Outlet Area   %Imperv Width %Slope CurbLen SnowPack
+S1     G1   O1     4.0469 0       152.4 1      0       SP1
+
+[SUBAREAS]
+S1 0.01 0.1 0 0 0 OUTLET
+
+[INFILTRATION]
+S1 0 0 4 7 0
+
+[OUTFALLS]
+O1 0 FREE
+
+[REPORT]
+SUBCATCHMENTS ALL

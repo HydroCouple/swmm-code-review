@@ -1,0 +1,315 @@
+API-04: return finished statistics in project units from the statistics getters
+
+swmm_getSubcatchStats(), swmm_getNodeStats(), swmm_getStorageStats(),
+swmm_getOutfallStats(), swmm_getLinkStats(), swmm_getPumpStats(),
+swmm_getSystemRoutingTotals() and swmm_getSystemRunoffTotals() copied the
+accumulators of stats.c and massbal.c: averages as sums over routing steps,
+times in seconds, depths as volumes, pollutant loads in mg/L x ft3 and every
+length, flow and volume in ft, cfs and ft3, also for SI projects. Convert
+them as statsrpt.c and massbal.c do for the report: divide sums by the step
+or period count, seconds by 3600 (pump utilization by the routed time),
+precipitation and runoff-total depths by the area, and apply UCF() and the
+pollutant mass factor.
+
+writeFlowClass() also divided LinkStats[].timeInFlowClass in place, so the
+getter's value depended on whether the report had been written; it now
+divides a copy. The header comments that described values the engine does
+not keep (Courant-critical "time", pump off-curve "depth") now describe the
+returned values.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply API-04_swmm530.patch
+
+diff --git a/include/openswmm/legacy/engine/openswmm_solver.h b/include/openswmm/legacy/engine/openswmm_solver.h
+index 43d4aca..9a94a67 100644
+--- a/include/openswmm/legacy/engine/openswmm_solver.h
++++ b/include/openswmm/legacy/engine/openswmm_solver.h
+@@ -703,7 +703,7 @@ typedef struct
+     double volFlooded;           /*!< Total volume flooded */
+     double timeFlooded;          /*!< Total time flooded (hours) */
+     double timeSurcharged;       /*!< Total time surcharged (hours) */
+-    double timeCourantCritical;  /*!< Total time Courant-critical (hours) */
++    double timeCourantCritical;  /*!< Number of routing steps in which the node was Courant-critical */
+     double totLatFlow;           /*!< Total lateral inflow volume */
+     double maxLatFlow;           /*!< Maximum lateral inflow rate */
+     double maxInflow;            /*!< Maximum total inflow rate */
+@@ -757,8 +757,8 @@ typedef struct
+     double timeFullDnstream;     /*!< Time full at downstream (hours) */
+     double timeFullFlow;         /*!< Time at full flow (hours) */
+     double timeCapacityLimited;  /*!< Time capacity-limited (hours) */
+-    double timeInFlowClass[SWMM_MAX_FLOW_CLASSES]; /*!< Time in each flow class */
+-    double timeCourantCritical;  /*!< Time Courant-critical (hours) */
++    double timeInFlowClass[SWMM_MAX_FLOW_CLASSES]; /*!< Time in each flow class (hours) */
++    double timeCourantCritical;  /*!< Number of routing steps in which the link was Courant-critical */
+     long   flowTurns;            /*!< Number of flow reversals */
+     int    flowTurnSign;         /*!< Current flow direction sign */
+ } swmm_LinkStats;
+@@ -775,8 +775,8 @@ typedef struct
+     double maxFlow;      /*!< Maximum flow rate */
+     double volume;       /*!< Total pumping volume */
+     double energy;       /*!< Total energy demand */
+-    double offCurveLow;  /*!< Off-curve depth below on-depth */
+-    double offCurveHigh; /*!< Off-curve depth above on-depth */
++    double offCurveLow;  /*!< Time operating off the low end of the pump curve (hours) */
++    double offCurveHigh; /*!< Time operating off the high end of the pump curve (hours) */
+     int    startUps;     /*!< Number of pump start-ups */
+     int    totalPeriods; /*!< Total simulation periods */
+ } swmm_PumpStats;
+diff --git a/src/legacy/engine/statsrpt.c b/src/legacy/engine/statsrpt.c
+index 8050f24..bffa25c 100644
+--- a/src/legacy/engine/statsrpt.c
++++ b/src/legacy/engine/statsrpt.c
+@@ -810,7 +810,7 @@ void writeFlowClass()
+         for ( i=0; i<MAX_FLOW_CLASSES; i++ )
+         {
+             fprintf(Frpt.file, "  %4.2f",
+-                LinkStats[j].timeInFlowClass[i] /= totalSeconds);              //5.2
++                LinkStats[j].timeInFlowClass[i] / totalSeconds);               //5.2
+                                                    //(double)ReportStepCount);
+         }
+         fprintf(Frpt.file, "  %4.2f", LinkStats[j].timeNormalFlow / totalSeconds);
+diff --git a/src/legacy/engine/swmm5_stats.c b/src/legacy/engine/swmm5_stats.c
+index b5a2dbf..48ed280 100644
+--- a/src/legacy/engine/swmm5_stats.c
++++ b/src/legacy/engine/swmm5_stats.c
+@@ -35,6 +35,13 @@ extern TPumpStats*     PumpStats;
+  * ==================================================================== */
+ extern TRunoffTotals   RunoffTotals;
+ extern TRoutingTotals  FlowTotals;
++extern double          TotalArea;          /* massbal.c, ft2 */
++extern double          RoutingTimeSpan;    /* stats.c, sec   */
++
++/* The accumulators are sums over routing steps, times in seconds and
++ * volumes, lengths and flows in internal units (ft, cfs, ft3). The getters
++ * return the finished statistics in the project's units, as statsrpt.c
++ * reports them. */
+ 
+ /* ====================================================================
+  *  Subcatchment Statistics
+@@ -47,14 +54,17 @@ int EXPORT_OPENSWMMCORE_SOLVER_API swmm_getSubcatchStats(
+     if (index < 0 || index >= Nobjects[SUBCATCH])
+         return ERR_API_OBJECT_INDEX;
+ 
+-    stats->precip       = SubcatchStats[index].precip;
+-    stats->runon        = SubcatchStats[index].runon;
+-    stats->evap         = SubcatchStats[index].evap;
+-    stats->infil        = SubcatchStats[index].infil;
+-    stats->runoff       = SubcatchStats[index].runoff;
+-    stats->maxFlow      = SubcatchStats[index].maxFlow;
+-    stats->impervRunoff = SubcatchStats[index].impervRunoff;
+-    stats->pervRunoff   = SubcatchStats[index].pervRunoff;
++    stats->precip       = 0.0;
++    if (Subcatch[index].area > 0.0)
++        stats->precip   = SubcatchStats[index].precip / Subcatch[index].area *
++                          UCF(RAINDEPTH);
++    stats->runon        = SubcatchStats[index].runon * UCF(VOLUME);
++    stats->evap         = SubcatchStats[index].evap * UCF(VOLUME);
++    stats->infil        = SubcatchStats[index].infil * UCF(VOLUME);
++    stats->runoff       = SubcatchStats[index].runoff * UCF(VOLUME);
++    stats->maxFlow      = SubcatchStats[index].maxFlow * UCF(FLOW);
++    stats->impervRunoff = SubcatchStats[index].impervRunoff * UCF(VOLUME);
++    stats->pervRunoff   = SubcatchStats[index].pervRunoff * UCF(VOLUME);
+     return 0;
+ }
+ 
+@@ -69,19 +79,22 @@ int EXPORT_OPENSWMMCORE_SOLVER_API swmm_getNodeStats(
+     if (index < 0 || index >= Nobjects[NODE])
+         return ERR_API_OBJECT_INDEX;
+ 
+-    stats->avgDepth            = NodeStats[index].avgDepth;
+-    stats->maxDepth            = NodeStats[index].maxDepth;
++    stats->avgDepth            = 0.0;
++    if (ReportStepCount > 0)
++        stats->avgDepth        = NodeStats[index].avgDepth / ReportStepCount *
++                                 UCF(LENGTH);
++    stats->maxDepth            = NodeStats[index].maxDepth * UCF(LENGTH);
+     stats->maxDepthDate        = NodeStats[index].maxDepthDate;
+     stats->maxRptDepth         = NodeStats[index].maxRptDepth;
+-    stats->volFlooded          = NodeStats[index].volFlooded;
+-    stats->timeFlooded         = NodeStats[index].timeFlooded;
+-    stats->timeSurcharged      = NodeStats[index].timeSurcharged;
++    stats->volFlooded          = NodeStats[index].volFlooded * UCF(VOLUME);
++    stats->timeFlooded         = NodeStats[index].timeFlooded / 3600.0;
++    stats->timeSurcharged      = NodeStats[index].timeSurcharged / 3600.0;
+     stats->timeCourantCritical = NodeStats[index].timeCourantCritical;
+-    stats->totLatFlow          = NodeStats[index].totLatFlow;
+-    stats->maxLatFlow          = NodeStats[index].maxLatFlow;
+-    stats->maxInflow           = NodeStats[index].maxInflow;
+-    stats->maxOverflow         = NodeStats[index].maxOverflow;
+-    stats->maxPondedVol        = NodeStats[index].maxPondedVol;
++    stats->totLatFlow          = NodeStats[index].totLatFlow * UCF(VOLUME);
++    stats->maxLatFlow          = NodeStats[index].maxLatFlow * UCF(FLOW);
++    stats->maxInflow           = NodeStats[index].maxInflow * UCF(FLOW);
++    stats->maxOverflow         = NodeStats[index].maxOverflow * UCF(FLOW);
++    stats->maxPondedVol        = NodeStats[index].maxPondedVol * UCF(VOLUME);
+     stats->maxInflowDate       = NodeStats[index].maxInflowDate;
+     stats->maxOverflowDate     = NodeStats[index].maxOverflowDate;
+     return 0;
+@@ -105,12 +118,14 @@ int EXPORT_OPENSWMMCORE_SOLVER_API swmm_getStorageStats(
+     if (Node[index].type != STORAGE || j < 0 || j >= Nnodes[STORAGE])
+         return ERR_API_OBJECT_TYPE;
+ 
+-    stats->initVol     = StorageStats[j].initVol;
+-    stats->avgVol      = StorageStats[j].avgVol;
+-    stats->maxVol      = StorageStats[j].maxVol;
+-    stats->maxFlow     = StorageStats[j].maxFlow;
+-    stats->evapLosses  = StorageStats[j].evapLosses;
+-    stats->exfilLosses = StorageStats[j].exfilLosses;
++    stats->initVol     = StorageStats[j].initVol * UCF(VOLUME);
++    stats->avgVol      = 0.0;
++    if (ReportStepCount > 0)
++        stats->avgVol  = StorageStats[j].avgVol / ReportStepCount * UCF(VOLUME);
++    stats->maxVol      = StorageStats[j].maxVol * UCF(VOLUME);
++    stats->maxFlow     = StorageStats[j].maxFlow * UCF(FLOW);
++    stats->evapLosses  = StorageStats[j].evapLosses * UCF(VOLUME);
++    stats->exfilLosses = StorageStats[j].exfilLosses * UCF(VOLUME);
+     stats->maxVolDate  = StorageStats[j].maxVolDate;
+     return 0;
+ }
+@@ -133,15 +148,19 @@ int EXPORT_OPENSWMMCORE_SOLVER_API swmm_getOutfallStats(
+     if (Node[index].type != OUTFALL || j < 0 || j >= Nnodes[OUTFALL])
+         return ERR_API_OBJECT_TYPE;
+ 
+-    stats->avgFlow      = OutfallStats[j].avgFlow;
+-    stats->maxFlow      = OutfallStats[j].maxFlow;
++    stats->avgFlow      = 0.0;
++    if (OutfallStats[j].totalPeriods > 0)
++        stats->avgFlow  = OutfallStats[j].avgFlow / OutfallStats[j].totalPeriods *
++                          UCF(FLOW);
++    stats->maxFlow      = OutfallStats[j].maxFlow * UCF(FLOW);
+     stats->totalPeriods = OutfallStats[j].totalPeriods;
+ 
+     /* Copy pollutant loads if array provided */
+     if (stats->totalLoad != NULL && OutfallStats[j].totalLoad != NULL)
+     {
+         for (p = 0; p < Nobjects[POLLUT]; p++)
+-            stats->totalLoad[p] = OutfallStats[j].totalLoad[p];
++            stats->totalLoad[p] = OutfallStats[j].totalLoad[p] * LperFT3 *
++                                  Pollut[p].mcf;
+     }
+     return 0;
+ }
+@@ -159,23 +178,23 @@ int EXPORT_OPENSWMMCORE_SOLVER_API swmm_getLinkStats(
+     if (index < 0 || index >= Nobjects[LINK])
+         return ERR_API_OBJECT_INDEX;
+ 
+-    stats->maxFlow             = LinkStats[index].maxFlow;
++    stats->maxFlow             = LinkStats[index].maxFlow * UCF(FLOW);
+     stats->maxFlowDate         = LinkStats[index].maxFlowDate;
+-    stats->maxVeloc            = LinkStats[index].maxVeloc;
+-    stats->maxDepth            = LinkStats[index].maxDepth;
+-    stats->timeNormalFlow      = LinkStats[index].timeNormalFlow;
+-    stats->timeInletControl    = LinkStats[index].timeInletControl;
+-    stats->timeSurcharged      = LinkStats[index].timeSurcharged;
+-    stats->timeFullUpstream    = LinkStats[index].timeFullUpstream;
+-    stats->timeFullDnstream    = LinkStats[index].timeFullDnstream;
+-    stats->timeFullFlow        = LinkStats[index].timeFullFlow;
+-    stats->timeCapacityLimited = LinkStats[index].timeCapacityLimited;
++    stats->maxVeloc            = LinkStats[index].maxVeloc * UCF(LENGTH);
++    stats->maxDepth            = LinkStats[index].maxDepth * UCF(LENGTH);
++    stats->timeNormalFlow      = LinkStats[index].timeNormalFlow / 3600.0;
++    stats->timeInletControl    = LinkStats[index].timeInletControl / 3600.0;
++    stats->timeSurcharged      = LinkStats[index].timeSurcharged / 3600.0;
++    stats->timeFullUpstream    = LinkStats[index].timeFullUpstream / 3600.0;
++    stats->timeFullDnstream    = LinkStats[index].timeFullDnstream / 3600.0;
++    stats->timeFullFlow        = LinkStats[index].timeFullFlow / 3600.0;
++    stats->timeCapacityLimited = LinkStats[index].timeCapacityLimited / 3600.0;
+     stats->timeCourantCritical = LinkStats[index].timeCourantCritical;
+     stats->flowTurns           = LinkStats[index].flowTurns;
+     stats->flowTurnSign        = LinkStats[index].flowTurnSign;
+ 
+     for (k = 0; k < MAX_FLOW_CLASSES; k++)
+-        stats->timeInFlowClass[k] = LinkStats[index].timeInFlowClass[k];
++        stats->timeInFlowClass[k] = LinkStats[index].timeInFlowClass[k] / 3600.0;
+ 
+     return 0;
+ }
+@@ -198,14 +217,19 @@ int EXPORT_OPENSWMMCORE_SOLVER_API swmm_getPumpStats(
+     if (Link[index].type != PUMP || j < 0 || j >= Nlinks[PUMP])
+         return ERR_API_OBJECT_TYPE;
+ 
+-    stats->utilized     = PumpStats[j].utilized;
+-    stats->minFlow      = PumpStats[j].minFlow;
+-    stats->avgFlow      = PumpStats[j].avgFlow;
+-    stats->maxFlow      = PumpStats[j].maxFlow;
+-    stats->volume       = PumpStats[j].volume;
++    stats->utilized     = 0.0;
++    if (RoutingTimeSpan > 0.0)
++        stats->utilized = PumpStats[j].utilized / RoutingTimeSpan;
++    stats->minFlow      = PumpStats[j].minFlow * UCF(FLOW);
++    stats->avgFlow      = 0.0;
++    if (PumpStats[j].totalPeriods > 0)
++        stats->avgFlow  = PumpStats[j].avgFlow / PumpStats[j].totalPeriods *
++                          UCF(FLOW);
++    stats->maxFlow      = PumpStats[j].maxFlow * UCF(FLOW);
++    stats->volume       = PumpStats[j].volume * UCF(VOLUME);
+     stats->energy       = PumpStats[j].energy;
+-    stats->offCurveLow  = PumpStats[j].offCurveLow;
+-    stats->offCurveHigh = PumpStats[j].offCurveHigh;
++    stats->offCurveLow  = PumpStats[j].offCurveLow / 3600.0;
++    stats->offCurveHigh = PumpStats[j].offCurveHigh / 3600.0;
+     stats->startUps     = PumpStats[j].startUps;
+     stats->totalPeriods = PumpStats[j].totalPeriods;
+     return 0;
+@@ -217,18 +241,18 @@ int EXPORT_OPENSWMMCORE_SOLVER_API swmm_getPumpStats(
+ int EXPORT_OPENSWMMCORE_SOLVER_API swmm_getSystemRoutingTotals(
+     swmm_RoutingTotals *totals)
+ {
+-    totals->dwInflow     = FlowTotals.dwInflow;
+-    totals->wwInflow     = FlowTotals.wwInflow;
+-    totals->gwInflow     = FlowTotals.gwInflow;
+-    totals->iiInflow     = FlowTotals.iiInflow;
+-    totals->exInflow     = FlowTotals.exInflow;
+-    totals->flooding     = FlowTotals.flooding;
+-    totals->outflow      = FlowTotals.outflow;
+-    totals->evapLoss     = FlowTotals.evapLoss;
+-    totals->seepLoss     = FlowTotals.seepLoss;
+-    totals->reacted      = FlowTotals.reacted;
+-    totals->initStorage  = FlowTotals.initStorage;
+-    totals->finalStorage = FlowTotals.finalStorage;
++    totals->dwInflow     = FlowTotals.dwInflow * UCF(VOLUME);
++    totals->wwInflow     = FlowTotals.wwInflow * UCF(VOLUME);
++    totals->gwInflow     = FlowTotals.gwInflow * UCF(VOLUME);
++    totals->iiInflow     = FlowTotals.iiInflow * UCF(VOLUME);
++    totals->exInflow     = FlowTotals.exInflow * UCF(VOLUME);
++    totals->flooding     = FlowTotals.flooding * UCF(VOLUME);
++    totals->outflow      = FlowTotals.outflow * UCF(VOLUME);
++    totals->evapLoss     = FlowTotals.evapLoss * UCF(VOLUME);
++    totals->seepLoss     = FlowTotals.seepLoss * UCF(VOLUME);
++    totals->reacted      = FlowTotals.reacted * UCF(VOLUME);
++    totals->initStorage  = FlowTotals.initStorage * UCF(VOLUME);
++    totals->finalStorage = FlowTotals.finalStorage * UCF(VOLUME);
+     totals->pctError     = FlowTotals.pctError;
+     return 0;
+ }
+@@ -239,17 +263,19 @@ int EXPORT_OPENSWMMCORE_SOLVER_API swmm_getSystemRoutingTotals(
+ int EXPORT_OPENSWMMCORE_SOLVER_API swmm_getSystemRunoffTotals(
+     swmm_RunoffTotals *totals)
+ {
+-    totals->rainfall       = RunoffTotals.rainfall;
+-    totals->evap           = RunoffTotals.evap;
+-    totals->infil          = RunoffTotals.infil;
+-    totals->runoff         = RunoffTotals.runoff;
+-    totals->drains         = RunoffTotals.drains;
+-    totals->runon          = RunoffTotals.runon;
+-    totals->initStorage    = RunoffTotals.initStorage;
+-    totals->finalStorage   = RunoffTotals.finalStorage;
+-    totals->initSnowCover  = RunoffTotals.initSnowCover;
+-    totals->finalSnowCover = RunoffTotals.finalSnowCover;
+-    totals->snowRemoved    = RunoffTotals.snowRemoved;
++    double a = (TotalArea > 0.0) ? UCF(RAINDEPTH) / TotalArea : 0.0;
++
++    totals->rainfall       = RunoffTotals.rainfall * a;
++    totals->evap           = RunoffTotals.evap * UCF(VOLUME);
++    totals->infil          = RunoffTotals.infil * UCF(VOLUME);
++    totals->runoff         = RunoffTotals.runoff * UCF(VOLUME);
++    totals->drains         = RunoffTotals.drains * UCF(VOLUME);
++    totals->runon          = RunoffTotals.runon * UCF(VOLUME);
++    totals->initStorage    = RunoffTotals.initStorage * a;
++    totals->finalStorage   = RunoffTotals.finalStorage * a;
++    totals->initSnowCover  = RunoffTotals.initSnowCover * a;
++    totals->finalSnowCover = RunoffTotals.finalSnowCover * a;
++    totals->snowRemoved    = RunoffTotals.snowRemoved * a;
+     totals->pctError       = RunoffTotals.pctError;
+     return 0;
+ }

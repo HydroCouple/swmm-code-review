@@ -1,0 +1,25 @@
+NUM-37: let a rooftop disconnection with Rough or Slope = 0 overflow
+
+roofFluxRates() called getSurfaceOverflowRate() when the roof has no
+Manning outflow (Rough or Slope = 0) but threw its result away, so the
+surface outflow, and the gutter flow taken from it, stayed 0 and all rain
+piled up on the roof. Assign the overflow rate to SurfaceOutflow, as the
+Manning branch does, so water above the storage depth leaves within the
+step (the documented rule) and the gutters take up to their capacity of it.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-37_swmm530.patch
+
+diff --git a/src/legacy/engine/lidproc.c b/src/legacy/engine/lidproc.c
+index dbd83e4..edfdf96 100644
+--- a/src/legacy/engine/lidproc.c
++++ b/src/legacy/engine/lidproc.c
+@@ -480,7 +480,7 @@ void roofFluxRates(double x[], double f[])
+     SurfaceInfil = 0.0;
+     if ( theLidProc->surface.alpha > 0.0 )
+       SurfaceOutflow = getSurfaceOutflowRate(surfaceDepth);
+-    else getSurfaceOverflowRate(&surfaceDepth);
++    else SurfaceOutflow = getSurfaceOverflowRate(&surfaceDepth);
+     StorageDrain = MIN(theLidProc->drain.coeff/UCF(RAINFALL), SurfaceOutflow);
+     SurfaceOutflow -= StorageDrain;
+     f[SURF] = (SurfaceInflow - SurfaceEvap - StorageDrain - SurfaceOutflow);

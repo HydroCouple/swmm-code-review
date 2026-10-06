@@ -1,0 +1,61 @@
+IO-37: open USE-mode interface files read-only
+
+A hot start, rainfall or runoff interface file named in a USE line is only
+read, but hotstart_is_valid(), initializeFromHotstartFile(), rain_open() and
+runoff_open() opened it with fopen(name, "r+b"), which also asks for write
+access. A file the user may read but not write (read-only permissions, a
+read-only mount, a file owned by someone else) was rejected with ERROR 331,
+315 or 323. Open these files with "rb". SAVE-mode and scratch files are
+unchanged ("w+b").
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-37_swmm530.patch
+
+diff --git a/src/legacy/engine/hotstart.c b/src/legacy/engine/hotstart.c
+index c03ca4a..371ce14 100644
+--- a/src/legacy/engine/hotstart.c
++++ b/src/legacy/engine/hotstart.c
+@@ -170,7 +170,7 @@ int hotstart_is_valid(const char *hotstartFile, int *inputFileVersion)
+ 	FILE* f;
+ 
+ 	// --- try to open the file
+-	if ( (f = fopen(hotstartFile, "r+b")) == NULL)
++	if ( (f = fopen(hotstartFile, "rb")) == NULL)
+ 	{
+ 		return ERR_HOTSTART_FILE_OPEN;
+ 	}
+@@ -254,7 +254,7 @@ int initializeFromHotstartFile()
+         return FALSE;
+     }
+ 
+-    FhotstartInput.file = fopen(FhotstartInput.name, "r+b");
++    FhotstartInput.file = fopen(FhotstartInput.name, "rb");
+     // --- read header records from the file
+     if (fileVersion > 1)
+     {
+diff --git a/src/legacy/engine/rain.c b/src/legacy/engine/rain.c
+index dc7b3b2..cf5b183 100644
+--- a/src/legacy/engine/rain.c
++++ b/src/legacy/engine/rain.c
+@@ -150,7 +150,7 @@ void  rain_open(void)
+         break;
+ 
+       case USE_FILE:
+-        if ( (Frain.file = fopen(Frain.name, "r+b")) == NULL)
++        if ( (Frain.file = fopen(Frain.name, "rb")) == NULL)
+         {
+             report_writeErrorMsg(ERR_RAIN_FILE_OPEN, Frain.name);
+             return;
+diff --git a/src/legacy/engine/runoff.c b/src/legacy/engine/runoff.c
+index bf00bad..6368350 100644
+--- a/src/legacy/engine/runoff.c
++++ b/src/legacy/engine/runoff.c
+@@ -108,7 +108,7 @@ int runoff_open()
+     switch ( Frunoff.mode )
+     {
+       case USE_FILE:
+-        if ( (Frunoff.file = fopen(Frunoff.name, "r+b")) == NULL)
++        if ( (Frunoff.file = fopen(Frunoff.name, "rb")) == NULL)
+             report_writeErrorMsg(ERR_RUNOFF_FILE_OPEN, Frunoff.name);
+         else runoff_initFile();
+         break;

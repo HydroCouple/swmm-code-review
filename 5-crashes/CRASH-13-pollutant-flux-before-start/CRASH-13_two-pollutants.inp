@@ -1,0 +1,40 @@
+[TITLE]
+CRASH-13: J1 -> C1 -> O1 with two pollutants (P1 = index 0, P2 = index 1).
+The test only opens the project and calls the pollutant flux setters before
+swmm_start.
+
+[OPTIONS]
+FLOW_UNITS           CFS
+INFILTRATION         HORTON
+FLOW_ROUTING         DYNWAVE
+START_DATE           01/01/2020
+START_TIME           00:00:00
+REPORT_START_DATE    01/01/2020
+REPORT_START_TIME    00:00:00
+END_DATE             01/01/2020
+END_TIME             01:00:00
+DRY_STEP             00:05:00
+WET_STEP             00:05:00
+ROUTING_STEP         30
+REPORT_STEP          00:15:00
+
+[JUNCTIONS]
+;;Name Elev MaxDepth InitDepth SurDepth Aponded
+J1     10   5   0   0   0
+
+[OUTFALLS]
+O1   5   FREE
+
+[CONDUITS]
+C1  J1  O1  400  0.013  0  0  0
+
+[XSECTIONS]
+C1  CIRCULAR  1.5  0  0  0  1
+
+[POLLUTANTS]
+;;Name Units Crain Cgw Crdii Kdecay SnowOnly CoPollut CoFrac Cdwf Cinit
+P1  MG/L  0  0  0  0  NO  *  0  0  0
+P2  MG/L  0  0  0  0  NO  *  0  0  0
+
+[DWF]
+J1  FLOW  1.0

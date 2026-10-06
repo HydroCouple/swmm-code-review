@@ -1,0 +1,30 @@
+CRASH-04: read a curve's type safely in the object-count pass
+
+input_countObjects() tokenizes with strtok() and, on a curve's first line,
+passes the next token to findmatch() to count shape curves. On a line with
+only the curve name the token is NULL and match() dereferences it. A quoted
+type ("Shape"), which the read pass accepts because getTokens() removes the
+quotes, is not counted, so the Shape array is allocated with no elements and
+project_validate() writes past it. Skip a missing type, and a leading quote,
+before the match. A name-only line then reaches table_readCurve(), which
+reports ERROR 203 (too few items).
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply CRASH-04_swmm530.patch
+
+diff --git a/src/legacy/engine/input.c b/src/legacy/engine/input.c
+index 5a58319..d644eb5 100644
+--- a/src/legacy/engine/input.c
++++ b/src/legacy/engine/input.c
+@@ -401,8 +401,10 @@ int  addObject(int objType, char* id)
+             Nobjects[CURVE]++;
+ 
+             // --- check for a conduit shape curve
++            //     (the type may be missing, or quoted as getTokens allows)
+             id = strtok(NULL, SEPSTR);
+-            if ( findmatch(id, CurveTypeWords) == SHAPE_CURVE )
++            if ( id && *id == '"' ) id++;
++            if ( id && findmatch(id, CurveTypeWords) == SHAPE_CURVE )
+                 Nobjects[SHAPE]++;
+         }
+         break;

@@ -1,0 +1,72 @@
+[TITLE]
+CON-14: 10 ac, 50 % impervious, with a 1 ac bio-retention cell (underdrain, no
+seepage) that takes ALL of the impervious runoff. Washoff is an EMC of 100 mg/L.
+
+[OPTIONS]
+FLOW_UNITS           CFS
+INFILTRATION         HORTON
+FLOW_ROUTING         KINWAVE
+START_DATE           01/01/2020
+START_TIME           00:00:00
+REPORT_START_DATE    01/01/2020
+REPORT_START_TIME    00:00:00
+END_DATE             01/03/2020
+END_TIME             00:00:00
+DRY_STEP             00:05:00
+WET_STEP             00:01:00
+ROUTING_STEP         30
+REPORT_STEP          01:00:00
+
+[RAINGAGES]
+G1  INTENSITY  0:15  1.0  TIMESERIES  RAIN
+
+[TIMESERIES]
+RAIN  01/01/2020  00:00  1.0
+RAIN  01/01/2020  01:00  1.0
+RAIN  01/01/2020  01:15  0.0
+
+[SUBCATCHMENTS]
+S1  G1  J1  10  50  500  0.5  0
+
+[SUBAREAS]
+S1  0.015  0.1  0.05  0.1  25  OUTLET
+
+[INFILTRATION]
+S1  5.0  4.0  4  7  0
+
+[LID_CONTROLS]
+BC1  BC
+BC1  SURFACE  6   0.0  0.1  1.0  5
+BC1  SOIL     12  0.5  0.2  0.1  5  10  3.5
+BC1  STORAGE  12  0.75 0.0  0
+BC1  DRAIN    0.5 0.5  0    6
+
+[LID_USAGE]
+S1  BC1  1  43560  0  0  100  0  *  *  0
+
+[JUNCTIONS]
+J1   1   5   0   0   0
+
+[OUTFALLS]
+O1   0   FREE
+
+[CONDUITS]
+C1  J1  O1  400  0.013  0  0  0
+
+[XSECTIONS]
+C1  CIRCULAR  1.5  0  0  0  1
+
+[POLLUTANTS]
+P1  MG/L  0  0  0  0  NO  *  0  0  0
+
+[LANDUSES]
+L1
+
+[COVERAGES]
+S1  L1  100
+
+[BUILDUP]
+L1  P1  NONE  0  0  0  AREA
+
+[WASHOFF]
+L1  P1  EMC  100  0  0  0

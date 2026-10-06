@@ -1,0 +1,31 @@
+CON-01: give a closed storage unit no free surface above its full depth
+
+A storage unit with a surcharge depth is closed: storage_getVolume() caps its
+volume at fullVolume above full depth. But initNodeStates() still gave it its
+curve area there, so whenever setNodeDepth() integrates the depth by area
+above full depth (always under SURCHARGE_METHOD SLOT; under EXTRAN when no
+link responds to head) the depth rose and fell through the surcharge band as
+if it held A*SurDepth of water that the volume never books. Set the node's
+own area to 0 above full depth, so in the band it behaves like a junction in
+surcharge (its links' areas, floored at MinSurfArea). EXTRAN storage units
+with conduits use the dQ/dH branch there and are unchanged.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply CON-01_swmm530.patch
+
+diff --git a/src/legacy/engine/dynwave.c b/src/legacy/engine/dynwave.c
+index 972da8c..6a62be5 100644
+--- a/src/legacy/engine/dynwave.c
++++ b/src/legacy/engine/dynwave.c
+@@ -311,6 +311,11 @@ void initNodeStates()
+             Xnode[i].newSurfArea = node_getSurfArea(i, Node[i].newDepth);
+         }
+ 
++        // --- a closed storage unit has no free surface above its full depth
++        if ( Node[i].type == STORAGE && Node[i].surDepth > 0.0 &&
++             Node[i].newDepth > Node[i].fullDepth )
++            Xnode[i].newSurfArea = 0.0;
++
+         // --- initialize nodal inflow & outflow
+         Node[i].inflow = 0.0;
+         Node[i].outflow = Node[i].losses;

@@ -1,0 +1,42 @@
+API-18: openswmm-legacy (runswmm) exits with status 1 when the run fails
+
+main() of the legacy command line program is documented to return the error
+status, but it always returned 0; it only printed "There are errors." when
+swmm_getError() reported an error. Keep the code swmm_getError() returns and
+exit with 1 when it is non-zero, so scripts can detect a failed run without
+parsing the report.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply API-18_swmm530.patch
+
+diff --git a/src/legacy/cli/main.c b/src/legacy/cli/main.c
+index 01ff2c5..3b32213 100644
+--- a/src/legacy/cli/main.c
++++ b/src/legacy/cli/main.c
+@@ -37,6 +37,7 @@ int  main(int argc, char *argv[])
+     char blank[] = "";
+     char errMsg[128];
+     int  msgLen = 127;
++    int  errorCode = 0;
+     time_t start;
+     double runTime;
+ 
+@@ -90,7 +91,8 @@ int  main(int argc, char *argv[])
+         // Display closing status on console
+         runTime = difftime(time(0), start);
+         printf("\n\n... OPEN-SOURCE SWMM completed in %.2f seconds.", runTime);
+-        if      ( swmm_getError(errMsg, msgLen) > 0 ) printf(" There are errors.\n");
++        errorCode = swmm_getError(errMsg, msgLen);
++        if      ( errorCode > 0 ) printf(" There are errors.\n");
+         else if ( swmm_getWarnings() > 0 ) printf(" There are warnings.\n");
+         else printf("\n");
+     }
+@@ -101,5 +103,6 @@ int  main(int argc, char *argv[])
+     getchar();
+ */
+ 
+-    return 0;
++    // --- exit status tells the caller whether the run failed
++    return errorCode ? 1 : 0;
+ }
+\ No newline at end of file

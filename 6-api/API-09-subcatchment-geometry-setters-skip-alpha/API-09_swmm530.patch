@@ -1,0 +1,41 @@
+API-09: recompute the overland-flow coefficient when AREA, WIDTH or SLOPE is set
+
+setSubcatchValue() accepted a new subcatchment area, width or slope between
+swmm_open() and swmm_start() but only stored it. The overland-flow
+coefficient alpha = PHI * width / area * sqrt(slope) / n of each subarea is
+computed in subcatch_validate(), which runs once during swmm_open(), so the
+runoff did not change (area changed the runoff volume but not alpha). Call
+subcatch_validate() for the subcatchment after storing the new value; it
+recomputes alpha and its other steps are idempotent.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply API-09_swmm530.patch
+
+diff --git a/src/legacy/engine/swmm5.c b/src/legacy/engine/swmm5.c
+index 4096c9a..70e255f 100644
+--- a/src/legacy/engine/swmm5.c
++++ b/src/legacy/engine/swmm5.c
+@@ -2155,6 +2155,7 @@ int setSubcatchValue(int property, int index, int subIndex, int pollutantIndex,
+             if (value >= 0.0)
+             {
+                 Subcatch[index].area = value / UCF(LANDAREA);
++                subcatch_validate(index);   // recompute overland flow alpha
+                 return 0;
+             }
+             else
+@@ -2163,6 +2164,7 @@ int setSubcatchValue(int property, int index, int subIndex, int pollutantIndex,
+             if (value >= 0.0)
+             {
+                 Subcatch[index].width = value / UCF(LENGTH);
++                subcatch_validate(index);   // recompute overland flow alpha
+                 return 0;
+             }
+             else
+@@ -2171,6 +2173,7 @@ int setSubcatchValue(int property, int index, int subIndex, int pollutantIndex,
+             if (value >= 0.0)
+             {
+                 Subcatch[index].slope = value;
++                subcatch_validate(index);   // recompute overland flow alpha
+                 return 0;
+             }
+             else

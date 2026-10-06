@@ -1,0 +1,216 @@
+IO-04: read bare-number [OPTIONS] times and steps as decimal hours
+
+Legacy SWMM reads START_TIME, END_TIME, REPORT_START_TIME, WET_STEP,
+DRY_STEP, REPORT_STEP and RULE_STEP with datetime_strToTime(), where a bare
+number is decimal hours ("START_TIME 6.5" is 06:30, "REPORT_STEP 0.25" is
+15 minutes). OptionsHandler read them with parse_time_seconds(), where a
+bare number is seconds, so the same deck started at 00:00:06 and reported
+every 0.25 s. A whole-token number is now taken as decimal hours, converted
+as legacy does (h/24 days for a time of day; whole seconds for a step), and
+anything else still goes to parse_time_seconds(). ROUTING_STEP,
+MINIMUM_STEP and LENGTHENING_STEP stay in seconds, as in legacy. Clock
+strings (HH:MM:SS) are read exactly as before.
+
+Four unit tests (test_dw_unsteady_friction, test_dw_tpa, test_fv_tpa_closure,
+test_fv_unsteady_friction) wrote REPORT_STEP as bare seconds (0.5, 1, 2, 5),
+which EPA SWMM reads as hours; they now write the same steps as clock
+strings (00:00:00.5, 00:00:01, ...), which mean the same to the unpatched
+engine.
+
+Requires: IO-02 (this patch edits the lines IO-02 adds its range checks to)
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b,
+after IO-02_swmm600.patch:
+    git apply IO-04_swmm600.patch
+
+diff --git a/src/engine/input/handlers/OptionsHandler.cpp b/src/engine/input/handlers/OptionsHandler.cpp
+index 80b714e..2fc4e26 100644
+--- a/src/engine/input/handlers/OptionsHandler.cpp
++++ b/src/engine/input/handlers/OptionsHandler.cpp
+@@ -86,6 +86,7 @@
+ #include <charconv>
+ #include <cmath>
+ #include <cstring>
++#include <limits>
+ #include <stdexcept>
+ #include <string>
+ #include <vector>
+@@ -100,6 +101,15 @@ static std::string norm(std::string_view sv) {
+     return Tokenizer::to_upper(sv);
+ }
+ 
++// Seconds in a clock time H:MM[:SS]. A token that is neither a number nor a
++// clock time gives NaN, which the range checks below reject (parse_time_seconds
++// alone would read it as 0).
++static double clock_seconds(std::string_view sv) {
++    if (sv.find(':') == std::string_view::npos)
++        return std::numeric_limits<double>::quiet_NaN();
++    return parse_time_seconds(sv);
++}
++
+ // legacy findmatch / match (input.c): a keyword matches when it is a
+ // case-insensitive PREFIX of the token — `STEADYFLOW` is STEADY, `DYNWAVE2`
+ // DYNWAVE. `tok` is already upper-cased by norm().
+@@ -278,21 +288,27 @@ void handle_options(SimulationContext& ctx, const std::vector<std::string>& line
+         } else if (key == "DRY_DAYS") {
+             openswmm::from_chars_double(val.data(), val.data() + val.size(), opt.dry_days);
+         } else if (key == "DRY_STEP") {
+-            const double step = parse_time_seconds(val);
++            double h = 0.0;   // a bare number is decimal hours, as in legacy
++            const double step = parse_double_strict(val, h)
++                ? std::floor(h / 24.0 * 86400.0 + 0.5) : clock_seconds(val);
+             if (!(step > 0.0 && step < 2147483647.0)) {  // legacy: ERROR 211
+                 ctx.errors.push_back(format_error(ERR_NUMBER, val));
+                 continue;
+             }
+             opt.dry_step = step;
+         } else if (key == "WET_STEP") {
+-            const double step = parse_time_seconds(val);
++            double h = 0.0;   // a bare number is decimal hours, as in legacy
++            const double step = parse_double_strict(val, h)
++                ? std::floor(h / 24.0 * 86400.0 + 0.5) : clock_seconds(val);
+             if (!(step > 0.0 && step < 2147483647.0)) {  // legacy: ERROR 211
+                 ctx.errors.push_back(format_error(ERR_NUMBER, val));
+                 continue;
+             }
+             opt.wet_step = step;
+         } else if (key == "REPORT_STEP") {
+-            const double step = parse_time_seconds(val);
++            double h = 0.0;   // a bare number is decimal hours, as in legacy
++            const double step = parse_double_strict(val, h)
++                ? std::floor(h / 24.0 * 86400.0 + 0.5) : clock_seconds(val);
+             if (!(step > 0.0 && step < 2147483647.0)) {  // legacy: ERROR 211
+                 ctx.errors.push_back(format_error(ERR_NUMBER, val));
+                 continue;
+@@ -327,7 +343,9 @@ void handle_options(SimulationContext& ctx, const std::vector<std::string>& line
+             start_date_part = parse_date(val);
+             got_start_date  = true;
+         } else if (key == "START_TIME") {
+-            const double t = parse_time_seconds(val) / datetime::SecsPerDay;
++            double h = 0.0;   // a bare number is decimal hours, as in legacy
++            const double t = parse_double_strict(val, h)
++                ? h / 24.0 : clock_seconds(val) / datetime::SecsPerDay;
+             if (!(t >= 0.0 && t <= 1.0)) {  // a time of day, 0:00 to 24:00
+                 ctx.errors.push_back(format_error(ERR_DATETIME, val));
+                 continue;
+@@ -338,7 +356,9 @@ void handle_options(SimulationContext& ctx, const std::vector<std::string>& line
+             end_date_part = parse_date(val);
+             got_end_date  = true;
+         } else if (key == "END_TIME") {
+-            const double t = parse_time_seconds(val) / datetime::SecsPerDay;
++            double h = 0.0;   // a bare number is decimal hours, as in legacy
++            const double t = parse_double_strict(val, h)
++                ? h / 24.0 : clock_seconds(val) / datetime::SecsPerDay;
+             if (!(t >= 0.0 && t <= 1.0)) {  // a time of day, 0:00 to 24:00
+                 ctx.errors.push_back(format_error(ERR_DATETIME, val));
+                 continue;
+@@ -349,7 +369,9 @@ void handle_options(SimulationContext& ctx, const std::vector<std::string>& line
+             rpt_date_part = parse_date(val);
+             got_rpt_date  = true;
+         } else if (key == "REPORT_START_TIME") {
+-            const double t = parse_time_seconds(val) / datetime::SecsPerDay;
++            double h = 0.0;   // a bare number is decimal hours, as in legacy
++            const double t = parse_double_strict(val, h)
++                ? h / 24.0 : clock_seconds(val) / datetime::SecsPerDay;
+             if (!(t >= 0.0 && t <= 1.0)) {  // a time of day, 0:00 to 24:00
+                 ctx.errors.push_back(format_error(ERR_DATETIME, val));
+                 continue;
+@@ -379,7 +401,9 @@ void handle_options(SimulationContext& ctx, const std::vector<std::string>& line
+             openswmm::from_chars_double(val.data(), val.data() + val.size(), opt.variable_step);
+ 
+         } else if (key == "RULE_STEP") {
+-            const double step = parse_time_seconds(val);
++            double h = 0.0;   // a bare number is decimal hours, as in legacy
++            const double step = parse_double_strict(val, h)
++                ? std::floor(h / 24.0 * 86400.0 + 0.5) : clock_seconds(val);
+             if (!(step >= 0.0 && step < 2147483647.0)) {  // legacy: ERROR 211
+                 ctx.errors.push_back(format_error(ERR_NUMBER, val));
+                 continue;
+diff --git a/tests/unit/engine/test_dw_tpa.cpp b/tests/unit/engine/test_dw_tpa.cpp
+index 0823816..78814c2 100644
+--- a/tests/unit/engine/test_dw_tpa.cpp
++++ b/tests/unit/engine/test_dw_tpa.cpp
+@@ -76,7 +76,7 @@ std::string drawdownModel(const std::string& method, bool apex_sealed,
+           "START_TIME           00:00:00\n"
+           "END_DATE             01/01/2026\n"
+           "END_TIME             00:15:00\n"
+-          "REPORT_STEP          2\n"
++          "REPORT_STEP          00:00:02\n"
+           "ROUTING_STEP         0.5\n"
+           "INERTIAL_DAMPING     PARTIAL\n"
+        << extra
+diff --git a/tests/unit/engine/test_dw_unsteady_friction.cpp b/tests/unit/engine/test_dw_unsteady_friction.cpp
+index 1e678af..a649949 100644
+--- a/tests/unit/engine/test_dw_unsteady_friction.cpp
++++ b/tests/unit/engine/test_dw_unsteady_friction.cpp
+@@ -74,7 +74,7 @@ std::string valveModel(const std::string& surcharge, const std::string& extra,
+           "START_TIME           00:00:00\n"
+           "END_DATE             01/01/2026\n"
+           "END_TIME             00:10:00\n"
+-          "REPORT_STEP          0.5\n"
++          "REPORT_STEP          00:00:00.5\n"
+           "ROUTING_STEP         0.25\n"
+           "RULE_STEP            0\n"
+           "INERTIAL_DAMPING     NONE\n"
+@@ -129,7 +129,7 @@ std::string restModel(const std::string& extra) {
+           "START_TIME           00:00:00\n"
+           "END_DATE             01/01/2026\n"
+           "END_TIME             00:10:00\n"
+-          "REPORT_STEP          5\n"
++          "REPORT_STEP          00:00:05\n"
+           "ROUTING_STEP         1\n"
+        << extra
+        << "\n[JUNCTIONS]\n;;Name Elev MaxDepth InitDepth\n"
+diff --git a/tests/unit/engine/test_fv_tpa_closure.cpp b/tests/unit/engine/test_fv_tpa_closure.cpp
+index 06c772f..f677cdc 100644
+--- a/tests/unit/engine/test_fv_tpa_closure.cpp
++++ b/tests/unit/engine/test_fv_tpa_closure.cpp
+@@ -155,7 +155,7 @@ std::string overTopModel(const std::string& closure, bool apex_sealed,
+           "START_TIME           00:00:00\n"
+           "END_DATE             01/01/2026\n"
+           "END_TIME             00:30:00\n"
+-          "REPORT_STEP          2\n"
++          "REPORT_STEP          00:00:02\n"
+           "ROUTING_STEP         0.5\n"
+           "FV_MIN_CELLS         6\n"
+           "FV_SLOT_CELERITY     100\n"
+@@ -500,7 +500,7 @@ std::string fillingSurgeDeck(const std::string& celerity,
+         "START_TIME           00:00:00\n"
+         "END_DATE             01/01/2026\n"
+         "END_TIME             00:02:00\n"
+-        "REPORT_STEP          1\n"
++        "REPORT_STEP          00:00:01\n"
+         "ROUTING_STEP         0.01\n"
+         "MIN_SURFAREA         0.05\n"
+         "INERTIAL_DAMPING     NONE\n"
+diff --git a/tests/unit/engine/test_fv_unsteady_friction.cpp b/tests/unit/engine/test_fv_unsteady_friction.cpp
+index e064097..bd7bcb8 100644
+--- a/tests/unit/engine/test_fv_unsteady_friction.cpp
++++ b/tests/unit/engine/test_fv_unsteady_friction.cpp
+@@ -118,7 +118,7 @@ std::string sloshModel(double init_a, double init_b, const std::string& extra) {
+           "START_TIME           00:00:00\n"
+           "END_DATE             01/01/2026\n"
+           "END_TIME             00:20:00\n"
+-          "REPORT_STEP          5\n"
++          "REPORT_STEP          00:00:05\n"
+           "ROUTING_STEP         1\n"
+           "FV_MIN_CELLS         8\n"
+        << extra
+@@ -218,7 +218,7 @@ std::string restModel(const std::string& extra) {
+           "START_TIME           00:00:00\n"
+           "END_DATE             01/01/2026\n"
+           "END_TIME             00:10:00\n"
+-          "REPORT_STEP          5\n"
++          "REPORT_STEP          00:00:05\n"
+           "ROUTING_STEP         1\n"
+           "FV_MIN_CELLS         8\n"
+        << extra
+@@ -294,7 +294,7 @@ std::string valveModel(const std::string& extra) {
+           "START_TIME           00:00:00\n"
+           "END_DATE             01/01/2026\n"
+           "END_TIME             00:10:00\n"
+-          "REPORT_STEP          0.5\n"
++          "REPORT_STEP          00:00:00.5\n"
+           "ROUTING_STEP         0.25\n"
+           "RULE_STEP            0\n"
+           "FV_MIN_CELLS         16\n"

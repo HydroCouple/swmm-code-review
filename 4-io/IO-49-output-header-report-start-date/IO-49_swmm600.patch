@@ -1,0 +1,46 @@
+IO-49: date the .out header one report step before the first saved period
+
+DefaultOutputPlugin::writeHeader() always wrote START_DATE as the report start
+date, so with a late REPORT_START a reader dating period k as
+header + (k+1)*REPORT_STEP shifts every period back by (first saved period - 1)
+steps. Write the date one report step before the first report time at or
+after REPORT_START, computed in whole seconds as the patched legacy
+output_open() does (same double result).
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-49_swmm600.patch
+
+diff --git a/src/engine/plugins/DefaultOutputPlugin.cpp b/src/engine/plugins/DefaultOutputPlugin.cpp
+index d0c8a92..b987fc6 100644
+--- a/src/engine/plugins/DefaultOutputPlugin.cpp
++++ b/src/engine/plugins/DefaultOutputPlugin.cpp
+@@ -42,6 +42,7 @@
+ #include "../../../include/openswmm/plugin_sdk/SimulationSnapshot.hpp"
+ #include "../core/SimulationContext.hpp"
+ #include "../core/UnitConversion.hpp"
++#include "../core/DateTime.hpp"
+ 
+ #include <cstring>
+ #include <cmath>
+@@ -407,9 +408,18 @@ void DefaultOutputPlugin::writeHeader(const SimulationContext& ctx) {
+     writeInt4(MAX_SYS_RESULTS);
+     for (int v = 0; v < MAX_SYS_RESULTS; ++v) writeInt4(v);
+ 
+-    // Report start date and step
+-    writeReal8(ctx.options.start_date);
+-    writeInt4(static_cast<int>(ctx.options.report_step));
++    // Report start date and step. With a late REPORT_START the date is one
++    // reporting period before the first saved period, which is the first
++    // report time at or after REPORT_START (legacy output_open, output.c).
++    double rpt_date = ctx.options.start_date;
++    const int rpt_step = static_cast<int>(ctx.options.report_step);
++    if (rpt_step > 0 && ctx.options.report_start > ctx.options.start_date) {
++        const double n = std::ceil(static_cast<double>(datetime::timeDiff(
++            ctx.options.report_start, ctx.options.start_date)) / rpt_step) - 1.0;
++        if (n > 0.0) rpt_date = ctx.options.start_date + n * rpt_step / 86400.0;
++    }
++    writeReal8(rpt_date);
++    writeInt4(rpt_step);
+ 
+     output_start_pos_ = std::ftell(out_file_);
+ }

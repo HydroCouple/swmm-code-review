@@ -1,0 +1,66 @@
+CON-11: read a pollutant in a treatment equation by that equation's type
+
+getVariableValue() returned a referenced pollutant's inflow concentration
+when the REFERENCED pollutant had a removal-type equation (or none, since
+treatType 0 is REMOVAL) and its nodal concentration otherwise. The manual
+(section 5.4.2) defines it by the equation being evaluated: inflow
+concentration in an R = equation, nodal concentration before treatment in a
+C = equation. getRemoval() now records the type of the equation it evaluates
+in TreatType (restored afterwards, since an R_ reference evaluates another
+equation in the middle) and getVariableValue() uses it. This restores the
+meaning the code had before 5.1.008.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply CON-11_swmm530.patch
+
+diff --git a/src/legacy/engine/treatmnt.c b/src/legacy/engine/treatmnt.c
+index 3638cd3..384b483 100644
+--- a/src/legacy/engine/treatmnt.c
++++ b/src/legacy/engine/treatmnt.c
+@@ -41,6 +41,7 @@ static double  Q;                      // node inflow (cfs)
+ static double  V;                      // node volume (ft3)
+ static double* R;                      // array of pollut. removals
+ static double* Cin;                    // node inflow concentrations
++static int     TreatType;              // type of treatment eqn. being evaluated
+ 
+ //-----------------------------------------------------------------------------
+ //  External functions (declared in funcs.h)
+@@ -334,7 +335,6 @@ double getVariableValue(int varCode)
+ {
+     int    p;
+     double a1, a2, y;
+-    TTreatment* treatment;
+ 
+     // --- variable is a process variable
+     if ( varCode < PVMAX )
+@@ -370,9 +370,10 @@ double getVariableValue(int varCode)
+     // --- variable is a pollutant concentration
+     else if ( varCode < PVMAX + Nobjects[POLLUT] )
+     {
++        // --- inflow concen. for a removal-type eqn., nodal concen.
++        //     before treatment for a concen.-type eqn.
+         p = varCode - PVMAX;
+-        treatment = &Node[J].treatment[p];
+-        if ( treatment->treatType == REMOVAL ) return Cin[p];
++        if ( TreatType == REMOVAL ) return Cin[p];
+         return Node[J].newQual[p];
+     }
+ 
+@@ -396,6 +397,7 @@ double  getRemoval(int p)
+ {
+     double c0 = Node[J].newQual[p];    // initial node concentration
+     double r;                          // removal value
++    int    treatType = TreatType;      // type of eqn. that requested R[p]
+     TTreatment* treatment;
+ 
+     // --- case where removal already being computed for another pollutant
+@@ -422,7 +424,9 @@ double  getRemoval(int p)
+ 
+     // --- apply treatment eqn.
+     treatment = &Node[J].treatment[p];
++    TreatType = treatment->treatType;
+     r = mathexpr_eval(treatment->equation, getVariableValue);
++    TreatType = treatType;
+     r = MAX(0.0, r);
+ 
+     // --- case where treatment eqn. is for removal

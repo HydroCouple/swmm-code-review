@@ -1,0 +1,47 @@
+IO-30: look up control-rule VARIABLE and EXPRESSION names by exact match
+
+getVariableIndex() and getExpressionIndex() compared names with match(),
+which is true when the defined name is a case-insensitive PREFIX of the
+token, and returned the first such name. With VARIABLE D1 and D10, every use
+of D10 (in a premise or inside an EXPRESSION formula) read D1; with
+EXPRESSION H and H2, "IF H2 > ..." read H. Compare whole names with
+strcomp() (case-insensitive equality), as findExactMatch() already does for
+keywords.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-30_swmm530.patch
+
+diff --git a/src/legacy/engine/controls.c b/src/legacy/engine/controls.c
+index e423886..6d3b1cf 100644
+--- a/src/legacy/engine/controls.c
++++ b/src/legacy/engine/controls.c
+@@ -1041,9 +1041,13 @@ int controls_evaluate(DateTime currentTime, DateTime elapsedTime, double tStep)
+ int getVariableIndex(char *varName)
+ {
+     int i;
++    char name[MAXVARNAME + 1];
++
++    // --- names are stored truncated to MAXVARNAME characters
++    sstrncpy(name, varName, MAXVARNAME);
+     for (i = 0; i < VariableCount; i++)
+     {
+-        if (match(varName, NamedVariable[i].name))
++        if (strcomp(name, NamedVariable[i].name))
+             return i;
+     }
+     return -1;
+@@ -1063,9 +1067,13 @@ double getNamedVariableValue(int varIndex)
+ int getExpressionIndex(char *exprName)
+ {
+     int i;
++    char name[MAXVARNAME + 1];
++
++    // --- names are stored truncated to MAXVARNAME characters
++    sstrncpy(name, exprName, MAXVARNAME);
+     for (i = 0; i < ExpressionCount; i++)
+     {
+-        if (match(exprName, Expression[i].name))
++        if (strcomp(name, Expression[i].name))
+             return i;
+     }
+     return -1;

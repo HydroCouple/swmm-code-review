@@ -1,0 +1,28 @@
+NUM-16: keep the notch flow of a partly open V-notch weir
+
+A V-notch weir with a setting below 1 is computed as a trapezoidal weir
+whose crest is raised by (1 - setting) * height. The triangular ends of that
+trapezoid are the notch itself, but their flow used Cd2, the end coefficient
+of TRAPEZOIDAL weirs, which defaults to 0 and is not documented for V-notch
+weirs. A setting of 0.999 therefore removed almost all of the weir's flow.
+In StructureSolver::computeWeirFlowK, use the V-notch coefficient (Cd, or its Cd curve value) for the ends of a
+partly open V-notch weir; the rectangular centre strip is unchanged. Fully
+open V-notch weirs and all other weir types are unchanged.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-16_swmm600.patch
+
+diff --git a/src/engine/hydraulics/HydStructures.cpp b/src/engine/hydraulics/HydStructures.cpp
+index 77d61bf..2642f4a 100644
+--- a/src/engine/hydraulics/HydStructures.cpp
++++ b/src/engine/hydraulics/HydStructures.cpp
+@@ -961,7 +961,8 @@ void StructureSolver::computeWeirFlowK(SimulationContext& ctx,
+                         ? 2.0 * weirs_.slope[uk] * y
+                         : links.xsect_y_bot[uj] + 2.0 * weirs_.slope[uk] * y;
+                     q1_out = cd * (w * ucfL) * std::pow(h, 1.5);
+-                    q2_out = cd2 * weirs_.slope[uk] * std::pow(h, 2.5);
++                    // a partly open V-notch keeps its own Cd for the notch
++                    q2_out = (wt == 2 ? cd : cd2) * weirs_.slope[uk] * std::pow(h, 2.5);
+                     break;
+                 }
+             }

@@ -1,0 +1,82 @@
+NUM-42: keep a UH's own rain gage, and rescale a co-gage's rainfall for RDII
+
+initGageData() re-pointed every unit hydrograph whose gage shares its rain
+series with an earlier gage (its co-gage) to that earlier gage. Before 5.3.0
+both gages gave the same rainfall, but since the per-gage rain scale factor
+was added the UH gets the co-gage's scaling instead of its own. The UH now
+keeps its gage; getRainfall() computes the co-gage's rainfall (once per RDII
+step, as for any gage) and rescales it by the ratio of the two scale factors,
+as gage_setState() does for subcatchments. With equal scale factors the
+results are bit-identical to before.
+
+Requires: NUM-41
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b,
+after NUM-41_swmm530.patch:
+    git apply NUM-42_swmm530.patch
+
+diff --git a/src/legacy/engine/rdii.c b/src/legacy/engine/rdii.c
+index e86b171..b72e240 100644
+--- a/src/legacy/engine/rdii.c
++++ b/src/legacy/engine/rdii.c
+@@ -1080,7 +1080,6 @@ void initGageData()
+ //  Purpose: initializes state of Unit Hydrograph rain gages.
+ //
+ {
+-    int i;                             // unit hyd. index
+     int g;                             // rain gage index
+ 
+     // --- first initialize the state of each rain gage
+@@ -1092,21 +1091,6 @@ void initGageData()
+         }
+         gage_initState(g);
+     }
+-
+-    // --- then flag each gage that is used by a Unit Hydrograph set
+-    for (i=0; i<Nobjects[UNITHYD]; i++)
+-    {
+-        g = UnitHyd[i].rainGage;
+-        if ( g >= 0 )
+-        {
+-            // --- if UH's gage uses same time series as a previous gage,
+-            //     then assign the latter gage to the UH
+-            if ( Gage[g].coGage >= 0 )
+-            {
+-                UnitHyd[i].rainGage = Gage[g].coGage;
+-            }
+-        }
+-    }
+ }
+ 
+ //=============================================================================
+@@ -1213,6 +1197,7 @@ void getRainfall(DateTime currentDate)
+     int      j;                        // UH group index
+     int      k;                        // UH index
+     int      g;                        // rain gage index
++    int      cg;                       // index of gage's co-gage
+     int      i;                        // past rainfall index
+     int      month;                    // month of current date
+     int      rainInterval;             // rainfall interval (sec)
+@@ -1241,7 +1226,21 @@ void getRainfall(DateTime currentDate)
+             Adjust.rainFactor = Adjust.rain[datetime_monthOfYear(gageDate)-1];
+             if (!Gage[g].isCurrent)
+             {
+-                GageRain[g] = getGageRainfall(g, prevDate, currentDate);
++                // --- a gage sharing its rainfall record with an earlier
++                //     gage (its co-gage) uses the co-gage's rainfall,
++                //     rescaled by the ratio of their scale factors
++                cg = Gage[g].coGage;
++                if ( cg >= 0 )
++                {
++                    if (!Gage[cg].isCurrent)
++                    {
++                        GageRain[cg] = getGageRainfall(cg, prevDate, currentDate);
++                        Gage[cg].isCurrent = TRUE;
++                    }
++                    GageRain[g] = GageRain[cg] * Gage[g].scaleFactor /
++                                  Gage[cg].scaleFactor;
++                }
++                else GageRain[g] = getGageRainfall(g, prevDate, currentDate);
+                 Gage[g].isCurrent = TRUE;
+             }
+ 

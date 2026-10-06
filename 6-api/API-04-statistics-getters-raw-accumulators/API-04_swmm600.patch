@@ -1,0 +1,243 @@
+API-04: return statistics in their documented units
+
+The swmm_stat_* getters in openswmm_statistics_impl.cpp copied the internal
+columns (ft, cfs, ft3, seconds) although openswmm_statistics.h documents
+project length, flow and volume units and hours, so an SI project got feet
+and cubic feet and every project got seconds for the "hours" statistics.
+Apply to_display() to lengths, flows and volumes and divide times by 3600,
+in the scalar and bulk getters. swmm_node_get_stat_time_flooded() and
+swmm_link_get_stat_surcharge_time(), documented in hours, also returned
+seconds.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply API-04_swmm600.patch
+
+diff --git a/src/engine/core/openswmm_links_impl.cpp b/src/engine/core/openswmm_links_impl.cpp
+index 9963ab2..0e439c4 100644
+--- a/src/engine/core/openswmm_links_impl.cpp
++++ b/src/engine/core/openswmm_links_impl.cpp
+@@ -1678,7 +1678,7 @@ SWMM_ENGINE_API int swmm_link_get_stat_surcharge_time(SWMM_Engine engine, int id
+     CHECK_HANDLE(engine);
+     const auto& ctx = to_engine(engine)->context();
+     CHECK_INDEX(idx >= 0 && idx < ctx.n_links());
+-    if (val) *val = ctx.links.stat_time_surcharged[static_cast<std::size_t>(idx)];
++    if (val) *val = ctx.links.stat_time_surcharged[static_cast<std::size_t>(idx)] / 3600.0; // sec -> hours
+     return SWMM_OK;
+ }
+ 
+diff --git a/src/engine/core/openswmm_nodes_impl.cpp b/src/engine/core/openswmm_nodes_impl.cpp
+index 8cd649f..61aed44 100644
+--- a/src/engine/core/openswmm_nodes_impl.cpp
++++ b/src/engine/core/openswmm_nodes_impl.cpp
+@@ -1076,7 +1076,7 @@ SWMM_ENGINE_API int swmm_node_get_stat_time_flooded(SWMM_Engine engine, int idx,
+     CHECK_HANDLE(engine);
+     const auto& ctx = to_engine(engine)->context();
+     CHECK_INDEX(idx >= 0 && idx < ctx.n_nodes());
+-    if (val) *val = ctx.nodes.stat_time_flooded[static_cast<std::size_t>(idx)];
++    if (val) *val = ctx.nodes.stat_time_flooded[static_cast<std::size_t>(idx)] / 3600.0; // sec -> hours
+     return SWMM_OK;
+ }
+ 
+diff --git a/src/engine/core/openswmm_statistics_impl.cpp b/src/engine/core/openswmm_statistics_impl.cpp
+index f42d951..4e67bed 100644
+--- a/src/engine/core/openswmm_statistics_impl.cpp
++++ b/src/engine/core/openswmm_statistics_impl.cpp
+@@ -39,7 +39,7 @@ SWMM_ENGINE_API int swmm_stat_node_max_depth(SWMM_Engine engine, int idx, double
+     CHECK_HANDLE(engine);
+     const auto& ctx = to_engine(engine)->context();
+     CHECK_INDEX(idx >= 0 && idx < ctx.n_nodes());
+-    if (val) *val = ctx.nodes.stat_max_depth[static_cast<std::size_t>(idx)];
++    if (val) *val = to_display(ctx, openswmm::ucf::LENGTH, ctx.nodes.stat_max_depth[static_cast<std::size_t>(idx)]);
+     return SWMM_OK;
+ }
+ 
+@@ -47,7 +47,7 @@ SWMM_ENGINE_API int swmm_stat_node_max_overflow(SWMM_Engine engine, int idx, dou
+     CHECK_HANDLE(engine);
+     const auto& ctx = to_engine(engine)->context();
+     CHECK_INDEX(idx >= 0 && idx < ctx.n_nodes());
+-    if (val) *val = ctx.nodes.stat_max_overflow[static_cast<std::size_t>(idx)];
++    if (val) *val = to_display(ctx, openswmm::ucf::FLOW, ctx.nodes.stat_max_overflow[static_cast<std::size_t>(idx)]);
+     return SWMM_OK;
+ }
+ 
+@@ -55,7 +55,7 @@ SWMM_ENGINE_API int swmm_stat_node_vol_flooded(SWMM_Engine engine, int idx, doub
+     CHECK_HANDLE(engine);
+     const auto& ctx = to_engine(engine)->context();
+     CHECK_INDEX(idx >= 0 && idx < ctx.n_nodes());
+-    if (val) *val = ctx.nodes.stat_vol_flooded[static_cast<std::size_t>(idx)];
++    if (val) *val = to_display(ctx, openswmm::ucf::VOLUME, ctx.nodes.stat_vol_flooded[static_cast<std::size_t>(idx)]);
+     return SWMM_OK;
+ }
+ 
+@@ -63,7 +63,7 @@ SWMM_ENGINE_API int swmm_stat_node_time_flooded(SWMM_Engine engine, int idx, dou
+     CHECK_HANDLE(engine);
+     const auto& ctx = to_engine(engine)->context();
+     CHECK_INDEX(idx >= 0 && idx < ctx.n_nodes());
+-    if (val) *val = ctx.nodes.stat_time_flooded[static_cast<std::size_t>(idx)];
++    if (val) *val = ctx.nodes.stat_time_flooded[static_cast<std::size_t>(idx)] / 3600.0;
+     return SWMM_OK;
+ }
+ 
+@@ -75,7 +75,7 @@ SWMM_ENGINE_API int swmm_stat_link_max_flow(SWMM_Engine engine, int idx, double*
+     CHECK_HANDLE(engine);
+     const auto& ctx = to_engine(engine)->context();
+     CHECK_INDEX(idx >= 0 && idx < ctx.n_links());
+-    if (val) *val = ctx.links.stat_max_flow[static_cast<std::size_t>(idx)];
++    if (val) *val = to_display(ctx, openswmm::ucf::FLOW, ctx.links.stat_max_flow[static_cast<std::size_t>(idx)]);
+     return SWMM_OK;
+ }
+ 
+@@ -83,7 +83,7 @@ SWMM_ENGINE_API int swmm_stat_link_max_velocity(SWMM_Engine engine, int idx, dou
+     CHECK_HANDLE(engine);
+     const auto& ctx = to_engine(engine)->context();
+     CHECK_INDEX(idx >= 0 && idx < ctx.n_links());
+-    if (val) *val = ctx.links.stat_max_veloc[static_cast<std::size_t>(idx)];
++    if (val) *val = to_display(ctx, openswmm::ucf::LENGTH, ctx.links.stat_max_veloc[static_cast<std::size_t>(idx)]);
+     return SWMM_OK;
+ }
+ 
+@@ -99,7 +99,7 @@ SWMM_ENGINE_API int swmm_stat_link_vol_flow(SWMM_Engine engine, int idx, double*
+     CHECK_HANDLE(engine);
+     const auto& ctx = to_engine(engine)->context();
+     CHECK_INDEX(idx >= 0 && idx < ctx.n_links());
+-    if (val) *val = ctx.links.stat_vol_flow[static_cast<std::size_t>(idx)];
++    if (val) *val = to_display(ctx, openswmm::ucf::VOLUME, ctx.links.stat_vol_flow[static_cast<std::size_t>(idx)]);
+     return SWMM_OK;
+ }
+ 
+@@ -107,7 +107,7 @@ SWMM_ENGINE_API int swmm_stat_link_surcharge_time(SWMM_Engine engine, int idx, d
+     CHECK_HANDLE(engine);
+     const auto& ctx = to_engine(engine)->context();
+     CHECK_INDEX(idx >= 0 && idx < ctx.n_links());
+-    if (val) *val = ctx.links.stat_time_surcharged[static_cast<std::size_t>(idx)];
++    if (val) *val = ctx.links.stat_time_surcharged[static_cast<std::size_t>(idx)] / 3600.0;
+     return SWMM_OK;
+ }
+ 
+@@ -119,7 +119,7 @@ SWMM_ENGINE_API int swmm_stat_subcatch_precip(SWMM_Engine engine, int idx, doubl
+     CHECK_HANDLE(engine);
+     const auto& ctx = to_engine(engine)->context();
+     CHECK_INDEX(idx >= 0 && idx < ctx.n_subcatches());
+-    if (val) *val = ctx.subcatches.stat_precip_vol[static_cast<std::size_t>(idx)];
++    if (val) *val = to_display(ctx, openswmm::ucf::VOLUME, ctx.subcatches.stat_precip_vol[static_cast<std::size_t>(idx)]);
+     return SWMM_OK;
+ }
+ 
+@@ -127,7 +127,7 @@ SWMM_ENGINE_API int swmm_stat_subcatch_runoff_vol(SWMM_Engine engine, int idx, d
+     CHECK_HANDLE(engine);
+     const auto& ctx = to_engine(engine)->context();
+     CHECK_INDEX(idx >= 0 && idx < ctx.n_subcatches());
+-    if (val) *val = ctx.subcatches.stat_runoff_vol[static_cast<std::size_t>(idx)];
++    if (val) *val = to_display(ctx, openswmm::ucf::VOLUME, ctx.subcatches.stat_runoff_vol[static_cast<std::size_t>(idx)]);
+     return SWMM_OK;
+ }
+ 
+@@ -135,7 +135,7 @@ SWMM_ENGINE_API int swmm_stat_subcatch_max_runoff(SWMM_Engine engine, int idx, d
+     CHECK_HANDLE(engine);
+     const auto& ctx = to_engine(engine)->context();
+     CHECK_INDEX(idx >= 0 && idx < ctx.n_subcatches());
+-    if (val) *val = ctx.subcatches.stat_max_runoff[static_cast<std::size_t>(idx)];
++    if (val) *val = to_display(ctx, openswmm::ucf::FLOW, ctx.subcatches.stat_max_runoff[static_cast<std::size_t>(idx)]);
+     return SWMM_OK;
+ }
+ 
+@@ -148,8 +148,7 @@ SWMM_ENGINE_API int swmm_stat_node_max_depth_bulk(SWMM_Engine engine, double* bu
+     const auto& ctx = to_engine(engine)->context();
+     if (!buf || count <= 0) return SWMM_ERR_BADPARAM;
+     const int n = std::min(count, ctx.n_nodes());
+-    std::copy(ctx.nodes.stat_max_depth.begin(),
+-              ctx.nodes.stat_max_depth.begin() + n, buf);
++    for (int i = 0; i < n; ++i) buf[i] = to_display(ctx, openswmm::ucf::LENGTH, ctx.nodes.stat_max_depth[static_cast<std::size_t>(i)]);
+     return SWMM_OK;
+ }
+ 
+@@ -158,8 +157,7 @@ SWMM_ENGINE_API int swmm_stat_link_max_flow_bulk(SWMM_Engine engine, double* buf
+     const auto& ctx = to_engine(engine)->context();
+     if (!buf || count <= 0) return SWMM_ERR_BADPARAM;
+     const int n = std::min(count, ctx.n_links());
+-    std::copy(ctx.links.stat_max_flow.begin(),
+-              ctx.links.stat_max_flow.begin() + n, buf);
++    for (int i = 0; i < n; ++i) buf[i] = to_display(ctx, openswmm::ucf::FLOW, ctx.links.stat_max_flow[static_cast<std::size_t>(i)]);
+     return SWMM_OK;
+ }
+ 
+@@ -168,8 +166,7 @@ SWMM_ENGINE_API int swmm_stat_subcatch_runoff_vol_bulk(SWMM_Engine engine, doubl
+     const auto& ctx = to_engine(engine)->context();
+     if (!buf || count <= 0) return SWMM_ERR_BADPARAM;
+     const int n = std::min(count, ctx.n_subcatches());
+-    std::copy(ctx.subcatches.stat_runoff_vol.begin(),
+-              ctx.subcatches.stat_runoff_vol.begin() + n, buf);
++    for (int i = 0; i < n; ++i) buf[i] = to_display(ctx, openswmm::ucf::VOLUME, ctx.subcatches.stat_runoff_vol[static_cast<std::size_t>(i)]);
+     return SWMM_OK;
+ }
+ 
+@@ -188,8 +185,7 @@ SWMM_ENGINE_API int swmm_stat_node_max_overflow_bulk(SWMM_Engine engine, double*
+     if (!buf || count <= 0) return SWMM_ERR_BADPARAM;
+     const auto& ctx = to_engine(engine)->context();
+     const int n = std::min(count, ctx.n_nodes());
+-    std::copy(ctx.nodes.stat_max_overflow.begin(),
+-              ctx.nodes.stat_max_overflow.begin() + n, buf);
++    for (int i = 0; i < n; ++i) buf[i] = to_display(ctx, openswmm::ucf::FLOW, ctx.nodes.stat_max_overflow[static_cast<std::size_t>(i)]);
+     return SWMM_OK;
+ }
+ 
+@@ -198,8 +194,7 @@ SWMM_ENGINE_API int swmm_stat_node_vol_flooded_bulk(SWMM_Engine engine, double*
+     if (!buf || count <= 0) return SWMM_ERR_BADPARAM;
+     const auto& ctx = to_engine(engine)->context();
+     const int n = std::min(count, ctx.n_nodes());
+-    std::copy(ctx.nodes.stat_vol_flooded.begin(),
+-              ctx.nodes.stat_vol_flooded.begin() + n, buf);
++    for (int i = 0; i < n; ++i) buf[i] = to_display(ctx, openswmm::ucf::VOLUME, ctx.nodes.stat_vol_flooded[static_cast<std::size_t>(i)]);
+     return SWMM_OK;
+ }
+ 
+@@ -208,8 +203,7 @@ SWMM_ENGINE_API int swmm_stat_node_time_flooded_bulk(SWMM_Engine engine, double*
+     if (!buf || count <= 0) return SWMM_ERR_BADPARAM;
+     const auto& ctx = to_engine(engine)->context();
+     const int n = std::min(count, ctx.n_nodes());
+-    std::copy(ctx.nodes.stat_time_flooded.begin(),
+-              ctx.nodes.stat_time_flooded.begin() + n, buf);
++    for (int i = 0; i < n; ++i) buf[i] = ctx.nodes.stat_time_flooded[static_cast<std::size_t>(i)] / 3600.0;
+     return SWMM_OK;
+ }
+ 
+@@ -218,8 +212,7 @@ SWMM_ENGINE_API int swmm_stat_subcatch_max_runoff_bulk(SWMM_Engine engine, doubl
+     if (!buf || count <= 0) return SWMM_ERR_BADPARAM;
+     const auto& ctx = to_engine(engine)->context();
+     const int n = std::min(count, ctx.n_subcatches());
+-    std::copy(ctx.subcatches.stat_max_runoff.begin(),
+-              ctx.subcatches.stat_max_runoff.begin() + n, buf);
++    for (int i = 0; i < n; ++i) buf[i] = to_display(ctx, openswmm::ucf::FLOW, ctx.subcatches.stat_max_runoff[static_cast<std::size_t>(i)]);
+     return SWMM_OK;
+ }
+ 
+@@ -236,8 +229,7 @@ SWMM_ENGINE_API int swmm_stat_link_max_velocity_bulk(SWMM_Engine engine, double*
+     if (!buf || count <= 0) return SWMM_ERR_BADPARAM;
+     const auto& ctx = to_engine(engine)->context();
+     const int n = std::min(count, ctx.n_links());
+-    std::copy(ctx.links.stat_max_veloc.begin(),
+-              ctx.links.stat_max_veloc.begin() + n, buf);
++    for (int i = 0; i < n; ++i) buf[i] = to_display(ctx, openswmm::ucf::LENGTH, ctx.links.stat_max_veloc[static_cast<std::size_t>(i)]);
+     return SWMM_OK;
+ }
+ 
+@@ -256,8 +248,7 @@ SWMM_ENGINE_API int swmm_stat_link_vol_flow_bulk(SWMM_Engine engine, double* buf
+     if (!buf || count <= 0) return SWMM_ERR_BADPARAM;
+     const auto& ctx = to_engine(engine)->context();
+     const int n = std::min(count, ctx.n_links());
+-    std::copy(ctx.links.stat_vol_flow.begin(),
+-              ctx.links.stat_vol_flow.begin() + n, buf);
++    for (int i = 0; i < n; ++i) buf[i] = to_display(ctx, openswmm::ucf::VOLUME, ctx.links.stat_vol_flow[static_cast<std::size_t>(i)]);
+     return SWMM_OK;
+ }
+ 
+@@ -266,8 +257,7 @@ SWMM_ENGINE_API int swmm_stat_link_surcharge_time_bulk(SWMM_Engine engine, doubl
+     if (!buf || count <= 0) return SWMM_ERR_BADPARAM;
+     const auto& ctx = to_engine(engine)->context();
+     const int n = std::min(count, ctx.n_links());
+-    std::copy(ctx.links.stat_time_surcharged.begin(),
+-              ctx.links.stat_time_surcharged.begin() + n, buf);
++    for (int i = 0; i < n; ++i) buf[i] = ctx.links.stat_time_surcharged[static_cast<std::size_t>(i)] / 3600.0;
+     return SWMM_OK;
+ }
+ 

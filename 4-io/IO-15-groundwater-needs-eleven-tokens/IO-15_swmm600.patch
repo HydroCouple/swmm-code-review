@@ -1,0 +1,29 @@
+IO-15: accept [GROUNDWATER] rows with the 10 required fields
+
+handle_groundwater() copied legacy's off-by-one: it reads seven required
+numbers from tokens 3-9 and treats tokens 10-13 as optional, but rejected any
+row with fewer than 11 tokens with ERROR 203. Require 10 tokens, as
+IO-15_swmm530.patch does for 5.3.0.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-15_swmm600.patch
+
+diff --git a/src/engine/input/handlers/HydrologyHandler.cpp b/src/engine/input/handlers/HydrologyHandler.cpp
+index 5035f36..d25d543 100644
+--- a/src/engine/input/handlers/HydrologyHandler.cpp
++++ b/src/engine/input/handlers/HydrologyHandler.cpp
+@@ -415,10 +415,10 @@ void handle_groundwater(SimulationContext& ctx, const std::vector<std::string>&
+         auto tok = Tokenizer::tokenize(line);
+         if (tok.empty()) continue;
+         // Subcatch  Aquifer  Node  SurfEl  A1  B1  A2  B2  A3  Dsw  [Egwt  Ebot  Wgw  Umc]
+-        // Legacy gwater.c gwater_readGroundwaterParams requires >= 11 tokens;
+-        // fewer is ERR_ITEMS (too few items). v6 formerly skipped short rows
+-        // silently, so a truncated row ran instead of being rejected.
+-        if (tok.size() < 11) {
++        // The 10 fields up to Dsw are required; fewer is ERR_ITEMS (too few
++        // items). v6 formerly skipped short rows silently, so a truncated row
++        // ran instead of being rejected.
++        if (tok.size() < 10) {
+             ctx.errors.push_back(format_error(ERR_ITEMS, ""));
+             continue;
+         }

@@ -1,0 +1,82 @@
+IO-41: reject a malformed number in a math expression
+
+The expression tokenizers (math/MathExpr.cpp for control rules and [GWF],
+quality/Treatment.cpp for [TREATMENT]) convert the characters of a number
+with std::stod, which reads the longest valid prefix ("2.5E+" -> 2.5,
+"1.5.2" -> 1.5) and throws std::invalid_argument when there is none ("."),
+which nothing caught, so the program terminated. Treat a number that stod
+does not consume completely as an error: the tokenizer reports it and
+mathexpr::parse() fails (an empty expression still parses, as before); the
+treatment validator reports it as a malformed number.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-41_swmm600.patch
+
+diff --git a/src/engine/math/MathExpr.cpp b/src/engine/math/MathExpr.cpp
+index 4eb512e..7dde614 100644
+--- a/src/engine/math/MathExpr.cpp
++++ b/src/engine/math/MathExpr.cpp
+@@ -95,7 +95,8 @@ const std::vector<std::string>& function_names() {
+     return names;
+ }
+ 
+-static std::vector<Token> tokenize(const std::string& s) {
++static std::vector<Token> tokenize(const std::string& s, bool& ok) {
++    ok = true;
+     std::vector<Token> tokens;
+     size_t i = 0;
+     while (i < s.size()) {
+@@ -108,7 +109,12 @@ static std::vector<Token> tokenize(const std::string& s) {
+                    ((s[i] == '+' || s[i] == '-') && i > 0 && (s[i-1] == 'e' || s[i-1] == 'E'))))
+                 ++i;
+             Token t; t.type = TokenType::NUMBER;
+-            t.value = std::stod(s.substr(start, i - start));
++            size_t used = 0;
++            try { t.value = std::stod(s.substr(start, i - start), &used); } catch (...) {}
++            if (used != i - start) {  // malformed number, e.g. "5e" or "."
++                ok = false;
++                return {};
++            }
+             tokens.push_back(t);
+         }
+         else if (std::isalpha(c) || c == '_') {
+@@ -164,7 +170,9 @@ int parse(const std::string& expr_str, Expression& result) {
+     result.postfix.clear();
+     result.valid = false;
+ 
+-    auto tokens = tokenize(expr_str);
++    bool ok = true;
++    auto tokens = tokenize(expr_str, ok);
++    if (!ok) return -1;  // malformed number
+     std::stack<Token> ops;
+ 
+     for (const auto& tok : tokens) {
+diff --git a/src/engine/quality/Treatment.cpp b/src/engine/quality/Treatment.cpp
+index 9ed6c1d..cb7958b 100644
+--- a/src/engine/quality/Treatment.cpp
++++ b/src/engine/quality/Treatment.cpp
+@@ -147,7 +147,9 @@ static std::vector<Token> tokenize(const std::string& s,
+                 ++i;
+             Token t;
+             t.type  = TokenType::NUMBER;
+-            t.value = std::stod(s.substr(start, i - start));
++            size_t used = 0;
++            try { t.value = std::stod(s.substr(start, i - start), &used); } catch (...) {}
++            if (used != i - start) return {};  // malformed number, e.g. "5e" or "."
+             tokens.push_back(t);
+             continue;
+         }
+@@ -432,9 +434,12 @@ int validate(const std::string& expr_str, std::string& msg, int& col) {
+                 ++i;
+             Token t;
+             t.type = TokenType::NUMBER;
++            size_t used = 0;
+             try {
+-                t.value = std::stod(rhs.substr(start, i - start));
++                t.value = std::stod(rhs.substr(start, i - start), &used);
+             } catch (...) {
++            }
++            if (used != i - start) {  // no number, or one followed by junk ("5e")
+                 return fail("malformed number '" + rhs.substr(start, i - start)
+                                 + "'",
+                             rhs_off + static_cast<int>(start));

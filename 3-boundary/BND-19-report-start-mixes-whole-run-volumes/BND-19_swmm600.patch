@@ -1,0 +1,70 @@
+BND-19: report inflow volumes for the reporting period when REPORT_START is late
+
+The Node Inflow "Total Inflow Volume" and the Outfall Loading "Total Volume"
+printed ctx.nodes.stat_total_inflow_vol, which accumulates from START, next
+to statistics that updateStatistics() collects only from REPORT_START. On
+the first statistics step of a late reporting period, copy those volumes to
+routing_stats.inflow_before_rpt and subtract them in the two columns, as the
+patched legacy engine does. The flow balance error column still uses the
+whole run. When reporting starts with the run the vector stays empty and
+the report is unchanged.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply BND-19_swmm600.patch
+
+diff --git a/src/engine/core/SWMMEngine.cpp b/src/engine/core/SWMMEngine.cpp
+index 839529d..e976663 100644
+--- a/src/engine/core/SWMMEngine.cpp
++++ b/src/engine/core/SWMMEngine.cpp
+@@ -5207,6 +5207,11 @@ void SWMMEngine::updateStatistics(double dt_routing) noexcept {
+         (ctx_.elapsed_ms + 1000.0 * dt_routing + 1.0) / 1000.0);
+     // ...and only once the reporting period has begun (stats.c:445).
+     if (stat_date < ctx_.options.report_start) return;
++    // A late REPORT_START: note each node's inflow volume so far, so the
++    // report's inflow volumes cover the reporting period (stats.c).
++    if (ctx_.routing_stats.report_steps == 0 &&
++        ctx_.options.report_start > ctx_.options.start_date)
++        ctx_.routing_stats.inflow_before_rpt = ctx_.nodes.stat_total_inflow_vol;
+     ++ctx_.routing_stats.report_steps;
+     ctx_.routing_stats.report_time += dt_routing;
+     double sys_outfall_flow = 0.0;   // legacy SysOutfallFlow
+diff --git a/src/engine/core/SimulationContext.hpp b/src/engine/core/SimulationContext.hpp
+index 4038a9e..0913da2 100644
+--- a/src/engine/core/SimulationContext.hpp
++++ b/src/engine/core/SimulationContext.hpp
+@@ -1491,6 +1491,9 @@ struct SimulationContext {
+         double steady_time = 0.0;  ///< Time skipped as steady state (sec)
+         long   report_steps = 0;   ///< Flow-stat steps after report start (legacy ReportStepCount)
+         double report_time  = 0.0; ///< Their total time, sec (legacy RoutingTimeSpan)
++        /// Per-node stat_total_inflow_vol when a late REPORT_START began, ft3
++        /// (empty when reporting starts with the run; legacy inflowBeforeRpt)
++        std::vector<double> inflow_before_rpt;
+         double max_outfall_flow = 0.0; ///< Peak of the summed outfall inflow, cfs (legacy MaxOutfallFlow)
+ 
+         /// Number of time step histogram bins (matching legacy TIMELEVELS=5).
+diff --git a/src/engine/plugins/DefaultReportPlugin.cpp b/src/engine/plugins/DefaultReportPlugin.cpp
+index 36a8dbb..7255cfb 100644
+--- a/src/engine/plugins/DefaultReportPlugin.cpp
++++ b/src/engine/plugins/DefaultReportPlugin.cpp
+@@ -2489,7 +2489,9 @@ void DefaultReportPlugin::write_results(std::FILE* f,
+             double max_lat  = ctx.nodes.stat_max_lat_inflow[uj] * Qcf;
+             double max_tot  = ctx.nodes.stat_max_total_inflow[uj] * Qcf;
+             double vol_lat  = ctx.nodes.stat_lat_inflow_vol[uj] * Vcf;
+-            double vol_tot  = ctx.nodes.stat_total_inflow_vol[uj] * Vcf;
++            const auto& pre = ctx.routing_stats.inflow_before_rpt;
++            double vol_tot  = (ctx.nodes.stat_total_inflow_vol[uj] -
++                               (uj < pre.size() ? pre[uj] : 0.0)) * Vcf;
+             int days, hrs, mins;
+             elapsedToParts(ctx.nodes.stat_max_inflow_date[uj], ctx.options.report_start, days, hrs, mins);
+ 
+@@ -2784,7 +2786,9 @@ void DefaultReportPlugin::write_results(std::FILE* f,
+                 ? ctx.nodes.stat_outfall_avg_flow[uj] * Qcf / static_cast<double>(periods) : 0.0;
+             double max_flow = ctx.nodes.stat_outfall_max_flow[uj] * Qcf;
+             double freq = 100.0 * static_cast<double>(periods) / static_cast<double>(total_steps);
+-            double vol = ctx.nodes.stat_total_inflow_vol[uj] * Vcf;
++            const auto& pre = ctx.routing_stats.inflow_before_rpt;
++            double vol = (ctx.nodes.stat_total_inflow_vol[uj] -
++                          (uj < pre.size() ? pre[uj] : 0.0)) * Vcf;
+ 
+             sys_freq_sum += freq;
+             sys_flow_sum += avg_flow;

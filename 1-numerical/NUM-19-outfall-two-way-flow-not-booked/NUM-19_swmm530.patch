@@ -1,0 +1,88 @@
+NUM-19: book an outfall's net flow when it both receives and sends flow
+
+node_getSystemOutflow() returned the outfall's inflow when it had no
+outflow and minus its outflow when it had no inflow, but 0 when it had both,
+so removeOutflows() booked nothing for it. Two ordinary cases give both: a
+FLOW (or DWF, RDII, ...) inflow at an outfall that feeds the network, and
+every SKIP_STEADY_STATE step that follows a step on which the function set
+a feeding outfall's inflow to its outflow for reporting. Return the net
+flow, inflow - outflow, which is what the other two cases already return;
+remember (Outfall.inflowIsBackflow) when the inflow was set for reporting,
+and on a skipped step put it back to 0 before quality routing and
+removeOutflows() see it. Results only change for outfalls that both
+receive and send flow, and on skipped steps that follow one.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-19_swmm530.patch
+
+diff --git a/src/legacy/engine/node.c b/src/legacy/engine/node.c
+index 070db5a..898260a 100644
+--- a/src/legacy/engine/node.c
++++ b/src/legacy/engine/node.c
+@@ -431,6 +431,8 @@ double node_getSystemOutflow(int j, int *isFlooded)
+     // --- if node is an outfall
+     if ( Node[j].type == OUTFALL )
+     {
++        Outfall[Node[j].subIndex].inflowIsBackflow = FALSE;
++
+         // --- node receives inflow from outfall conduit
+         if ( Node[j].outflow == 0.0 ) outflow = Node[j].inflow;
+ 
+@@ -438,10 +440,12 @@ double node_getSystemOutflow(int j, int *isFlooded)
+         //     (therefore it has a negative outflow)
+         else
+         {
++            // --- net of any inflow the outfall also receives
++            outflow = Node[j].inflow - Node[j].outflow;
+             if ( Node[j].inflow == 0.0 )
+             {
+-                outflow = -Node[j].outflow;
+                 Node[j].inflow = fabs(outflow);
++                Outfall[Node[j].subIndex].inflowIsBackflow = TRUE;
+             }
+         }
+ 
+diff --git a/src/legacy/engine/objects.h b/src/legacy/engine/objects.h
+index 6b54d76..fbc7e61 100644
+--- a/src/legacy/engine/objects.h
++++ b/src/legacy/engine/objects.h
+@@ -559,6 +559,7 @@ typedef struct
+    int        routeTo;            // subcatchment index routed onto
+    double     vRouted;            // flow volume routed (ft3)
+    double*    wRouted;            // pollutant load routed (mass)
++   char       inflowIsBackflow;   // true if node inflow was set to backflow
+ }  TOutfall;
+ 
+ //--------------------
+diff --git a/src/legacy/engine/routing.c b/src/legacy/engine/routing.c
+index 9a47f4b..94892d5 100644
+--- a/src/legacy/engine/routing.c
++++ b/src/legacy/engine/routing.c
+@@ -215,6 +215,7 @@ void routing_execute(int routingModel, double routingStep)
+ //  Purpose: executes the routing process at the current time period.
+ //
+ {
++    int      j;
+     int      trialsCount = 1;          // trials required to solve flow routing
+     int      actionCount = 0;          // number of control actions taken
+     int      inSteadyState = TRUE;     // system is in steady state
+@@ -248,6 +249,19 @@ void routing_execute(int routingModel, double routingStep)
+         if (inSteadyState == FALSE)
+             trialsCount = routeFlow(routingModel, routingStep);
+ 
++        // --- a skipped step reuses the last routed flows, so remove the
++        //     inflow that node_getSystemOutflow() gave a backflowing outfall
++        //     at the end of the previous step
++        else
++        {
++            for (j = 0; j < Nobjects[NODE]; j++)
++            {
++                if ( Node[j].type == OUTFALL &&
++                     Outfall[Node[j].subIndex].inflowIsBackflow )
++                    Node[j].inflow = 0.0;
++            }
++        }
++
+         // --- route water quality constituents
+         if (Nobjects[POLLUT] > 0 && !IgnoreQuality)
+         {

@@ -1,0 +1,29 @@
+IO-59: print a space before each flow value in the summary tables
+
+DefaultReportPlugin's flowFmt() copies the legacy "%9.2f" / "%9.3f", so
+flows of 100,000.00 or more (10,000.000 in MGD or CMS) run into the
+preceding value in the Node Inflow Summary, e.g. "150000.00150000.00".
+Use " %8.2f" / " %8.3f": every value that fits prints exactly as before,
+and a larger one is still separated by a space.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-59_swmm600.patch
+
+diff --git a/src/engine/plugins/DefaultReportPlugin.cpp b/src/engine/plugins/DefaultReportPlugin.cpp
+index 0c601fa..af8a86b 100644
+--- a/src/engine/plugins/DefaultReportPlugin.cpp
++++ b/src/engine/plugins/DefaultReportPlugin.cpp
+@@ -148,9 +148,11 @@ static const char* lt_str(int lt) {
+ 
+ #define WRITE(f, s) std::fprintf(f, "\n  %s", s)
+ 
+-// Flow format string (legacy: "%9.3f" for MGD/CMS, "%9.2f" otherwise)
++// Flow format string (legacy: " %8.3f" for MGD/CMS, " %8.2f" otherwise);
++// the leading space keeps a flow too large for its column from merging
++// with the preceding value
+ static const char* flowFmt(int fu) {
+-    return (fu == 2 || fu == 3) ? "%9.3f" : "%9.2f";
++    return (fu == 2 || fu == 3) ? " %8.3f" : " %8.2f";
+ }
+ 
+ // Project land-area units → internal ft². Subcatchment area is stored in

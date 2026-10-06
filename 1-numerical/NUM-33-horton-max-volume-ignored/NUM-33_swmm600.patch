@@ -1,0 +1,51 @@
+NUM-33: apply the Horton maximum infiltration volume to constant-rate curves
+
+infil::horton_getInfil() and infil::modHorton_getInfil() return early when the
+curve is a constant rate (f0 == fmin or decay == 0), before the Fmax cap, so
+Fmax is ignored. Apply the same cap in the constant-rate branch (Fe for
+Horton, Fmh for modified Horton) and let the accumulated volume recover during
+dry steps with exp(-kr*dt), as the 5.3.0 patch does.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-33_swmm600.patch
+
+diff --git a/src/engine/hydrology/Infiltration.cpp b/src/engine/hydrology/Infiltration.cpp
+index aee99ec..513049e 100644
+--- a/src/engine/hydrology/Infiltration.cpp
++++ b/src/engine/hydrology/Infiltration.cpp
+@@ -78,7 +78,16 @@ double horton_getInfil(HortonState& state, double precip, double depth, double d
+     if (df == 0.0 || kd == 0.0) {
+         double fp = f0;
+         fp = std::min(fp, ia);
+-        return std::max(0.0, fp);
++        fp = std::max(0.0, fp);
++
++        // Limit cumulative infiltration to Fmax (recovers when dry)
++        if (Fmax > 0.0) {
++            if (state.Fe + fp * dt > Fmax)
++                fp = std::max((Fmax - state.Fe) / dt, 0.0);
++            state.Fe += fp * dt;
++            if (ia <= TINY) state.Fe *= std::exp(-kr * dt);
++        }
++        return fp;
+     }
+ 
+     double fp = 0.0;
+@@ -165,7 +174,16 @@ double modHorton_getInfil(HortonState& state, double precip, double depth, doubl
+         double fp = f0;
+         double fa = precip + depth / dt;
+         fp = std::min(fp, fa);
+-        return std::max(0.0, fp);
++        fp = std::max(0.0, fp);
++
++        // Limit cumulative infiltration to Fmax (recovers when dry)
++        if (state.Fmax > 0.0) {
++            if (state.Fmh + fp * dt > state.Fmax)
++                fp = std::max((state.Fmax - state.Fmh) / dt, 0.0);
++            state.Fmh += fp * dt;
++            if (fa <= TINY) state.Fmh *= std::exp(-kr * dt);
++        }
++        return fp;
+     }
+ 
+     // Available water rate (ft/sec)

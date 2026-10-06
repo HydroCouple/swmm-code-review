@@ -1,0 +1,64 @@
+IO-02: range-check clock-time and step options
+
+datetime_strToTime() reads a bare number as decimal hours and accepts any
+value, including nan, inf and 1e30. START_TIME, END_TIME and
+REPORT_START_TIME stored the result unchecked (a NaN start date; an end time
+4e28 days away, so the run never ends), and WET_STEP, DRY_STEP, REPORT_STEP
+and RULE_STEP converted it to seconds in int arithmetic, which wraps a
+negative or huge value into an accepted positive step (REPORT_STEP -0.25 h
+becomes 23:45:00) or overflows (undefined behaviour above 596,523 h).
+
+The three time-of-day options now require 0:00:00 to 24:00:00 (ERROR 213
+otherwise), and a step must be non-negative and fit in an int number of
+seconds before it is converted (ERROR 211 otherwise; the existing tests
+still reject 0 for all steps but RULE_STEP). Both checks are written so
+that NaN fails them. Valid options are read exactly as before.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-02_swmm530.patch
+
+diff --git a/src/legacy/engine/project.c b/src/legacy/engine/project.c
+index d24c17f..368bc5e 100644
+--- a/src/legacy/engine/project.c
++++ b/src/legacy/engine/project.c
+@@ -516,7 +516,8 @@ int project_readOption(char* s1, char* s2)
+ 
+       // --- simulation start time of day
+       case START_TIME:
+-        if ( !datetime_strToTime(s2, &StartTime) )
++        if ( !datetime_strToTime(s2, &StartTime) ||
++             !(StartTime >= 0.0 && StartTime <= 1.0) )  // 0:00 to 24:00
+         {
+             return error_setInpError(ERR_DATETIME, s2);
+         }
+@@ -532,7 +533,8 @@ int project_readOption(char* s1, char* s2)
+ 
+       // --- simulation ending time of day
+       case END_TIME:
+-        if ( !datetime_strToTime(s2, &EndTime) )
++        if ( !datetime_strToTime(s2, &EndTime) ||
++             !(EndTime >= 0.0 && EndTime <= 1.0) )
+         {
+             return error_setInpError(ERR_DATETIME, s2);
+         }
+@@ -548,7 +550,8 @@ int project_readOption(char* s1, char* s2)
+ 
+       // --- reporting start time of day
+       case REPORT_START_TIME:
+-        if ( !datetime_strToTime(s2, &ReportStartTime) )
++        if ( !datetime_strToTime(s2, &ReportStartTime) ||
++             !(ReportStartTime >= 0.0 && ReportStartTime <= 1.0) )
+         {
+             return error_setInpError(ERR_DATETIME, s2);
+         }
+@@ -589,6 +592,10 @@ int project_readOption(char* s1, char* s2)
+         {
+             return error_setInpError(ERR_DATETIME, s2);
+         }
++
++        // --- reject NaN, negative steps and steps whose seconds overflow an int
++        if ( !(aTime >= 0.0 && aTime * SECperDAY < 2147483647.0) )
++            return error_setInpError(ERR_NUMBER, s2);
+         datetime_decodeTime(aTime, &h, &m, &s);
+         h += 24*(int)aTime;
+         s = s + 60*m + 3600*h;

@@ -1,0 +1,24 @@
+IO-40: read '-' after ')' as a subtraction in math expressions
+
+getOperand() folds a '-' followed by a digit into a negative number when the
+previous lexeme is an operator or '(' (codes <= 6, or '^'), but code 2 in
+that range is ')'. "(TSS)-1" therefore became "(TSS)" followed by the number
+-1 and was rejected as an invalid expression (ERROR 233), while "(TSS) - 1"
+parsed. Exclude ')' from the set.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-40_swmm530.patch
+
+diff --git a/src/legacy/engine/mathexpr.c b/src/legacy/engine/mathexpr.c
+index c39dff7..2ea85c4 100644
+--- a/src/legacy/engine/mathexpr.c
++++ b/src/legacy/engine/mathexpr.c
+@@ -260,7 +260,7 @@ int getOperand()
+       case '-': code = 4;
+         if (Pos < Len-1 &&
+             isDigit(S[Pos+1]) &&
+-            (CurLex <= 6 || CurLex == 31))
++            ((CurLex <= 6 && CurLex != 2) || CurLex == 31))
+         {
+             Pos++;
+             Fvalue = -getNumber();

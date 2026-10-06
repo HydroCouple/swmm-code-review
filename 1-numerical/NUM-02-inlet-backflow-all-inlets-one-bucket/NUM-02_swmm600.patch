@@ -1,0 +1,103 @@
+NUM-02: group inlet backflow ratios by capture node
+
+computeBackflowRatios() reproduces 5.3.0's single model-wide bucket on
+purpose, so a capture node's overflow is split across all inlets of the
+model instead of the inlets that drain to it. Accumulate the open area,
+link counts and custom inlet counts per capture node, in the same order as
+legacy, so the ratios match the patched 5.3.0 exactly.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-02_swmm600.patch
+
+diff --git a/src/engine/hydraulics/Inlet.cpp b/src/engine/hydraulics/Inlet.cpp
+index 2738ce5..b5fac9f 100644
+--- a/src/engine/hydraulics/Inlet.cpp
++++ b/src/engine/hydraulics/Inlet.cpp
+@@ -1094,29 +1094,22 @@ void InletSolver::updateStats(int ii, double q) {
+ // computeBackflowRatios() — legacy getBackflowRatios (inlet.c:1805)
+ // ============================================================================
+ //
+-// PARITY NOTE (plan D-E6): legacy assigns the capture-node index to the
+-// file-scope Manning roughness `n` (`n = inlet->nodeIndex;`) and then indexes
+-// its per-node accumulator with the local `nodeIndex`, which is initialised to
+-// 0 and never advanced (inlet.c:1836/1853). Every inlet in the model therefore
+-// lands in slot 0 and every ratio is read back out of that one slot: the
+-// backflow of ANY capture node is split across ALL of the model's inlets by
+-// open area, not among the inlets that actually drain into it.
+-//
+-// That is a bug, but it is the oracle's behaviour and it is observable —
+-// example7-inlets' four one-inlet capture nodes get ratio 0.2 (their share of
+-// the whole model's grate area), not the 1.0 a per-node grouping gives, which
+-// changes every backflow and split the deck from routing step 287. Reproduced
+-// deliberately; the grouping v6 used to do is the documented divergence.
++// Each capture node's overflow is divided among the inlets that drain to it
++// (fix NUM-02): by open area among the standard inlets, by inlet count among
++// the custom ones, with f = the node's share of usages carrying a standard
++// inlet. 5.3.0 put every inlet into one model-wide bucket.
+ 
+ void InletSolver::computeBackflowRatios() {
+     const int ni = soa_.count;
+     if (ni == 0) return;
+ 
+-    // One aggregate bucket — legacy's inletNodes[0] (see the note above).
+-    int    n_links     = 0;   // total inlet usages in the model
+-    int    n_std_links = 0;   // those with a standard (area > 0) inlet
+-    int    n_custom    = 0;   // sum of num_inlets over the custom ones
+-    double total_area  = 0.0;
++    // Per capture node accumulators (legacy's inletNodes[] array).
++    struct NodeSums { int n_links = 0, n_std_links = 0, n_custom = 0; double total_area = 0.0; };
++    int max_node = -1;
++    for (int ii = 0; ii < ni; ++ii)
++        max_node = std::max(max_node, soa_.node_idx[static_cast<std::size_t>(ii)]);
++    if (max_node < 0) return;
++    std::vector<NodeSums> sums(static_cast<std::size_t>(max_node) + 1);
+ 
+     // Legacy walks its inlet list, which is the [INLET_USAGE] rows in REVERSE
+     // (inlet.c:441 prepends); the area sum is a float accumulation, so the
+@@ -1124,33 +1117,34 @@ void InletSolver::computeBackflowRatios() {
+     for (int ii = ni - 1; ii >= 0; --ii) {
+         const int m = soa_.node_idx[static_cast<std::size_t>(ii)];
+         if (m < 0) continue;
+-        n_links++;
++        NodeSums& s = sums[static_cast<std::size_t>(m)];
++        s.n_links++;
+         const double area = getInletArea(designOf(ii), usageOf(ii));
+         if (area > 0.0) {
+-            n_std_links++;
+-            total_area += area;
++            s.n_std_links++;
++            s.total_area += area;
+         } else {
+-            n_custom += soa_.num_inlets[static_cast<std::size_t>(ii)];
++            s.n_custom += soa_.num_inlets[static_cast<std::size_t>(ii)];
+         }
+     }
+-    if (n_links == 0) return;
+-
+-    // f = share of usages carrying a standard inlet (legacy inlet.c:1851-1853)
+-    const double f = static_cast<double>(n_std_links) / static_cast<double>(n_links);
+ 
+     for (int ii = ni - 1; ii >= 0; --ii) {
+         const auto ui = static_cast<std::size_t>(ii);
+         soa_.backflow_ratio[ui] = 0.0;
+         if (soa_.node_idx[ui] < 0) continue;
++        const NodeSums& s = sums[static_cast<std::size_t>(soa_.node_idx[ui])];
++
++        // f = share of the node's usages carrying a standard inlet (legacy inlet.c:1851-1853)
++        const double f = static_cast<double>(s.n_std_links) / static_cast<double>(s.n_links);
+ 
+         const double area = getInletArea(designOf(ii), usageOf(ii));
+         if (area > 0.0) {
+-            if (total_area > 0.0)
+-                soa_.backflow_ratio[ui] = area / total_area * f;
+-        } else if (n_custom > 0) {
++            if (s.total_area > 0.0)
++                soa_.backflow_ratio[ui] = area / s.total_area * f;
++        } else if (s.n_custom > 0) {
+             soa_.backflow_ratio[ui] =
+                 static_cast<double>(soa_.num_inlets[ui])
+-                / static_cast<double>(n_custom) * (1.0 - f);
++                / static_cast<double>(s.n_custom) * (1.0 - f);
+         }
+     }
+ }

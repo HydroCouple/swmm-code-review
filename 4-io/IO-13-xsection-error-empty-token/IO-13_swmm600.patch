@@ -1,0 +1,54 @@
+IO-13: report invalid cross-section geometry as ERROR 119 naming the link
+
+6.0.0 copied legacy's ERROR 211 with an empty token for geometry that
+setParams() refuses, and since 6.0.0 input errors carry no line number, the
+message "ERROR 211: invalid number ." gives no way to find the link. Report
+ERR_XSECT with the link name in both places (LinksHandler.cpp for Geom1 <= 0,
+PostParseResolver.cpp for the rest), as the 5.3.0 patch does.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-13_swmm600.patch
+
+diff --git a/src/engine/input/PostParseResolver.cpp b/src/engine/input/PostParseResolver.cpp
+index 807f527..f5868e1 100644
+--- a/src/engine/input/PostParseResolver.cpp
++++ b/src/engine/input/PostParseResolver.cpp
+@@ -3337,14 +3337,14 @@ void resolve_cross_references(SimulationContext& ctx) {
+                     // setParams has answered "I cannot build a section from
+                     // this" — the same verdict legacy's xsect_setParams returns
+                     // as FALSE, and legacy refuses the deck on it
+-                    // (link.c:250, ERROR 211 naming an empty token). v6 computed
++                    // (link.c:250, ERROR 119 naming the link). v6 computed
+                     // the verdict and then threw it away, falling through to the
+                     // rectangular fallback below: a MODBASKETHANDLE with a top
+                     // width of 0, which has no geometry at all, ran as a
+                     // rectangle. rc is what must be tested, not this branch —
+                     // DUMMY reaches it with rc == 0, because setParams leaves a
+                     // dummy's fields to the caller.
+-                    ctx.errors.push_back(format_error(ERR_NUMBER, ""));
++                    ctx.errors.push_back(format_error(ERR_XSECT, ctx.link_names.name_of(j)));
+                 }
+                 // Invalid geometry — preserve the previous generic fallback.
+                 a_full = w_max * y_full;
+diff --git a/src/engine/input/handlers/LinksHandler.cpp b/src/engine/input/handlers/LinksHandler.cpp
+index c205c9e..3593883 100644
+--- a/src/engine/input/handlers/LinksHandler.cpp
++++ b/src/engine/input/handlers/LinksHandler.cpp
+@@ -432,14 +432,14 @@ void handle_xsections(SimulationContext& ctx, const std::vector<std::string>& li
+             continue;
+         }
+         // Legacy xsect_setParams (xsect.c:233) refuses Geom1 <= 0 for every
+-        // shape but DUMMY, and link.c:250 reports it as ERR_NUMBER with an
+-        // empty token. (CUSTOM's own Geom1 test is link.c:226.)
++        // shape but DUMMY, and link.c:250 reports it as ERR_XSECT naming
++        // the link. (CUSTOM's own Geom1 test is link.c:226.)
+         if (ctx.links.xsect_shape[idx] != XsectShape::IRREGULAR &&
+             ctx.links.xsect_shape[idx] != XsectShape::STREET_XSECT &&
+             ctx.links.xsect_shape[idx] != XsectShape::CUSTOM &&
+             ctx.links.xsect_shape[idx] != XsectShape::DUMMY &&
+             !(to_double(tok[2]) > 0.0)) {
+-            ctx.errors.push_back(format_error(ERR_NUMBER, ""));
++            ctx.errors.push_back(format_error(ERR_XSECT, tok[0]));
+             continue;
+         }
+ 

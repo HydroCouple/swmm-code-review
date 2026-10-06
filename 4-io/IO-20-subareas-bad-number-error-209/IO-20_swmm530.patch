@@ -1,0 +1,24 @@
+IO-20: report an invalid [SUBAREAS] number as ERROR 211, not ERROR 209
+
+subcatch_readSubareaParams() reports a non-numeric or negative Manning's n,
+depression storage or PctZero with ERR_NAME, "ERROR 209: undefined object
+abc", which sends the user looking for a missing object. Use ERR_NUMBER
+("ERROR 211: invalid number"), as every other numeric check in the file
+does.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-20_swmm530.patch
+
+diff --git a/src/legacy/engine/subcatch.c b/src/legacy/engine/subcatch.c
+index 7c1d97c..14aafce 100644
+--- a/src/legacy/engine/subcatch.c
++++ b/src/legacy/engine/subcatch.c
+@@ -239,7 +239,7 @@ int subcatch_readSubareaParams(char* tok[], int ntoks)
+     for (i = 0; i < 5; i++)
+     {
+         if ( ! getDouble(tok[i+1], &x[i])  || x[i] < 0.0 )
+-            return error_setInpError(ERR_NAME, tok[i+1]);
++            return error_setInpError(ERR_NUMBER, tok[i+1]);
+     }
+ 
+     // --- check for valid runoff routing keyword

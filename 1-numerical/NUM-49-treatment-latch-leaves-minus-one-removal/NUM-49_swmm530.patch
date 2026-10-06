@@ -1,0 +1,26 @@
+NUM-49: do not apply a removal that was never computed (R = -1)
+
+treatmnt_treat() sets every removal to -1 ("not computed") and the apply pass
+only skipped R[p] == 0. Once a cyclic treatment latches ErrCode, getRemoval()
+returns 0 for every pollutant evaluated after it without assigning R[p], so
+the apply pass used R = -1: a concentration-type equation then set the node
+concentration to 2*C and the created mass never reached the mass balance.
+Skip any R[p] <= 0, as 6.0.0 already does.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-49_swmm530.patch
+
+diff --git a/src/legacy/engine/treatmnt.c b/src/legacy/engine/treatmnt.c
+index 3638cd3..1bc0f49 100644
+--- a/src/legacy/engine/treatmnt.c
++++ b/src/legacy/engine/treatmnt.c
+@@ -234,7 +234,8 @@ void  treatmnt_treat(int j, double q, double v, double tStep)
+     // --- update nodal concentrations and mass balances
+     else for ( p = 0; p < Nobjects[POLLUT]; p++ )
+     {
+-        if ( R[p] == 0.0 ) continue;
++        // --- skip R[p] = -1 too (removal never computed)
++        if ( R[p] <= 0.0 ) continue;
+         treatment = &Node[j].treatment[p];
+ 
+         // --- removal-type treatment equations get applied to inflow stream

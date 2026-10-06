@@ -1,0 +1,39 @@
+﻿[OPTIONS]
+FLOW_UNITS           CMS
+FLOW_ROUTING         KINWAVE
+START_DATE           06/01/2020
+START_TIME           00:00:00
+REPORT_START_DATE    06/01/2020
+REPORT_START_TIME    00:00:00
+END_DATE             06/01/2020
+END_TIME             06:00:00
+REPORT_STEP          00:15:00
+ROUTING_STEP         5
+
+[TITLE]
+IO-08: saved as UTF-8 with a byte order mark; [OPTIONS] (CMS, KINWAVE, 06/01/2020) is the first section
+
+[INFLOWS]
+;;Node Constituent Series Type Mfactor Sfactor Baseline
+J1   FLOW   ""   FLOW   1.0   1.0   0.15
+
+[JUNCTIONS]
+;;Name Elev MaxDepth InitDepth SurDepth Aponded
+J1   100   10   0   0   0
+J2    99   10   0   0   0
+
+[OUTFALLS]
+O1    98   FREE   NO
+
+[CONDUITS]
+;;Name From To Length Roughness InOffset OutOffset InitFlow MaxFlow
+C1   J1   J2   400   0.013   0   0   0   0
+C2   J2   O1   400   0.013   0   0   0   0
+
+[XSECTIONS]
+C1   CIRCULAR   2   0   0   0   1
+C2   CIRCULAR   2   0   0   0   1
+
+[REPORT]
+NODES ALL
+LINKS ALL

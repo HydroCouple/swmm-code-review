@@ -1,0 +1,36 @@
+IO-20: reject invalid [SUBAREAS] numbers with ERROR 211
+
+handle_subareas() converted Manning's n, depression storage and PctZero
+with to_double() and no check, so "abc" ran as 0 and a negative depression
+storage was used as given. Parse them as legacy getDouble() does
+(parse_double_strict) and report a non-numeric or negative value as ERROR
+211 (invalid number), as the 5.3.0 patch does.
+
+Requires: IO-17
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-20_swmm600.patch
+
+diff --git a/src/engine/input/handlers/CatchmentHandler.cpp b/src/engine/input/handlers/CatchmentHandler.cpp
+index d10cb99..bb98734 100644
+--- a/src/engine/input/handlers/CatchmentHandler.cpp
++++ b/src/engine/input/handlers/CatchmentHandler.cpp
+@@ -220,6 +220,18 @@ void handle_subareas(SimulationContext& ctx, const std::vector<std::string>& lin
+             continue;
+         }
+ 
++        // n, depression storage and PctZero must be numbers >= 0
++        // (legacy subcatch_readSubareaParams: ERROR 211)
++        bool bad = false;
++        for (std::size_t k = 1; k <= 5 && !bad; ++k) {
++            double v = 0.0;
++            if (!parse_double_strict(tok[k], v) || v < 0.0) {
++                ctx.errors.push_back(format_error(ERR_NUMBER, tok[k]));
++                bad = true;
++            }
++        }
++        if (bad) continue;
++
+         ctx.subcatches.n_imperv[idx]  = to_double(tok[1]);
+         ctx.subcatches.n_perv[idx]    = to_double(tok[2]);
+         ctx.subcatches.ds_imperv[idx] = to_double(tok[3]);

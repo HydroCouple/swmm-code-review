@@ -1,0 +1,25 @@
+IO-36: resolve a relative RDII interface file name against the input file's folder
+
+iface_readFileParams() passes every [FILES] name through addAbsolutePath(),
+which prefixes a relative name with the input file's folder, except the RDII
+file name. USE RDII therefore looked for the file in the working directory
+(ERROR 343 when the engine is not started from the project folder) and SAVE
+RDII wrote it there, while SAVE OUTFLOWS on the next line went next to the
+.inp. The RDII name now goes through addAbsolutePath() like the others.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-36_swmm530.patch
+
+diff --git a/src/legacy/engine/iface.c b/src/legacy/engine/iface.c
+index 23272de..c95c646 100644
+--- a/src/legacy/engine/iface.c
++++ b/src/legacy/engine/iface.c
+@@ -145,7 +145,7 @@ int iface_readFileParams(char* tok[], int ntoks)
+ 
+       case RDII_FILE:
+         Frdii.mode = k;
+-        sstrncpy(Frdii.name, fname, MAXFNAME);
++        sstrncpy(Frdii.name, addAbsolutePath(fname), MAXFNAME);
+         break;
+ 
+       case INFLOWS_FILE:

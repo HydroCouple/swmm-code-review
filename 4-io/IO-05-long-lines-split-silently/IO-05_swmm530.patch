@@ -1,0 +1,59 @@
+IO-05: do not split input lines longer than the 1024-character buffer
+
+input_countObjects() and input_readData() read the input file with
+fgets(line, MAXLINE, ...), which stops after 1023 characters. The rest of a
+longer line was returned by the next fgets() and parsed as a line of its
+own: the tail of a long comment became a bogus object, and the ERR_LINE_LENGTH
+check (strlen(line) >= MAXLINE) could never fire. Both passes now read past
+the remainder of a line that did not fit, and input_readData() counts its
+characters, so a data line longer than the limit is reported as ERROR 201 at
+its own line number while a long comment is ignored, as the existing check
+intended. Lines that fit the buffer are read exactly as before.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-05_swmm530.patch
+
+diff --git a/src/legacy/engine/input.c b/src/legacy/engine/input.c
+index 5a58319..8c3b857 100644
+--- a/src/legacy/engine/input.c
++++ b/src/legacy/engine/input.c
+@@ -93,6 +93,14 @@ int input_countObjects()
+     // --- make pass through data file counting number of each object
+     while ( fgets(line, MAXLINE, Finp.file) != NULL )
+     {
++        // --- skip the rest of a line too long for the buffer, so that it is
++        //     not read as a new line (input_readData reports ERR_LINE_LENGTH)
++        if ( strchr(line, '\n') == NULL )
++        {
++            int c;
++            while ( (c = fgetc(Finp.file)) != EOF && c != '\n' ) {}
++        }
++
+         // --- skip blank lines & those beginning with a comment
+         lineCount++;
+         sstrncpy(wLine, line, MAXLINE);     // make working copy of line
+@@ -184,6 +192,16 @@ int input_readData()
+     {
+         // --- make copy of line and scan for tokens
+         lineCount++;
++        lineLength = (int)strlen(line);
++
++        // --- skip the rest of a line too long for the buffer, counting
++        //     its characters, so that it is not read as a new line
++        if ( strchr(line, '\n') == NULL )
++        {
++            int c;
++            while ( (c = fgetc(Finp.file)) != EOF && c != '\n' )
++                if ( c != '\r' ) lineLength++;
++        }
+         sstrncpy(wLine, line, MAXLINE);
+         Ntokens = getTokens(wLine);
+ 
+@@ -192,7 +210,6 @@ int input_readData()
+         if ( *Tok[0] == ';' ) continue;
+ 
+         // --- check if max. line length exceeded
+-        lineLength = (int)strlen(line);
+         if ( lineLength >= MAXLINE )
+         {
+             // --- don't count comment if present

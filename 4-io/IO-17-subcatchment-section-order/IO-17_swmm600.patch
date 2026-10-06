@@ -1,0 +1,76 @@
+IO-17: replay [SUBAREAS], [INFILTRATION] and [ADJUSTMENTS] rows that name a later subcatchment
+
+The 6.0.0 handlers for [SUBAREAS] and [INFILTRATION] skipped a row whose
+subcatchment had not been declared yet, and [ADJUSTMENTS] skipped an N-PERV,
+DSTORE or INFIL row whose subcatchment or pattern had not been declared yet,
+all without an error. 6.0.0's own .inp writer puts [ADJUSTMENTS] above
+[SUBCATCHMENTS] and [PATTERNS], so it could not read back the adjustments it
+wrote. Stash such rows in ctx.deferred_section_rows, as [XSECTIONS], [LOSSES]
+and [GROUNDWATER] already do: InputReader replays them after the last section
+and reports ERROR 209 for any that still name no object, as legacy SWMM does.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-17_swmm600.patch
+
+diff --git a/src/engine/input/handlers/CatchmentHandler.cpp b/src/engine/input/handlers/CatchmentHandler.cpp
+index 1a1626e..d10cb99 100644
+--- a/src/engine/input/handlers/CatchmentHandler.cpp
++++ b/src/engine/input/handlers/CatchmentHandler.cpp
+@@ -213,7 +213,12 @@ void handle_subareas(SimulationContext& ctx, const std::vector<std::string>& lin
+         // Subcatch  N-Imperv  N-Perv  S-Imperv  S-Perv  PctZero  [RouteTo]
+ 
+         const int idx = ctx.subcatch_names.find(tok[0]);
+-        if (idx < 0) continue;
++        if (idx < 0) {
++            // The subcatchment may be declared further down: replay the row
++            // once every section has been read (as for [XSECTIONS]).
++            ctx.deferred_section_rows.emplace_back("SUBAREAS", line);
++            continue;
++        }
+ 
+         ctx.subcatches.n_imperv[idx]  = to_double(tok[1]);
+         ctx.subcatches.n_perv[idx]    = to_double(tok[2]);
+@@ -272,7 +277,11 @@ void handle_infiltration(SimulationContext& ctx, const std::vector<std::string>&
+         // Subcatch  Param1  Param2  Param3  [Param4]  [Param5]
+ 
+         const int idx = ctx.subcatch_names.find(tok[0]);
+-        if (idx < 0) continue;
++        if (idx < 0) {
++            // Same deferral as [SUBAREAS] — the subcatchment may be declared later.
++            ctx.deferred_section_rows.emplace_back("INFILTRATION", line);
++            continue;
++        }
+ 
+         // SWMM 5.2 allows a per-subcatchment method override as the LAST
+         // token (legacy infil.c:150-155: findmatch against InfilModelWords).
+diff --git a/src/engine/input/handlers/InfraHandler.cpp b/src/engine/input/handlers/InfraHandler.cpp
+index a5b9ab8..a63ac43 100644
+--- a/src/engine/input/handlers/InfraHandler.cpp
++++ b/src/engine/input/handlers/InfraHandler.cpp
+@@ -416,6 +416,8 @@ void handle_adjustments(SimulationContext& ctx, const std::vector<std::string>&
+                     ctx.subcatch_n_perv_pattern.resize(usi + 1, -1);
+                 ctx.subcatch_n_perv_pattern[usi] = pi;
+             }
++            // the subcatchment or the pattern may be declared further down
++            else ctx.deferred_section_rows.emplace_back("ADJUSTMENTS", line);
+         }
+         else if (kw("DSTORE") && tok.size() >= 3) {
+             const int si = ctx.subcatch_names.find(tok[1]);
+@@ -426,6 +428,8 @@ void handle_adjustments(SimulationContext& ctx, const std::vector<std::string>&
+                     ctx.subcatch_d_store_pattern.resize(usi + 1, -1);
+                 ctx.subcatch_d_store_pattern[usi] = pi;
+             }
++            // the subcatchment or the pattern may be declared further down
++            else ctx.deferred_section_rows.emplace_back("ADJUSTMENTS", line);
+         }
+         else if (kw("INFIL") && tok.size() >= 3) {
+             const int si = ctx.subcatch_names.find(tok[1]);
+@@ -436,6 +440,8 @@ void handle_adjustments(SimulationContext& ctx, const std::vector<std::string>&
+                     ctx.subcatch_infil_pattern.resize(usi + 1, -1);
+                 ctx.subcatch_infil_pattern[usi] = pi;
+             }
++            // the subcatchment or the pattern may be declared further down
++            else ctx.deferred_section_rows.emplace_back("ADJUSTMENTS", line);
+         }
+     }
+ }

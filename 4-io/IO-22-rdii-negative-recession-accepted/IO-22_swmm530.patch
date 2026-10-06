@@ -1,0 +1,38 @@
+IO-22: reject an RDII unit hydrograph with a negative recession limb ratio K
+
+The base time of an RTK unit hydrograph is T*(1+K). validateRdii() only
+rejected a negative time to peak, so K < 0 gave a base time shorter than the
+time to peak and a hydrograph cut off on its rising limb (volume (1+K)*R
+instead of R), K = -1 a zero base time that made the UH count as absent, and
+K < -1 a negative base time for which no past-rainfall array is allocated
+and getRainfall() writes through a null pointer. A base time shorter than the
+time to peak is now ERROR 151 (invalid time base), and a zero base time only
+means "no UH" when the time to peak is zero too.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-22_swmm530.patch
+
+diff --git a/src/legacy/engine/rdii.c b/src/legacy/engine/rdii.c
+index d8835c5..c97f94a 100644
+--- a/src/legacy/engine/rdii.c
++++ b/src/legacy/engine/rdii.c
+@@ -870,13 +870,17 @@ void validateRdii()
+             for (k=0; k<3; k++)
+             {
+                 // --- if no base time then UH doesn't exist
+-                if ( UnitHyd[j].tBase[m][k] == 0 ) continue;
++                //     (unless it has a time to peak, i.e., K = -1)
++                if ( UnitHyd[j].tBase[m][k] == 0 &&
++                     UnitHyd[j].tPeak[m][k] == 0 ) continue;
+ 
+                 // --- restriction on time to peak being less than the
+                 //     rain gage's recording interval no longer applies
+ 
+                 // --- can't have negative UH parameters
+-                if ( UnitHyd[j].tPeak[m][k] < 0.0 )
++                //     (a base time shorter than the time to peak means K < 0)
++                if ( UnitHyd[j].tPeak[m][k] < 0.0 ||
++                     UnitHyd[j].tBase[m][k] < UnitHyd[j].tPeak[m][k] )
+                 {
+                     report_writeErrorMsg(ERR_UNITHYD_TIMES, UnitHyd[j].ID);
+                 }

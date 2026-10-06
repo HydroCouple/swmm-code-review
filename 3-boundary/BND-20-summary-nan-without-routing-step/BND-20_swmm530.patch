@@ -1,0 +1,84 @@
+BND-20: print 0 instead of NaN when no routing step falls in the reporting period
+
+The status report divides by ReportStepCount and RoutingTimeSpan (Node Depth
+average depth, Storage average volume, Outfall flow frequency, Flow
+Classification fractions, Pump utilization) and the Groundwater Summary by
+the runoff time, with no check for zero. With no routing step after
+REPORT_START (the reporting window lies outside every [EVENTS] period, or a
+toolkit client ends the run before the first swmm_step) these print -nan.
+Divide by at least one step / one second: the accumulated statistics are
+0 in that case, so the report shows 0. Also skip the non-convergence
+frequency in stats_report() when no routing step was taken (0/0, no printed
+value). Results with at least one step are unchanged.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply BND-20_swmm530.patch
+
+diff --git a/src/legacy/engine/stats.c b/src/legacy/engine/stats.c
+index 6d38f70..f0a4fd2 100644
+--- a/src/legacy/engine/stats.c
++++ b/src/legacy/engine/stats.c
+@@ -795,7 +795,7 @@ void stats_findMaxStats()
+     stepCount = TimeStepStats.timeStepCount;
+ 
+     // --- find nodes with highest nonconvergence frequency
+-    if ( RouteModel == DW )
++    if ( RouteModel == DW && stepCount > 0 )
+         for (j = 0; j < Nobjects[NODE]; j++)
+             stats_updateMaxStats(MaxNonConverged, NODE, j,
+                 NodeStats[j].nonConvergedCount / stepCount);
+diff --git a/src/legacy/engine/statsrpt.c b/src/legacy/engine/statsrpt.c
+index 8050f24..5f62d54 100644
+--- a/src/legacy/engine/statsrpt.c
++++ b/src/legacy/engine/statsrpt.c
+@@ -195,6 +195,7 @@ void    writeGroundwater(void)
+     int i, j;
+     int count = 0;
+     double totalSeconds = NewRunoffTime / 1000.;
++    if ( totalSeconds <= 0.0 ) totalSeconds = 1.0;    // no runoff step taken
+     double x[9];
+ 
+     if ( Nobjects[SUBCATCH] == 0 ) return;
+@@ -343,7 +344,7 @@ void writeNodeDepths()
+         fprintf(Frpt.file, " %-9s ", NodeTypeWords[Node[j].type]);
+         getElapsedTime(NodeStats[j].maxDepthDate, &days, &hrs, &mins);
+         fprintf(Frpt.file, "%7.2f  %7.2f  %7.2f  %4d  %02d:%02d  %10.2f",
+-            NodeStats[j].avgDepth / ReportStepCount * UCF(LENGTH),
++            NodeStats[j].avgDepth / MAX(ReportStepCount, 1) * UCF(LENGTH),
+             NodeStats[j].maxDepth * UCF(LENGTH),
+             (NodeStats[j].maxDepth + Node[j].invertElev) * UCF(LENGTH),
+             days, hrs, mins, NodeStats[j].maxRptDepth);
+@@ -544,7 +545,7 @@ void writeStorageVolumes()
+             if ( Node[j].type != STORAGE ) continue;
+             k = Node[j].subIndex;
+             fprintf(Frpt.file, "\n  %-20s", Node[j].ID);
+-            avgVol = StorageStats[k].avgVol / (double)ReportStepCount;
++            avgVol = StorageStats[k].avgVol / (double)MAX(ReportStepCount, 1);
+             maxVol = StorageStats[k].maxVol;
+             pctMaxVol = 0.0;
+             pctAvgVol = 0.0;
+@@ -639,7 +640,7 @@ void writeOutfallLoads()
+ 
+             // --- print node ID, flow freq., avg. flow, max. flow & flow vol.
+             fprintf(Frpt.file, "\n  %-20s", Node[j].ID);
+-            x = 100.*flowCount/(double)ReportStepCount;
++            x = 100.*flowCount/(double)MAX(ReportStepCount, 1);
+             fprintf(Frpt.file, "%7.2f", x);
+             freqSum += x;
+             if ( flowCount > 0 )
+@@ -789,6 +790,7 @@ void writeFlowClass()
+     double totalSeconds = RoutingTimeSpan;
+ 
+     if ( RouteModel != DW ) return;
++    if ( totalSeconds <= 0.0 ) totalSeconds = 1.0;   // no step in reporting period
+     WRITE("");
+     WRITE("***************************");
+     WRITE("Flow Classification Summary");
+@@ -874,6 +876,7 @@ void writePumpFlows()
+            totalSeconds = RoutingTimeSpan;
+ 
+     if ( Nlinks[PUMP] == 0 ) return;
++    if ( totalSeconds <= 0.0 ) totalSeconds = 1.0;   // no step in reporting period
+ 
+     WRITE("");
+     WRITE("***************");

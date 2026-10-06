@@ -1,0 +1,67 @@
+[TITLE]
+NUM-33: the same six soils, two 1-in storms ten days apart.
+Fmax = 0.5 in, drying time 7 days, evaporation 0.2 in/day empties the
+0.05 in of depression storage between the storms.
+H1, M1: decaying curve (reference); H2, M2: f0 = fmin; H3, M3: decay = 0
+
+[OPTIONS]
+FLOW_UNITS           CFS
+INFILTRATION         HORTON
+FLOW_ROUTING         KINWAVE
+START_DATE           06/01/2020
+START_TIME           00:00:00
+REPORT_START_DATE    06/01/2020
+REPORT_START_TIME    00:00:00
+END_DATE             06/12/2020
+END_TIME             00:00:00
+WET_STEP             00:05:00
+DRY_STEP             01:00:00
+REPORT_STEP          01:00:00
+ROUTING_STEP         0:00:30
+IGNORE_ROUTING       YES
+
+[EVAPORATION]
+CONSTANT         0.2
+
+[RAINGAGES]
+G1   INTENSITY 1:00 1.0 TIMESERIES R1
+
+[SUBCATCHMENTS]
+;;Name Gage Outlet Area %Imperv Width %Slope CurbLen
+H1   G1   O1   1.0   0   100   1.0   0
+H2   G1   O1   1.0   0   100   1.0   0
+H3   G1   O1   1.0   0   100   1.0   0
+M1   G1   O1   1.0   0   100   1.0   0
+M2   G1   O1   1.0   0   100   1.0   0
+M3   G1   O1   1.0   0   100   1.0   0
+
+[SUBAREAS]
+;;Name N-Imperv N-Perv S-Imperv S-Perv PctZero RouteTo
+H1   0.01   0.1   0.05   0.05   0   OUTLET
+H2   0.01   0.1   0.05   0.05   0   OUTLET
+H3   0.01   0.1   0.05   0.05   0   OUTLET
+M1   0.01   0.1   0.05   0.05   0   OUTLET
+M2   0.01   0.1   0.05   0.05   0   OUTLET
+M3   0.01   0.1   0.05   0.05   0   OUTLET
+
+[INFILTRATION]
+;;Name f0 fmin decay drytime(days) Fmax(in) method
+H1   3.0   0.5   4   7   0.5   HORTON
+H2   3.0   3.0   4   7   0.5   HORTON
+H3   3.0   0.5   0   7   0.5   HORTON
+M1   3.0   0.5   4   7   0.5   MODIFIED_HORTON
+M2   3.0   3.0   4   7   0.5   MODIFIED_HORTON
+M3   3.0   0.5   0   7   0.5   MODIFIED_HORTON
+
+[OUTFALLS]
+O1   0   FREE
+
+[TIMESERIES]
+;1 in/hr for one hour on 1 June and again on 11 June
+R1   06/01/2020   0:00   1.0
+R1   06/01/2020   1:00   0.0
+R1   06/11/2020   0:00   1.0
+R1   06/11/2020   1:00   0.0
+
+[REPORT]
+SUBCATCHMENTS ALL

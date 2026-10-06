@@ -1,0 +1,63 @@
+BND-14: reject a subcatchment that drains onto a subcatchment with no area
+
+subcatch_readParams() accepts an Area of 0. Runoff sent to such a
+subcatchment is dropped by subcatch_addRunonFlow(), the zero-area
+subcatchment is skipped by runoff_execute(), and the upstream runoff is not
+counted as leaving the study area because its outlet is a subcatchment, so
+the water disappears without a message. subcatch_validate() now reports a
+new ERROR 106 for a subcatchment with area that drains onto a subcatchment
+without area. The error number is new; it is unused in 5.2.4, 5.3.0 and
+6.0.0.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply BND-14_swmm530.patch
+
+diff --git a/src/legacy/engine/error.h b/src/legacy/engine/error.h
+index 2bcea19..5cdff02 100644
+--- a/src/legacy/engine/error.h
++++ b/src/legacy/engine/error.h
+@@ -46,6 +46,8 @@ enum ErrorType {
+ // ... Subcatchment/Aquifer Errors
+       /*! \brief Subcatchment has no outlet */
+       ERR_SUBCATCH_OUTLET      = 108,
++      /*! \brief Subcatchment drains onto a subcatchment with no area */
++      ERR_SUBCATCH_NO_AREA     = 106,
+       /*! \brief Aquifer parameter error */
+       ERR_AQUIFER_PARAMS       = 109,
+       /*! \brief Ground elevation error */
+diff --git a/src/legacy/engine/error.txt b/src/legacy/engine/error.txt
+index 801d96b..f257340 100644
+--- a/src/legacy/engine/error.txt
++++ b/src/legacy/engine/error.txt
+@@ -6,6 +6,7 @@ ERR(105,"\n  ERROR 105: cannot open ODE solver.")
+ ERR(107,"\n  ERROR 107: cannot compute a valid time step.")
+ 
+ ERR(108,"\n  ERROR 108: ambiguous outlet ID name for Subcatchment %s.")
++ERR(106,"\n  ERROR 106: Subcatchment %s drains onto a subcatchment with no area.")
+ ERR(109,"\n  ERROR 109: invalid parameter values for Aquifer %s.")
+ ERR(110,"\n  ERROR 110: ground elevation is below water table for Subcatchment %s.")
+ 
+diff --git a/src/legacy/engine/subcatch.c b/src/legacy/engine/subcatch.c
+index 7c1d97c..762a59c 100644
+--- a/src/legacy/engine/subcatch.c
++++ b/src/legacy/engine/subcatch.c
+@@ -385,6 +385,7 @@ void subcatch_validate(int subcatchIndex)
+ //
+ {
+     int     i;
++    int     k = Subcatch[subcatchIndex].outSubcatch;
+     double  area;
+     double  nonLidArea = Subcatch[subcatchIndex].area;
+ 
+@@ -392,6 +393,11 @@ void subcatch_validate(int subcatchIndex)
+     if ( Subcatch[subcatchIndex].outNode >= 0 && Subcatch[subcatchIndex].outSubcatch >= 0 )
+         report_writeErrorMsg(ERR_SUBCATCH_OUTLET, Subcatch[subcatchIndex].ID);
+ 
++    // --- check that an outlet subcatchment has an area to receive runoff
++    if ( k >= 0 && k != subcatchIndex && Subcatch[subcatchIndex].area > 0.0
++    &&   Subcatch[k].area <= 0.0 )
++        report_writeErrorMsg(ERR_SUBCATCH_NO_AREA, Subcatch[subcatchIndex].ID);
++
+     // --- validate subcatchment's groundwater component 
+     gwater_validate(subcatchIndex);
+ 

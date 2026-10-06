@@ -1,0 +1,27 @@
+IO-61: use the continuity tables' gallons factor in the summary tables
+
+DefaultReportPlugin copied legacy statsrpt.c's summary-table factor,
+7.48 gal/ft3 (28.317 L/ft3), next to the continuity tables' factor
+0.64632 / 86400 (2.4466 / 86400), so the same water printed 0.0074 %
+smaller in the summary tables. Use the continuity factor for both.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-61_swmm600.patch
+
+diff --git a/src/engine/plugins/DefaultReportPlugin.cpp b/src/engine/plugins/DefaultReportPlugin.cpp
+index 36a8dbb..0c601fa 100644
+--- a/src/engine/plugins/DefaultReportPlugin.cpp
++++ b/src/engine/plugins/DefaultReportPlugin.cpp
+@@ -896,9 +896,9 @@ void DefaultReportPlugin::write_results(std::FILE* f,
+     const double len_ucf   = du.length;      // ft  → ft | m  (depth/HGL/velocity)
+     const double svol_ucf  = du.volume;      // ft³ → ft³ | m³ (storage volume)
+     const char*  len_word  = du.length_word; // Feet | Meters
+-    // legacy statsrpt.c's own factor for every summary-table volume
+-    // (7.48 gal/ft3, 28.317 L/ft3 — not the massbal/continuity constants).
+-    const double Vcf       = si_report ? 28.317 / 1.0e6 : 7.48 / 1.0e6;
++    // factor for every summary-table volume: the same as the continuity
++    // tables' 10^6 gal (ltr) column below, MGDperCFS (MLDperCFS) / SECperDAY.
++    const double Vcf       = si_report ? 2.4466 / 86400.0 : 0.64632 / 86400.0;
+     const char*  vol_word  = du.mvol_word;    // 10^6 gal | 10^6 ltr
+     // legacy report.c continuity factors: UCF(LENGTH) * UCF(LANDAREA) for
+     // acre-feet / hectare-m, and MGDperCFS (MLDperCFS) / SECperDAY for the

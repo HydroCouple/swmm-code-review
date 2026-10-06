@@ -1,0 +1,52 @@
+[TITLE]
+BND-03: a FIXED-stage outfall feeds the network and has a CONCEN inflow
+
+[OPTIONS]
+FLOW_UNITS           CFS
+FLOW_ROUTING         DYNWAVE
+START_DATE           01/01/2020
+START_TIME           00:00:00
+REPORT_START_DATE    01/01/2020
+REPORT_START_TIME    00:00:00
+END_DATE             01/01/2020
+END_TIME             12:00:00
+REPORT_STEP          00:15:00
+WET_STEP             00:05:00
+DRY_STEP             01:00:00
+ROUTING_STEP         5
+
+[POLLUTANTS]
+;;Name Units Crain Cgw Crdii Kdecay
+TSS    MG/L  0     0   0     0
+
+[JUNCTIONS]
+;;Name  Elev  MaxDepth InitDepth SurDepth Aponded
+J1      99    10        0        0        0
+
+;; OHI's stage (102 ft) is 2 ft above its invert, so water flows from OHI
+;; through C1 and C2 to the free outfall OLO: OHI is a receiving water that
+;; supplies the network.
+[OUTFALLS]
+;;Name  Elev  Type  Stage Gated
+OHI     100   FIXED 102   NO
+OLO     95    FREE        NO
+
+[CONDUITS]
+;;Name From To Length Rough InOff OutOff InitFlow
+C1      OHI  J1  400   0.013 0     0      0
+C2      J1   OLO 400   0.013 0     0      0
+
+[XSECTIONS]
+C1      CIRCULAR 2 0 0 0 1
+C2      CIRCULAR 2 0 0 0 1
+
+;; The receiving water carries 100 mg/L TSS. The input reference allows a
+;; CONCEN inflow without a FLOW inflow at an outfall: the pollutant enters
+;; with the reverse flow.
+[INFLOWS]
+;;Node Param TSeries Type Mfactor Sfactor Baseline
+OHI    TSS   ""      CONCEN 1.0    1.0     100
+
+[REPORT]
+NODES ALL
+LINKS ALL

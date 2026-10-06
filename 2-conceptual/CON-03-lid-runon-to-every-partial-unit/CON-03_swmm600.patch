@@ -1,0 +1,54 @@
+CON-03: add upstream run-on to LID units only when they fill the subcatchment
+
+SWMMEngine::stepRunoff() added the subcatchment's run-on depth rate to every
+LID unit's inflow, copying the 5.3.0 test (area >= lidArea, always true).
+The same run-on is spread over the non-LID area and booked there, so a LID
+that covers only part of the subcatchment received it twice. Add it only
+when the subcatchment has no non-LID area (the area add_runon() divides
+by), and use the same rate for the unit's age and temperature mixing.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply CON-03_swmm600.patch
+
+diff --git a/src/engine/core/SWMMEngine.cpp b/src/engine/core/SWMMEngine.cpp
+index 839529d..77bf8ab 100644
+--- a/src/engine/core/SWMMEngine.cpp
++++ b/src/engine/core/SWMMEngine.cpp
+@@ -2498,17 +2498,16 @@ void SWMMEngine::stepRunoff(double dt_routing) noexcept {
+                 } else {
+                     g.inflow[uu] = q_from_sc + rain;
+                 }
+-                // Legacy lid.c:1713-1717 (5.3.0): `if (subcatch->area >=
+-                // subcatch->lidArea) lidInflow += subcatch->runon;` — the
+-                // test is always true for validated input (lidArea never
+-                // exceeds area), so the subcatchment's run-on depth rate
+-                // (over its non-LID area, or the full area when there is
+-                // none) is added onto EVERY unit's inflow, partial coverage
+-                // included, AFTER the rain (FP addition is not associative,
+-                // so the legacy order (captured + rain) + runon must hold).
+-                // 5.2.4 tested `==` (full coverage only); the pinned oracle
+-                // is 5.3.0.
+-                g.inflow[uu] += ctx_.subcatches.runon_rate[usc];
++                // Legacy lid.c:1713-1717: upstream run-on goes onto the
++                // LID units only when they fill the subcatchment. Otherwise
++                // it is spread over the non-LID area (add_runon) and reaches
++                // a unit only through its captured share of that area's
++                // runoff. Added AFTER the rain (FP addition is not
++                // associative, so the legacy order (captured + rain) + runon
++                // must hold).
++                const double runon_lid = (rsoa.area[usc] > 0.0)
++                    ? 0.0 : ctx_.subcatches.runon_rate[usc];
++                g.inflow[uu] += runon_lid;
+                 // Rain-barrel dry-time reset signal (legacy lid.c:1920 uses
+                 // Subcatch.rainfall, independent of what the unit captures).
+                 g.subcatch_rain[uu] = rain;
+@@ -2519,8 +2518,7 @@ void SWMMEngine::stepRunoff(double dt_routing) noexcept {
+                 // The run-on share this unit takes (its area x the depth
+                 // rate), so the age/temperature paths carry the same water
+                 // the inflow above does.
+-                const double q_runon_unit =
+-                    ctx_.subcatches.runon_rate[usc] * lid_area;
++                const double q_runon_unit = runon_lid * lid_area;
+                 transport::setLidInflowAge(
+                     ctx_, t, u, sc, rain,
+                     q_imperv * g.from_imperv[uu], q_perv * g.from_perv[uu],

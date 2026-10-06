@@ -1,0 +1,50 @@
+[TITLE]
+NUM-08: open storage S1 (1000 ft2, 10 ft deep, no surcharge depth, no ponding)
+filled by 100 cfs for 5 min, then no inflow; fixed 30 s routing step.
+S1 has no links, so it fills, floods, and stops flooding before the run ends.
+J1-C1-O1 is only there because SWMM needs an outfall.
+
+[OPTIONS]
+FLOW_UNITS           CFS
+INFILTRATION         HORTON
+FLOW_ROUTING         DYNWAVE
+START_DATE           01/01/2020
+START_TIME           00:00:00
+REPORT_START_DATE    01/01/2020
+REPORT_START_TIME    00:00:00
+END_DATE             01/01/2020
+END_TIME             00:20:00
+REPORT_STEP          00:00:30
+WET_STEP             00:05:00
+DRY_STEP             00:05:00
+ROUTING_STEP         30
+VARIABLE_STEP        0
+
+[JUNCTIONS]
+J1     0    5        0         0        0
+
+[OUTFALLS]
+O1     -1   FREE
+
+[STORAGE]
+;;Name Elev MaxD InitD Shape     A1 A2 A0   SurDepth Fevap
+S1     0    10   0     FUNCTIONAL 0  0  1000 0        0
+
+[CONDUITS]
+C1     J1  O1  100  0.013  0  0  0  0
+
+[XSECTIONS]
+C1     CIRCULAR 1 0 0 0 1
+
+[INFLOWS]
+S1  FLOW  TS1  FLOW 1.0 1.0 0
+
+[TIMESERIES]
+TS1  0:00  100
+TS1  0:05  100
+TS1  0:05:01  0
+TS1  0:20  0
+
+[REPORT]
+NODES ALL
+LINKS ALL

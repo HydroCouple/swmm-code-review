@@ -1,0 +1,168 @@
+IO-47: carry the groundwater table and soil moisture through a runoff interface file
+
+RunoffInterfaceFile wrote 0 for the groundwater elevation and upper-zone soil
+moisture of every subcatchment and skipped both on reading, so a USE RUNOFF
+run reported the initial water table and moisture for the whole run, and a
+legacy run reading a 6.0.0 file got a water table at the aquifer bottom. Pass
+the groundwater state to saveResults()/readResults(): write
+(bottom_elev + lower_depth) * UCF(LENGTH) and theta as legacy
+subcatch_getResults() does, and restore lower_depth and theta from them.
+
+Requires: IO-45
+Requires: IO-46
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-45_swmm600.patch IO-46_swmm600.patch IO-47_swmm600.patch
+
+diff --git a/src/engine/core/SWMMEngine.cpp b/src/engine/core/SWMMEngine.cpp
+index 7896995..c588c88 100644
+--- a/src/engine/core/SWMMEngine.cpp
++++ b/src/engine/core/SWMMEngine.cpp
+@@ -2126,7 +2126,8 @@ void SWMMEngine::stepRunoff(double dt_routing) noexcept {
+         if (runoff_iface_file_ && runoff_iface_file_->isOpen()
+             && ctx_.files.runoff_mode == FileMode::USE) {
+             double file_dt = 0.0;
+-            if (!runoff_iface_file_->readResults(ctx_, &file_dt)) {
++            if (!runoff_iface_file_->readResults(ctx_, &file_dt,
++                                                 &groundwater_.state())) {
+                 // Legacy ERR 327 (read beyond end of runoff interface
+                 // file). Freeze the runoff clock at the simulation end so
+                 // the last state holds and the loop cannot spin.
+@@ -7773,12 +7774,12 @@ int SWMMEngine::openRunoffIfaceRead(const std::string& path) noexcept {
+ void SWMMEngine::saveRunoffIfaceStep(double dt) noexcept {
+     if (!runoff_iface_file_) return;
+     // saveResults is a no-op if the file is not in SAVE mode.
+-    runoff_iface_file_->saveResults(ctx_, dt);
++    runoff_iface_file_->saveResults(ctx_, dt, &groundwater_.state());
+ }
+ 
+ bool SWMMEngine::readRunoffIfaceStep() noexcept {
+     if (!runoff_iface_file_) return false;
+-    return runoff_iface_file_->readResults(ctx_);
++    return runoff_iface_file_->readResults(ctx_, nullptr, &groundwater_.state());
+ }
+ 
+ void SWMMEngine::closeRunoffIface() noexcept {
+diff --git a/src/engine/hydrology/RunoffInterface.cpp b/src/engine/hydrology/RunoffInterface.cpp
+index 3f38810..9693a57 100644
+--- a/src/engine/hydrology/RunoffInterface.cpp
++++ b/src/engine/hydrology/RunoffInterface.cpp
+@@ -29,6 +29,7 @@
+  */
+ 
+ #include "RunoffInterface.hpp"
++#include "Groundwater.hpp"
+ #include "core/FileIO.hpp"   // issue #7: UTF-8 paths on Windows
+ #include "../core/SimulationContext.hpp"
+ #include "../core/UnitConversion.hpp"
+@@ -132,7 +133,8 @@ int RunoffInterfaceFile::openForRead(const std::string& path, int n_subcatch,
+ // Save one timestep of results
+ // ============================================================================
+ 
+-void RunoffInterfaceFile::saveResults(const SimulationContext& ctx, double dt) {
++void RunoffInterfaceFile::saveResults(const SimulationContext& ctx, double dt,
++                                      const groundwater::GWSoA* gw) {
+     if (!fp_ || !writing_) return;
+ 
+     float dt_f = static_cast<float>(dt);
+@@ -170,8 +172,14 @@ void RunoffInterfaceFile::saveResults(const SimulationContext& ctx, double dt) {
+                                      * ucf::Ucf[ucf::RAINFALL][us]);
+         buf_[4] = static_cast<float>(runoff * qcf);
+         buf_[5] = static_cast<float>(ctx.subcatches.gw_flow[uj] * qcf);
+-        buf_[6] = 0.0f;  // GW elevation (no per-subcatch state — see header)
+-        buf_[7] = 0.0f;  // soil moisture (no per-subcatch state — see header)
++        buf_[6] = 0.0f;  // GW elevation (legacy: 0 without groundwater)
++        buf_[7] = 0.0f;  // soil moisture
++        if (gw && uj < ctx.subcatches.gw_aquifer.size() &&
++            ctx.subcatches.gw_aquifer[uj] >= 0 && uj < gw->lower_depth.size()) {
++            buf_[6] = static_cast<float>((gw->bottom_elev[uj] + gw->lower_depth[uj])
++                                         * ucf::Ucf[ucf::LENGTH][us]);
++            buf_[7] = static_cast<float>(gw->theta[uj]);
++        }
+ 
+         // Pollutant washoff concentrations (legacy: zero when runoff is zero)
+         for (int p = 0; p < np; ++p) {
+@@ -191,7 +199,8 @@ void RunoffInterfaceFile::saveResults(const SimulationContext& ctx, double dt) {
+ // Read one timestep of results
+ // ============================================================================
+ 
+-bool RunoffInterfaceFile::readResults(SimulationContext& ctx, double* dt_out) {
++bool RunoffInterfaceFile::readResults(SimulationContext& ctx, double* dt_out,
++                                      groundwater::GWSoA* gw) {
+     if (!fp_ || writing_) return false;
+ 
+     float dt_f;
+@@ -210,8 +219,8 @@ bool RunoffInterfaceFile::readResults(SimulationContext& ctx, double* dt_out) {
+         // Restore subcatchment state from file, converting the user-unit
+         // record values back to internal units with the factors they were
+         // written with (evaporation in in/day or mm/day: UCF(EVAPRATE)).
+-        // Snow depth / GW elev / soil moisture have no refactored
+-        // per-subcatch state and are skipped.
++        // Snow depth has no refactored per-subcatch state and is skipped;
++        // GW elevation and soil moisture go to the GW state.
+         const int us = unit_system_;
+         const double qcf = ucf::Qcf[flow_units_];
+         ctx.subcatches.evap_loss[uj]  = static_cast<double>(buf_[2])
+@@ -220,6 +229,12 @@ bool RunoffInterfaceFile::readResults(SimulationContext& ctx, double* dt_out) {
+                                         / ucf::Ucf[ucf::RAINFALL][us];
+         ctx.subcatches.runoff[uj]     = static_cast<double>(buf_[4]) / qcf;
+         ctx.subcatches.gw_flow[uj]    = static_cast<double>(buf_[5]) / qcf;
++        if (gw && uj < ctx.subcatches.gw_aquifer.size() &&
++            ctx.subcatches.gw_aquifer[uj] >= 0 && uj < gw->lower_depth.size()) {
++            gw->lower_depth[uj] = static_cast<double>(buf_[6])
++                                  / ucf::Ucf[ucf::LENGTH][us] - gw->bottom_elev[uj];
++            gw->theta[uj]       = static_cast<double>(buf_[7]);
++        }
+ 
+         // Restore pollutant concentrations
+         for (int p = 0; p < np; ++p) {
+diff --git a/src/engine/hydrology/RunoffInterface.hpp b/src/engine/hydrology/RunoffInterface.hpp
+index 368249d..1ca2a3f 100644
+--- a/src/engine/hydrology/RunoffInterface.hpp
++++ b/src/engine/hydrology/RunoffInterface.hpp
+@@ -40,8 +40,9 @@
+  *
+  * @note Legacy reference: src/legacy/engine/runoff.c,
+  *       subcatch.c subcatch_getResults().
+- * @note Fields with no refactored per-subcatchment state are written as 0
+- *       and skipped on read: snow_depth, gw_elev, soil_moist. Legacy's
++ * @note snow_depth has no refactored per-subcatchment state: it is written
++ *       as 0 and skipped on read. gw_elev and soil_moist come from and go
++ *       to the groundwater state when one is passed. Legacy's
+  *       LID-drain addition to reported runoff is not replicated either
+  *       (the refactored LID drain is architected as next-step runon).
+  * @note The rainfall slot (write-only in both engines — neither read path
+@@ -69,6 +70,7 @@
+ namespace openswmm {
+ 
+ struct SimulationContext;
++namespace groundwater { struct GWSoA; }
+ 
+ namespace runoff_iface {
+ 
+@@ -100,8 +102,10 @@ public:
+      * @brief Save one timestep of runoff results to file.
+      * @param ctx  Simulation context (subcatchment results read from here).
+      * @param dt   Timestep duration (seconds).
++     * @param gw   Optional groundwater state (GW elevation, soil moisture).
+      */
+-    void saveResults(const SimulationContext& ctx, double dt);
++    void saveResults(const SimulationContext& ctx, double dt,
++                     const groundwater::GWSoA* gw = nullptr);
+ 
+     /**
+      * @brief Read one timestep of runoff results from file.
+@@ -110,9 +114,12 @@ public:
+      *                used by the USE-mode runoff clock (legacy
+      *                runoff_readFromFile advances NewRunoffTime by the
+      *                file's tStep).
++     * @param gw      Optional groundwater state that receives the record's
++     *                GW elevation (as lower-zone depth) and soil moisture.
+      * @returns true if data was read, false if EOF.
+      */
+-    bool readResults(SimulationContext& ctx, double* dt_out = nullptr);
++    bool readResults(SimulationContext& ctx, double* dt_out = nullptr,
++                     groundwater::GWSoA* gw = nullptr);
+ 
+     /// Close the file and finalize header (write step count for SAVE mode).
+     void close();

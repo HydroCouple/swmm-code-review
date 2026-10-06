@@ -1,0 +1,53 @@
+IO-45: read evaporation from a runoff interface file in the units it was written
+
+RunoffInterfaceFile::writeResults() writes evaporation as evap_loss *
+UCF(EVAPRATE) (in/day or mm/day), but readResults() divided it by
+UCF(RAINFALL) (in/hr or mm/hr), copying legacy runoff_readFromFile() on
+purpose. A USE RUNOFF run reported 24 times the evaporation of the run that
+wrote the file. Divide by UCF(EVAPRATE), and correct the comments.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-45_swmm600.patch
+
+diff --git a/src/engine/hydrology/RunoffInterface.cpp b/src/engine/hydrology/RunoffInterface.cpp
+index 2d2f9d3..3f38810 100644
+--- a/src/engine/hydrology/RunoffInterface.cpp
++++ b/src/engine/hydrology/RunoffInterface.cpp
+@@ -208,15 +208,14 @@ bool RunoffInterfaceFile::readResults(SimulationContext& ctx, double* dt_out) {
+             return false;
+ 
+         // Restore subcatchment state from file, converting the user-unit
+-        // record values back to internal units exactly as legacy
+-        // runoff_readFromFile does — including its evap asymmetry (written
+-        // ×UCF(EVAPRATE) but read ÷UCF(RAINFALL), a deliberate legacy-parity
+-        // quirk). Snow depth / GW elev / soil moisture have no refactored
++        // record values back to internal units with the factors they were
++        // written with (evaporation in in/day or mm/day: UCF(EVAPRATE)).
++        // Snow depth / GW elev / soil moisture have no refactored
+         // per-subcatch state and are skipped.
+         const int us = unit_system_;
+         const double qcf = ucf::Qcf[flow_units_];
+         ctx.subcatches.evap_loss[uj]  = static_cast<double>(buf_[2])
+-                                        / ucf::Ucf[ucf::RAINFALL][us];
++                                        / ucf::Ucf[ucf::EVAPRATE][us];
+         ctx.subcatches.infil_loss[uj] = static_cast<double>(buf_[3])
+                                         / ucf::Ucf[ucf::RAINFALL][us];
+         ctx.subcatches.runoff[uj]     = static_cast<double>(buf_[4]) / qcf;
+diff --git a/src/engine/hydrology/RunoffInterface.hpp b/src/engine/hydrology/RunoffInterface.hpp
+index c2dfb5c..368249d 100644
+--- a/src/engine/hydrology/RunoffInterface.hpp
++++ b/src/engine/hydrology/RunoffInterface.hpp
+@@ -49,10 +49,9 @@
+  *       report-period accumulator, which lags one report step; the first
+  *       record may differ. Verified byte-identical to legacy everywhere
+  *       else for US and SI models (2026-07-02).
+- * @note The read path reproduces legacy runoff_readFromFile verbatim —
+- *       including its evap asymmetry (written ×UCF(EVAPRATE) but read back
+- *       ÷UCF(RAINFALL), a ×24 inflation) — so USE-mode results match a
+- *       legacy USE run on the same file bit-for-bit in intent.
++ * @note The read path reproduces legacy runoff_readFromFile, with
++ *       evaporation read back ÷UCF(EVAPRATE) as it was written (legacy
++ *       read it ÷UCF(RAINFALL), a ×24 inflation; IO-45).
+  * @ingroup new_engine
+  *
+  * @author   Caleb Buahin <caleb.buahin@gmail.com>

@@ -1,0 +1,62 @@
+[TITLE]
+IO-60: a rain barrel that receives no water, next to one that does
+
+[OPTIONS]
+FLOW_UNITS       CFS
+INFILTRATION     HORTON
+FLOW_ROUTING     KINWAVE
+START_DATE       01/01/2020
+START_TIME       00:00:00
+REPORT_START_DATE 01/01/2020
+REPORT_START_TIME 00:00:00
+END_DATE         01/01/2020
+END_TIME         06:00:00
+REPORT_STEP      00:15:00
+WET_STEP         00:01:00
+DRY_STEP         00:01:00
+ROUTING_STEP     60
+
+[EVAPORATION]
+CONSTANT 0.0
+
+[RAINGAGES]
+;G1: 1 in/hr for 1 hour; G0: no rain at all
+G1 INTENSITY 1:00 1.0 TIMESERIES TS1
+G0 INTENSITY 1:00 1.0 TIMESERIES TS0
+
+[TIMESERIES]
+TS1 0 1.0
+TS1 1 0.0
+TS0 0 0.0
+TS0 1 0.0
+
+[SUBCATCHMENTS]
+;name rg outlet area %imp width slope curb
+;S1 is dry (gage G0), S2 gets 1.0 in of rain
+S1 G0 O1 1 50 200 1 0
+S2 G1 O1 1 50 200 1 0
+
+[SUBAREAS]
+S1 0.01 0.1 0 0 0 OUTLET
+S2 0.01 0.1 0 0 0 OUTLET
+
+[INFILTRATION]
+S1 0 0 4 7 0
+S2 0 0 4 7 0
+
+[LID_CONTROLS]
+;uncovered 48 in barrel without a drain, empty at the start
+RB1 RB
+RB1 STORAGE 48 0.75 0 0 NO
+RB1 DRAIN 0 0.5 0 6 0 0
+
+[LID_USAGE]
+;subcatch lid number area(ft2) width initsat fromimp toperv
+S1 RB1 10 50 0 0 50 0
+S2 RB1 10 50 0 0 50 0
+
+[OUTFALLS]
+O1 0 FREE
+
+[REPORT]
+SUBCATCHMENTS ALL

@@ -1,0 +1,34 @@
+CON-05: send a covered barrel's rain to LID runoff when it cannot be returned
+
+lid_getRunoff() adds the rain falling on a covered rain barrel to the flow
+returned to the pervious area, but subcatch_getRunon() only applies that
+flow when the subcatchment has a pervious non-LID area. On a 100 %
+impervious subcatchment, or one filled by LIDs, the rain was dropped from
+the water balance. In that case add it to the LID group's surface runoff,
+which leaves through the subcatchment outlet.
+
+Requires: CON-04
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply CON-05_swmm530.patch
+
+diff --git a/src/legacy/engine/lid.c b/src/legacy/engine/lid.c
+index 395ac7a..1fa17bb 100644
+--- a/src/legacy/engine/lid.c
++++ b/src/legacy/engine/lid.c
+@@ -1701,8 +1701,13 @@ void lid_getRunoff(int j, double tStep)
+             if (lidProc->lidType == RAIN_BARREL &&
+                 lidProc->storage.covered == TRUE)
+             {
+-                // Add runoff from closed rain barrel to return (cfs)
+-                qReturn += subcatch->rainfall * lidArea;
++                // Add runoff from closed rain barrel to return (cfs),
++                // or to LID surface runoff if there is no pervious area
++                // to return it to (see subcatch_getRunon)
++                if (subcatch->area > subcatch->lidArea &&
++                    subcatch->fracImperv < 1.0)
++                    qReturn += subcatch->rainfall * lidArea;
++                else qRunoff += subcatch->rainfall * lidArea;
+ 			}
+             else
+             {

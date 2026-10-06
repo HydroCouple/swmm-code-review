@@ -1,0 +1,28 @@
+NUM-29: average an N = 0 subarea's runoff over the whole step
+
+A subarea with Manning's n = 0 releases its ponded depth in excess of
+depression storage within the step. In the step in which depression storage
+fills, getSubareaRunoff() turned that excess into a rate by dividing by
+tRunoff, the time left after storage filled, while Voutflow and the
+subcatchment runoff book the rate over the full step tStep. The water that
+had just filled depression storage was therefore also counted as runoff.
+Divide by tStep instead, so that rate x tStep is the excess volume.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-29_swmm530.patch
+
+diff --git a/src/legacy/engine/subcatch.c b/src/legacy/engine/subcatch.c
+index 7c1d97c..30dbb73 100644
+--- a/src/legacy/engine/subcatch.c
++++ b/src/legacy/engine/subcatch.c
+@@ -1004,7 +1004,9 @@ double getSubareaRunoff(int j, int i, double area, double precip, double evap,
+     }
+ 
+     // --- compute runoff based on updated ponded depth
+-    runoff = findSubareaRunoff(subarea, tRunoff);
++    //     (an N = 0 subarea's excess leaves within this step, so its
++    //     rate is averaged over the full step tStep, not over tRunoff)
++    runoff = findSubareaRunoff(subarea, tStep);
+ 
+     // --- compute runoff volume leaving subcatchment for mass balance purposes
+     //     (fOutlet is the fraction of this subarea's runoff that goes to the

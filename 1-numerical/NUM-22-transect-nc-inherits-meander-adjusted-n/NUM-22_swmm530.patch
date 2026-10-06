@@ -1,0 +1,28 @@
+NUM-22: do not carry a transect's meander adjustment into the next transect's n
+
+transect_validate() multiplies the file-scope Nchannel by sqrt(Lfactor) to
+build the transect's tables and leaves it that way. setManning() keeps the
+current Nchannel when an NC line gives 0 for the channel ("no change from
+previous NC line"), so the next transect inherited the previous transect's
+meander-adjusted n. Restore the value as entered at the end of
+transect_validate(); the tables and Transect[j].roughness are built exactly as
+before.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-22_swmm530.patch
+
+diff --git a/src/legacy/engine/transect.c b/src/legacy/engine/transect.c
+index c8e58ca..5d930ec 100644
+--- a/src/legacy/engine/transect.c
++++ b/src/legacy/engine/transect.c
+@@ -259,6 +259,10 @@ void  transect_validate(int j)
+ 
+     // --- save unadjusted main channel roughness 
+     Transect[j].roughness = oldNchannel;
++
++    // --- restore it so that a following NC line with a zero channel n
++    //     inherits the value as entered, not the meander-adjusted one
++    Nchannel = oldNchannel;
+ }
+ 
+ //=============================================================================

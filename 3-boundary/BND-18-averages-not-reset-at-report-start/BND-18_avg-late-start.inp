@@ -1,0 +1,50 @@
+[TITLE]
+BND-18: AVERAGES YES with REPORT_START 3 h after START
+(storm inflow 0-2:30 on a 0.05 cfs base flow; reporting starts after the storm)
+
+[OPTIONS]
+FLOW_UNITS           CFS
+FLOW_ROUTING         DYNWAVE
+START_DATE           01/01/2020
+START_TIME           00:00:00
+REPORT_START_DATE    01/01/2020
+REPORT_START_TIME    03:00:00
+END_DATE             01/01/2020
+END_TIME             04:00:00
+REPORT_STEP          00:15:00
+ROUTING_STEP         5
+VARIABLE_STEP        0
+ALLOW_PONDING        NO
+
+[JUNCTIONS]
+;;Name  Elev  MaxDepth  InitDepth  SurDepth  Aponded
+J1      10    3         0          0         0
+J2      9     3         0          0         0
+
+[OUTFALLS]
+O1      8     FREE
+
+[CONDUITS]
+C1  J1  J2  100  0.013  0  0  0  0
+C2  J2  O1  100  0.013  0  0  0  0
+
+[XSECTIONS]
+C1  CIRCULAR  1.0  0  0  0  1
+C2  CIRCULAR  1.0  0  0  0  1
+
+[INFLOWS]
+J1  FLOW  TS1  FLOW  1.0  1.0
+
+[TIMESERIES]
+TS1  0:00  0.05
+TS1  1:00  1.0
+TS1  2:00  1.0
+TS1  2:30  0.05
+TS1  4:00  0.05
+
+[REPORT]
+INPUT     NO
+CONTROLS  NO
+AVERAGES  YES
+NODES     ALL
+LINKS     ALL

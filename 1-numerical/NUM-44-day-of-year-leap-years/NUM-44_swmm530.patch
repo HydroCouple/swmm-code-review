@@ -1,0 +1,99 @@
+NUM-44: compare month/day dates with the current date in the same 365-day calendar
+
+SWEEP_START, SWEEP_END and a DAYOFYEAR rule value given as MM/DD are stored
+as the day of year they have in the non-leap year 1947 (03/01 = 60,
+12/31 = 365), but were compared with the day of year of the current date,
+which in a leap year is one higher from Mar 1 on (03/01 = 61,
+12/31 = 366). Every date after Feb 28 was therefore matched one day early in
+leap years and Dec 31 was never matched. Add datetime_dayOfYear365(), which
+gives the current date's day in the same 365-day calendar (Feb 29 = 59.5,
+between Feb 28 and Mar 1), and use it for the DAYOFYEAR premise and the
+sweeping season. Non-leap years are unchanged.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-44_swmm530.patch
+
+diff --git a/src/legacy/engine/controls.c b/src/legacy/engine/controls.c
+index e423886..ea0367d 100644
+--- a/src/legacy/engine/controls.c
++++ b/src/legacy/engine/controls.c
+@@ -1858,7 +1858,7 @@ double getVariableValue(struct TVariable v)
+         return datetime_monthOfYear(CurrentDate);
+ 
+     case r_DAYOFYEAR:
+-        return datetime_dayOfYear(CurrentDate);
++        return datetime_dayOfYear365(CurrentDate);
+ 
+     case r_STATUS:
+         if (j < 0 ||
+diff --git a/src/legacy/engine/datetime.c b/src/legacy/engine/datetime.c
+index 31eb5bc..91617e8 100644
+--- a/src/legacy/engine/datetime.c
++++ b/src/legacy/engine/datetime.c
+@@ -466,6 +466,25 @@ int  datetime_dayOfYear(DateTime date)
+ 
+ //=============================================================================
+ 
++double datetime_dayOfYear365(DateTime date)
++
++//  Input:   date = an encoded date/time value
++//  Output:  returns day of year in a 365-day calendar (1..365)
++//  Purpose: finds the day of year a date's month and day have in a non-leap
++//           year (the calendar month/day inputs are converted with), so that
++//           03/01 is 60 and 12/31 is 365 in every year; Feb 29 is 59.5.
++
++{
++    int year, month, day;
++    double doy = datetime_dayOfYear(date);
++    datetime_decodeDate(date, &year, &month, &day);
++    if ( isLeapYear(year) && month > 2 ) doy -= 1.0;
++    else if ( month == 2 && day == 29 ) doy -= 0.5;
++    return doy;
++}
++
++//=============================================================================
++
+ int datetime_dayOfWeek(DateTime date)
+ 
+ //  Input:   date = an encoded date/time value
+diff --git a/src/legacy/engine/datetime.h b/src/legacy/engine/datetime.h
+index b45ec11..5cba5e0 100644
+--- a/src/legacy/engine/datetime.h
++++ b/src/legacy/engine/datetime.h
+@@ -120,6 +120,14 @@ int  datetime_monthOfYear(DateTime date);
+ */
+ int  datetime_dayOfYear(DateTime date);
+ 
++/*!
++* \brief Finds the day of the year of a date's month and day in a 365-day
++*        (non-leap) calendar; Feb 29 falls between Feb 28 and Mar 1 (59.5).
++* \param[in] date Date value
++* \return Day of year (1 to 365)
++*/
++double datetime_dayOfYear365(DateTime date);
++
+ /*!
+ * \brief Finds the day of the week for a date.
+ * \param[in] date Date value
+diff --git a/src/legacy/engine/runoff.c b/src/legacy/engine/runoff.c
+index bf00bad..5f6cb13 100644
+--- a/src/legacy/engine/runoff.c
++++ b/src/legacy/engine/runoff.c
+@@ -164,7 +164,7 @@ void runoff_execute()
+ //
+ {
+     int      j;                        // object index
+-    int      day;                      // day of calendar year
++    double   day;                      // day of calendar year
+     double   runoffStep;               // runoff time step (sec)
+     double   oldRunoffStep;            // previous runoff time step (sec)
+     double   runoff;                   // subcatchment runoff (ft/sec)
+@@ -209,7 +209,7 @@ void runoff_execute()
+     }
+ 
+     // --- see if street sweeping can occur on current date
+-    day = datetime_dayOfYear(currentDate);
++    day = datetime_dayOfYear365(currentDate);
+     canSweep = FALSE;
+     if ( SweepStart <= SweepEnd )
+     {

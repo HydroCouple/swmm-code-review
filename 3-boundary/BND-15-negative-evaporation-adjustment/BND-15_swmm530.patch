@@ -1,0 +1,27 @@
+BND-15: do not let the evaporation adjustment make the rate negative
+
+setEvap() added the monthly [ADJUSTMENTS] EVAPORATION value to the source
+rate with no lower bound. An adjustment more negative than the source rate
+(e.g. -0.10 in/day on a 0.05 in/day month) gave a negative Evap.rate, and
+getSubareaRunoff() then booked negative evaporation that added water to
+ponded and depression storage. Stop the adjusted rate at zero. Non-negative
+rates are unchanged.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply BND-15_swmm530.patch
+
+diff --git a/src/legacy/engine/climate.c b/src/legacy/engine/climate.c
+index c343b93..58ae8a5 100644
+--- a/src/legacy/engine/climate.c
++++ b/src/legacy/engine/climate.c
+@@ -1262,8 +1262,8 @@ void setEvap(DateTime theDate)
+         Evap.rate = 0.0;
+     }
+ 
+-    // --- apply climate change adjustment
+-    Evap.rate += Adjust.evap[mon - 1];
++    // --- apply climate change adjustment (the rate cannot go below 0)
++    Evap.rate = MAX(0.0, Evap.rate + Adjust.evap[mon - 1]);
+ 
+     // --- an API prescribed evaporation rate overrides the data-source
+     //     value (applied after adjustments so the prescription is final;

@@ -1,0 +1,57 @@
+[TITLE]
+CON-19: permeable pavement with a surface VegFrac = 0.5, ponded at the end
+
+[OPTIONS]
+FLOW_UNITS       CFS
+INFILTRATION     HORTON
+FLOW_ROUTING     KINWAVE
+START_DATE       01/01/2020
+START_TIME       00:00:00
+END_DATE         01/01/2020
+END_TIME         01:30:00
+REPORT_STEP      00:15:00
+WET_STEP         00:01:00
+DRY_STEP         00:01:00
+ROUTING_STEP     60
+
+[EVAPORATION]
+CONSTANT 0.0
+
+[RAINGAGES]
+;;Name  Format     Interval  SCF  Source
+G1      INTENSITY  1:00      1.0  TIMESERIES  TS1
+
+[TIMESERIES]
+;; 2 in/hr for 1 hour: 2.0 in of rain
+TS1  0  2.0
+TS1  1  0.0
+
+[SUBCATCHMENTS]
+;;Name  Gage  Outlet  Area  %Imperv  Width  %Slope  CurbLen
+S1      G1    O1      1     0        100    1       0
+
+[SUBAREAS]
+;;Subcatch  N-Imperv  N-Perv  S-Imperv  S-Perv  PctZero  RouteTo
+S1          0.01      0.1     0         0       0        OUTLET
+
+[INFILTRATION]
+S1  0  0  4  7  0
+
+[LID_CONTROLS]
+;; 3 in of surface storage, half of it taken up by vegetation, no
+;; overland flow (Rough = Slope = 0); 6 in of pavement that passes only
+;; 0.5 in/hr; 12 in gravel bed with an impermeable floor and no drain
+PP1  PP
+PP1  SURFACE   3   0.5   0  0  0
+PP1  PAVEMENT  6   0.15  0  0.5  0
+PP1  STORAGE   12  0.75  0  0
+
+[LID_USAGE]
+;;Subcat  LID  Number  Area   Width  InitSat  FromImp  ToPerv
+S1        PP1  1       43560  0      0        0        0
+
+[OUTFALLS]
+O1  0  FREE
+
+[REPORT]
+SUBCATCHMENTS ALL

@@ -1,0 +1,48 @@
+[TITLE]
+IO-56: steep overflow pipe that runs during a 1-hour inflow and is then dry for 5 hours
+
+[OPTIONS]
+FLOW_UNITS           CFS
+FLOW_ROUTING         DYNWAVE
+START_DATE           01/01/2020
+START_TIME           00:00:00
+END_DATE             01/01/2020
+END_TIME             06:00:00
+REPORT_STEP          00:15:00
+ROUTING_STEP         5
+NORMAL_FLOW_LIMITED  BOTH
+
+[JUNCTIONS]
+;;Name  Elev  MaxDepth  InitDepth  SurDepth  Aponded
+J1      100   5         0          0         0
+
+[OUTFALLS]
+O1      90    FREE
+O2      99    FREE
+
+[CONDUITS]
+;;Name  From  To  Length  Roughness  InOffset  OutOffset  InitFlow
+;; C1: steep overflow pipe, inlet 0.5 ft above the floor of J1
+C1      J1    O1  400     0.013      0.5       0          0
+;; C2: small low-level pipe that drains J1 below the overflow
+C2      J1    O2  200     0.013      0         0          0
+
+[XSECTIONS]
+;;Link  Shape     Geom1  Geom2  Geom3  Geom4  Barrels
+C1      CIRCULAR  1.5    0      0      0      1
+C2      CIRCULAR  0.5    0      0      0      1
+
+[INFLOWS]
+;;Node  Constituent  TimeSeries  Type  Mfactor  Sfactor
+J1      FLOW         Qin         FLOW  1.0      1.0
+
+[TIMESERIES]
+;; 4 cfs for the first hour, then nothing
+Qin     0:00   4.0
+Qin     1:00   4.0
+Qin     1:01   0.0
+Qin     6:00   0.0
+
+[REPORT]
+INPUT     NO
+CONTROLS  NO

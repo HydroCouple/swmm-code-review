@@ -1,0 +1,70 @@
+IO-51: force the continuity tables on large negative errors too
+
+massbal_report() writes a continuity table when [REPORT] CONTINUITY is YES
+or when the error exceeds 10 %, but compares the signed error, so a large
+negative error (more water or mass leaving or stored than came in) never
+forces the table. Compare the magnitude instead, and make
+massbal_getLoadingError() return the error of largest magnitude, as
+massbal_getQualError() does, instead of the largest positive one.
+
+Requires: IO-50
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b,
+after IO-50_swmm530.patch:
+    git apply IO-51_swmm530.patch
+
+diff --git a/src/legacy/engine/massbal.c b/src/legacy/engine/massbal.c
+index 48266c2..fe48892 100644
+--- a/src/legacy/engine/massbal.c
++++ b/src/legacy/engine/massbal.c
+@@ -271,13 +271,13 @@ void massbal_report()
+ 
+     if ( Nobjects[SUBCATCH] > 0 )
+     {
+-        if ( massbal_getRunoffError() > MAX_RUNOFF_BALANCE_ERR ||
++        if ( fabs(massbal_getRunoffError()) > MAX_RUNOFF_BALANCE_ERR ||
+              RptFlags.continuity == TRUE
+            ) report_writeRunoffError(&RunoffTotals, TotalArea);
+ 
+         if ( Nobjects[POLLUT] > 0 && !IgnoreQuality )
+         {
+-            if ( massbal_getLoadingError() > MAX_RUNOFF_BALANCE_ERR ||
++            if ( fabs(massbal_getLoadingError()) > MAX_RUNOFF_BALANCE_ERR ||
+                  RptFlags.continuity == TRUE
+                ) report_writeLoadingError(LoadingTotals);
+         }
+@@ -285,7 +285,7 @@ void massbal_report()
+ 
+     if ( Nobjects[AQUIFER] > 0  && !IgnoreGwater )
+     {
+-        if ( massbal_getGwaterError() > MAX_RUNOFF_BALANCE_ERR ||
++        if ( fabs(massbal_getGwaterError()) > MAX_RUNOFF_BALANCE_ERR ||
+              RptFlags.continuity == TRUE )
+         {
+             for ( j = 0; j < Nobjects[SUBCATCH]; j++ )
+@@ -298,13 +298,13 @@ void massbal_report()
+ 
+     if ( Nobjects[NODE] > 0 && !IgnoreRouting )
+     {
+-        if ( massbal_getFlowError() > MAX_FLOW_BALANCE_ERR ||
++        if ( fabs(massbal_getFlowError()) > MAX_FLOW_BALANCE_ERR ||
+              RptFlags.continuity == TRUE
+            ) report_writeFlowError(&FlowTotals);
+     
+         if ( Nobjects[POLLUT] > 0 && !IgnoreQuality )
+         {
+-            if ( massbal_getQualError() > MAX_FLOW_BALANCE_ERR ||
++            if ( fabs(massbal_getQualError()) > MAX_FLOW_BALANCE_ERR ||
+                  RptFlags.continuity == TRUE
+                ) report_writeQualError(QualTotals);
+         }
+@@ -760,7 +760,8 @@ double massbal_getLoadingError()
+         {
+             LoadingTotals[j].pctError = NAN;
+         }
+-        maxError = MAX(maxError, LoadingTotals[j].pctError);
++        if ( fabs(LoadingTotals[j].pctError) > fabs(maxError) )
++            maxError = LoadingTotals[j].pctError;
+ 
+         // --- report total counts as log10
+         if ( Pollut[j].units == COUNT )

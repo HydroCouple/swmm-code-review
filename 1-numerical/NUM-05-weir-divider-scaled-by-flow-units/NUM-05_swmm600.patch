@@ -1,0 +1,59 @@
+NUM-05: evaluate the WEIR divider equation in CFS/CMS, and add ERROR 137
+
+divider::getOutflow() divided Cd*Ht^1.5 by the flow-unit factor, as legacy
+does, so the same divider diverted 5% of the flow in GPM, 76% in MGD, 3% in
+LPS and 11% in MLD instead of 95%. Convert Cd*Ht^1.5 from CFS or CMS to
+internal cfs as weir links do (divide by M3perFT3 under SI). 6.0.0 also never
+raised ERROR 137, so a divider with Qmin > Cd*Ht^1.5 ran and produced NaN
+flows; port legacy divider_validate's check to resolve_cross_references().
+CFS models are unchanged; CMS models change by +0.011% (0.02832/0.028317).
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-05_swmm600.patch
+
+diff --git a/src/engine/hydraulics/Divider.cpp b/src/engine/hydraulics/Divider.cpp
+index 9c8b003..aa156dd 100644
+--- a/src/engine/hydraulics/Divider.cpp
++++ b/src/engine/hydraulics/Divider.cpp
+@@ -76,13 +76,17 @@ double getOutflow(SimulationContext& ctx, int node_idx, int link_idx) {
+             const double qMin  = divs.cutoff[ur];
+             const double dhMax = divs.max_depth[ur];
+             const double cWeir = divs.cd[ur];
++            // Cd*Ht^1.5 is a flow in CFS (US) or CMS (SI) whatever the
++            // flow units; convert it like weir links do (M3perFT3).
++            const double q_base = ucf::getUnitSystem(
++                static_cast<int>(ctx.options.flow_units)) == 1 ? 0.028317 : 1.0;
+             // qMax derived as in legacy divider_validate (node.c:1227)
+-            const double qMax = cWeir * std::pow(dhMax, 1.5) / ucf_flow;
++            const double qMax = cWeir * std::pow(dhMax, 1.5) / q_base;
+             if (qIn <= qMin) qOut = 0.0;
+             else {
+                 const double f = (qIn - qMin) / (qMax - qMin);
+                 if (f > 1.0) qOut = qMax * std::sqrt(f);
+-                else qOut = cWeir * std::pow(f * dhMax, 1.5) / ucf_flow;
++                else qOut = cWeir * std::pow(f * dhMax, 1.5) / q_base;
+             }
+             break;
+         }
+diff --git a/src/engine/input/PostParseResolver.cpp b/src/engine/input/PostParseResolver.cpp
+index 807f527..76a71f3 100644
+--- a/src/engine/input/PostParseResolver.cpp
++++ b/src/engine/input/PostParseResolver.cpp
+@@ -2635,6 +2635,17 @@ void resolve_cross_references(SimulationContext& ctx) {
+               ctx.links.node2[static_cast<std::size_t>(dl)] != i)))
+             ctx.errors.push_back(format_error(ERR_DIVIDER_LINK, ctx.node_names.name_of(i)));
+ 
++        // legacy divider_validate (node.c:1220-1231): a WEIR divider needs
++        // Ht > 0, Cd > 0 and Qmin <= Cd*Ht^1.5 (CFS or CMS), else ERROR 137.
++        // Without the check the run takes pow() of a negative fraction (NaN).
++        if (D.method[ur] == DividerType::WEIR) {
++            const double q_base = ucf::getUnitSystem(
++                static_cast<int>(ctx.options.flow_units)) == 1 ? 0.028317 : 1.0;
++            if (D.max_depth[ur] <= 0.0 || D.cd[ur] <= 0.0 ||
++                D.cutoff[ur] > D.cd[ur] * std::pow(D.max_depth[ur], 1.5) / q_base)
++                ctx.errors.push_back(format_error(ERR_WEIR_DIVIDER, ctx.node_names.name_of(i)));
++        }
++
+         // Re-resolve diversion curve name → index (TABULAR dividers)
+         if (D.curve[ur] < 0 && !D.curve_name[ur].empty())
+             D.curve[ur] = ctx.find_curve(D.curve_name[ur]);

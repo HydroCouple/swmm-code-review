@@ -1,0 +1,94 @@
+[TITLE]
+NUM-44: non-leap year 2021, 12/30 00:30 to 12/31 12:00, default sweeping season (01/01 to 12/31)
+
+;; Two control rules keyed on calendar dates:
+;;   R1  DAYOFYEAR >= 03/01  sets orifice OR1 to 0.5 (1.0 otherwise)
+;;   R2  DAYOFYEAR =  12/31  sets orifice OR2 to 0.5 (1.0 otherwise)
+;; and street sweeping of S1 (1 ac): TSS builds up linearly at 1 lb/ac/day
+;; from zero, the land use is swept every day with 100% removal while the
+;; date is inside the sweeping season. No rain, so nothing washes off and
+;; the report's "Sweeping Removal" is all the buildup up to the last sweep.
+
+[OPTIONS]
+FLOW_UNITS       CFS
+INFILTRATION     HORTON
+FLOW_ROUTING     KINWAVE
+START_DATE       12/30/2021
+START_TIME       00:30:00
+REPORT_START_DATE 12/30/2021
+REPORT_START_TIME 00:30:00
+END_DATE         12/31/2021
+END_TIME         12:00:00
+REPORT_STEP      01:00:00
+WET_STEP         01:00:00
+DRY_STEP         01:00:00
+ROUTING_STEP     300
+
+[EVAPORATION]
+CONSTANT 0.0
+
+[RAINGAGES]
+G1 INTENSITY 1:00 1.0 TIMESERIES RAIN1
+
+[TIMESERIES]
+RAIN1 12/30/2021 00:00 0.0
+
+[SUBCATCHMENTS]
+;;Name Gage Outlet Area %Imperv Width %Slope CurbLen
+S1     G1   SU1    1    100     200   1      0
+
+[SUBAREAS]
+S1 0.01 0.1 0 0 0 OUTLET
+
+[INFILTRATION]
+S1 0 0 4 7 0
+
+[STORAGE]
+;;Name Elev MaxDepth InitDepth Shape      Coeff Expon Const
+SU1    0    5        0         FUNCTIONAL 0     0     1000
+SU2    0    5        0         FUNCTIONAL 0     0     1000
+
+[OUTFALLS]
+O1 0 FREE
+
+[ORIFICES]
+;;Name From To Type Offset Qcoeff Gated CloseTime
+OR1    SU1  O1 SIDE 0      0.65   NO    0
+OR2    SU2  O1 SIDE 0      0.65   NO    0
+
+[XSECTIONS]
+OR1 CIRCULAR 1 0 0 0
+OR2 CIRCULAR 1 0 0 0
+
+[CONTROLS]
+RULE R1
+IF SIMULATION DAYOFYEAR >= 03/01
+THEN ORIFICE OR1 SETTING = 0.5
+ELSE ORIFICE OR1 SETTING = 1.0
+
+RULE R2
+IF SIMULATION DAYOFYEAR = 12/31
+THEN ORIFICE OR2 SETTING = 0.5
+ELSE ORIFICE OR2 SETTING = 1.0
+
+[POLLUTANTS]
+;;Name Units Crain Cgw Crdii Kdecay
+TSS    MG/L  0     0   0     0
+
+[LANDUSES]
+;;Name SweepInterval Availability LastSwept
+STREET 1             1.0          0
+
+[COVERAGES]
+S1 STREET 100
+
+[BUILDUP]
+;;Landuse Pollutant Function Max  Rate Power PerUnit
+STREET    TSS       POW      1000 1    1     AREA
+
+[WASHOFF]
+;;Landuse Pollutant Function C1  C2 SweepRmvl BmpRmvl
+STREET    TSS       EXP      0.1 1  100       0
+
+[REPORT]
+CONTROLS YES

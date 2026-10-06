@@ -1,0 +1,24 @@
+CRASH-10: range-check the node indexes read from a binary RDII file
+
+readRdiiFileHeader() used each node index stored in a binary RDII interface
+file to read Node[j] without checking that j is a node of the current model.
+A file written by another model, or before nodes were added or deleted,
+reads outside the Node array (heap overflow or segmentation fault). An index
+outside 0..Nobjects[NODE]-1 is now ERROR 345, like an index of a node that
+has no RDII inflow.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply CRASH-10_swmm530.patch
+
+diff --git a/src/legacy/engine/rdii.c b/src/legacy/engine/rdii.c
+index d8835c5..bd276b9 100644
+--- a/src/legacy/engine/rdii.c
++++ b/src/legacy/engine/rdii.c
+@@ -621,6 +621,7 @@ int readRdiiFileHeader()
+     for ( i=0; i<NumRdiiNodes; i++ )
+     {
+         j = RdiiNodeIndex[i];
++        if ( j < 0 || j >= Nobjects[NODE] ) return ERR_RDII_FILE_FORMAT;
+         if ( Node[j].rdiiInflow == NULL ) return ERR_RDII_FILE_FORMAT;
+     }
+     if ( feof(Frdii.file) ) return ERR_RDII_FILE_FORMAT;

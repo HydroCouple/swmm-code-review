@@ -1,0 +1,77 @@
+NUM-44: compare month/day dates with the current date in the same 365-day calendar
+
+OptionsHandler (SWEEP_START/SWEEP_END) and Controls (DAYOFYEAR = MM/DD)
+store month/day dates as their day of year in a non-leap year, like legacy
+SWMM, but compared them with datetime::dayOfYear() of the current date,
+which is one higher from Mar 1 on in a leap year. Add
+datetime::dayOfYear365() (Feb 29 = 59.5) and use it for SIM_DAYOFYEAR and
+for the sweeping season in SWMMEngine and SurfaceQuality2D. Same change as
+NUM-44_swmm530.patch; non-leap years are unchanged.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-44_swmm600.patch
+
+diff --git a/src/engine/2d/quality/SurfaceQuality2D.cpp b/src/engine/2d/quality/SurfaceQuality2D.cpp
+index b778c8b..f452ccf 100644
+--- a/src/engine/2d/quality/SurfaceQuality2D.cpp
++++ b/src/engine/2d/quality/SurfaceQuality2D.cpp
+@@ -500,7 +500,7 @@ void SurfaceQuality2D::step(const SimulationContext& ctx, const MeshData& mesh,
+     const double q_to_display = si_ ? 1000.0 * 3600.0 : 39.3700787 * 3600.0;   // m/s → mm/hr | in/hr
+     const double ucf_flow     = ucf::UCF(ucf::FLOW, ctx.options);                 // cfs → display flow
+     // sweeping season (the A7 block's rule)
+-    const int sweep_doy = datetime::dayOfYear(abs_time);
++    const double sweep_doy = datetime::dayOfYear365(abs_time);
+     const int ss = ctx.options.sweep_start, se = ctx.options.sweep_end;
+     const bool in_season = (ss <= se) ? (sweep_doy >= ss && sweep_doy <= se)
+                                       : (sweep_doy >= ss || sweep_doy <= se);
+diff --git a/src/engine/controls/Controls.cpp b/src/engine/controls/Controls.cpp
+index 88369ca..044c5d6 100644
+--- a/src/engine/controls/Controls.cpp
++++ b/src/engine/controls/Controls.cpp
+@@ -618,7 +618,7 @@ double ControlEngine::getVariableValue(const SimulationContext& ctx,
+         case ConditionVar::SIM_MONTH:
+             return static_cast<double>(datetime::monthOfYear(cur_date_));
+         case ConditionVar::SIM_DAYOFYEAR:
+-            return static_cast<double>(datetime::dayOfYear(cur_date_));
++            return datetime::dayOfYear365(cur_date_);
+     }
+     return MISSING;
+ }
+diff --git a/src/engine/core/DateTime.hpp b/src/engine/core/DateTime.hpp
+index 27b5c23..39f26dc 100644
+--- a/src/engine/core/DateTime.hpp
++++ b/src/engine/core/DateTime.hpp
+@@ -219,6 +219,20 @@ inline int dayOfYear(DateTime date) {
+     return static_cast<int>(std::floor(date - startOfYear)) + 1;
+ }
+ 
++/**
++ * @brief Day of year of a date's month and day in a 365-day (non-leap)
++ *        calendar, the one month/day inputs are converted with: 03/01 is 60
++ *        and 12/31 is 365 in every year; Feb 29 falls between them (59.5).
++ */
++inline double dayOfYear365(DateTime date) {
++    int y, m, d;
++    decodeDate(date, y, m, d);
++    double doy = dayOfYear(date);
++    if (isLeapYear(y) && m > 2) doy -= 1.0;
++    else if (m == 2 && d == 29) doy -= 0.5;
++    return doy;
++}
++
+ } // namespace datetime
+ } // namespace openswmm
+ 
+diff --git a/src/engine/core/SWMMEngine.cpp b/src/engine/core/SWMMEngine.cpp
+index 839529d..042a809 100644
+--- a/src/engine/core/SWMMEngine.cpp
++++ b/src/engine/core/SWMMEngine.cpp
+@@ -2931,7 +2931,7 @@ void SWMMEngine::stepRunoff(double dt_routing) noexcept {
+             // IGNORE_QUALITY: skip street-sweeping buildup removal (runoff.c:274).
+             if ((np > 0 || msxsurf::active(ctx_)) && nlu > 0
+                 && !ctx_.options.ignore_quality) {
+-                int sweep_doy = datetime::dayOfYear(abs_time);
++                double sweep_doy = datetime::dayOfYear365(abs_time);
+                 int ss = ctx_.options.sweep_start;
+                 int se = ctx_.options.sweep_end;
+                 bool in_season = (ss <= se)

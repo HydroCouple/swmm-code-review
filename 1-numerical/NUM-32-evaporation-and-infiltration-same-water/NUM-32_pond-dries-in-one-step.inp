@@ -1,0 +1,54 @@
+[TITLE]
+NUM-32: ponded water on a pervious area is used up within one long dry step
+
+[OPTIONS]
+;; 1 in/hr of rain for 30 min on a pervious area that infiltrates 0.5 in/hr
+;; leaves about 0.24 in ponded in its 0.3 in of depression storage (no runoff).
+;; When the rain stops the runoff step becomes the 6-hour DRY_STEP, and that
+;; water is used up by infiltration and evaporation (0.5 in/day) within it.
+FLOW_UNITS           CFS
+INFILTRATION         HORTON
+FLOW_ROUTING         KINWAVE
+START_DATE           06/01/2020
+START_TIME           00:00:00
+REPORT_START_DATE    06/01/2020
+REPORT_START_TIME    00:00:00
+END_DATE             06/02/2020
+END_TIME             00:00:00
+WET_STEP             00:05:00
+DRY_STEP             06:00:00
+REPORT_STEP          00:15:00
+ROUTING_STEP         0:00:30
+IGNORE_ROUTING       YES
+
+[EVAPORATION]
+CONSTANT         0.5
+DRY_ONLY         NO
+
+[RAINGAGES]
+;;Name  Format     Interval  SCF  Source
+G1      INTENSITY  0:30      1.0  TIMESERIES  R1
+
+[SUBCATCHMENTS]
+;;Name  Gage  Outlet  Area  %Imperv  Width  %Slope  CurbLen
+S1      G1    O1      1.0   0        100    1.0     0
+
+[SUBAREAS]
+;;Subcatch  N-Imperv  N-Perv  S-Imperv  S-Perv  PctZero  RouteTo
+S1          0.01      0.1     0.05      0.3     0        OUTLET
+
+[INFILTRATION]
+;;Subcatch  MaxRate  MinRate  Decay  DryTime  MaxInfil
+S1          0.5      0.5      4      7        0
+
+[OUTFALLS]
+;;Name  Elev  Type
+O1      0     FREE
+
+[TIMESERIES]
+;; 1 in/hr for 30 min: 0.5 in of rain
+R1   0:00   1.0
+R1   0:30   0.0
+
+[REPORT]
+SUBCATCHMENTS ALL

@@ -1,0 +1,32 @@
+IO-29: read the X1 line in the layout the manual documents
+
+The manual gives the X1 line as "X1 Name Nsta Xleft Xright 0 0 0 Lfactor
+Wfactor Eoffset" (11 items), but transect_readParams() always takes Lfactor,
+Wfactor and Eoffset from items 8-10, the 10-item layout with two placeholder
+zeros that the GUI writes. A line written from the manual lost its meander
+factor, used it as a width multiplier and used Wfactor as the elevation
+offset, without any message. Read the three factors one item later when the
+line has 11 items. 10-item lines are read as before.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply IO-29_swmm530.patch
+
+diff --git a/src/legacy/engine/transect.c b/src/legacy/engine/transect.c
+index c8e58ca..9d697e2 100644
+--- a/src/legacy/engine/transect.c
++++ b/src/legacy/engine/transect.c
+@@ -162,6 +162,14 @@ int transect_readParams(int* count, char* tok[], int ntoks)
+                 return error_setInpError(ERR_NUMBER, tok[i]);
+         }
+ 
++        // --- the layout given in the manual has three placeholder zeros
++        //     before Lfactor (11 items) instead of two (10 items)
++        if ( ntoks >= 11 ) for ( i = 7; i < 10; i++ )
++        {
++            if ( ! getDouble(tok[i+1], &x[i]) )
++                return error_setInpError(ERR_NUMBER, tok[i+1]);
++        }
++
+         // --- update total transect count
+         *count = index + 1;
+ 

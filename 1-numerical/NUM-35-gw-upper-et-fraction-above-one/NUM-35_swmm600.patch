@@ -1,0 +1,24 @@
+NUM-35: cap the pattern-adjusted aquifer upper-zone ET fraction at 1
+
+GWSolver::execute() multiplies the upper-zone ET fraction by the monthly
+pattern factor without a limit. Input validation already rejects ETu > 1, but
+a pattern factor above 1 can still push the fraction past 1, and the lower-
+zone ET rate (1 - fraction) * e_max then turns negative and adds water to the
+saturated zone. Cap the fraction at 1, as NUM-35_swmm530.patch does for 5.3.0.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-35_swmm600.patch
+
+diff --git a/src/engine/hydrology/Groundwater.cpp b/src/engine/hydrology/Groundwater.cpp
+index 9611079..ce78e7b 100644
+--- a/src/engine/hydrology/Groundwater.cpp
++++ b/src/engine/hydrology/Groundwater.cpp
+@@ -294,7 +294,7 @@ void GWSolver::execute(SimulationContext& ctx, double dt, double max_evap,
+             if (month >= 1 && month <= static_cast<int>(facs.size()))
+                 evap_frac *= facs[static_cast<std::size_t>(month - 1)];
+         }
+-        c.upper_evap_frac  = evap_frac;
++        c.upper_evap_frac  = std::min(evap_frac, 1.0);  // a pattern may push it above 1
+         c.lower_evap_depth = soa_.lower_evap_depth[ui];
+         c.lower_loss_coeff = soa_.lower_loss_coeff[ui];
+         c.total_depth      = soa_.total_depth[ui];

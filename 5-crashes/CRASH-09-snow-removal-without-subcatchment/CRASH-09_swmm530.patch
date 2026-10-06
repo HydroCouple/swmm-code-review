@@ -1,0 +1,26 @@
+CRASH-09: skip the transfer of plowed snow when no receiving subcatchment is named
+
+The receiving subcatchment is the optional last field of a [SNOWPACKS]
+REMOVAL line; when it is left out, toSubcatch is -1. snow_plowSnow() then
+read Subcatch[-1].snowpack whenever Fsub > 0 (heap out-of-bounds read, and
+a write through the pointer it finds). Only transfer snow when a
+subcatchment was named. The Fsub share then stays on the plowable area, as
+it already does when the receiving subcatchment has no pervious snow area,
+and as 6.0.0's SnowSolver::plowSnow() does.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply CRASH-09_swmm530.patch
+
+diff --git a/src/legacy/engine/snow.c b/src/legacy/engine/snow.c
+index d415675..83f88a3 100644
+--- a/src/legacy/engine/snow.c
++++ b/src/legacy/engine/snow.c
+@@ -473,7 +473,7 @@ void snow_plowSnow(int subcatchIndex, double tStep)
+             sfracTotal += Snowmelt[k].sfrac[3];
+ 
+             // --- send to another subcatchment
+-            if ( Snowmelt[k].sfrac[4] > 0.0 )
++            if ( Snowmelt[k].sfrac[4] > 0.0 && Snowmelt[k].toSubcatch >= 0 )
+             {
+                 m = Snowmelt[k].toSubcatch;
+                 if ( Subcatch[m].snowpack )

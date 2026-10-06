@@ -1,0 +1,40 @@
+CON-17: scale the full area and radius of custom ellipses with both axes
+
+For HORIZ_ELLIPSE and VERT_ELLIPSE pipes without a size code,
+xsect_setParams() set aFull = 1.2692*D^2 and rFull = 0.3061*D from the minor
+axis D alone (the values of a standard 1:1.56 ellipse), while the width table
+is scaled by the span. Area and width then describe different pipes, and the
+change log at the top of this file already claims the fix for 5.3.0. Apply
+the fix from origin/dev-elliptical_pipes (0c0a5ca3, with 8e27af6c keeping the
+user's span): aFull = 0.8117*yFull*wMax, rFull = 0.2448*sqrt(yFull*wMax) for
+both orientations. Both reduce to the old values for a 1:1.5636 ellipse.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply CON-17_swmm530.patch
+
+diff --git a/src/legacy/engine/xsect.c b/src/legacy/engine/xsect.c
+index cf40f97..a135be1 100644
+--- a/src/legacy/engine/xsect.c
++++ b/src/legacy/engine/xsect.c
+@@ -573,8 +573,8 @@ int xsect_setParams(TXsect *xsect, int type, double p[], double ucf)
+             // --- length of major axis
+             if ( p[1] < 0.0 ) return FALSE;
+             xsect->wMax = p[1]/ucf;
+-            xsect->aFull = 1.2692 * xsect->yFull * xsect->yFull;
+-            xsect->rFull = 0.3061 * xsect->yFull;
++            xsect->aFull = 0.8117 * xsect->yFull * xsect->wMax;
++            xsect->rFull = 0.2448 * sqrt(xsect->yFull * xsect->wMax);
+         }
+         xsect->sFull = xsect->aFull * pow(xsect->rFull, 2./3.);
+         xsect->sMax  = xsect->sFull;
+@@ -601,8 +601,8 @@ int xsect_setParams(TXsect *xsect, int type, double p[], double ucf)
+             // --- length of minor axis
+             xsect->yFull = p[0]/ucf;
+             xsect->wMax = p[1]/ucf;
+-            xsect->aFull = 1.2692 * xsect->wMax * xsect->wMax;
+-            xsect->rFull = 0.3061 * xsect->wMax;
++            xsect->aFull = 0.8117 * xsect->yFull * xsect->wMax;
++            xsect->rFull = 0.2448 * sqrt(xsect->yFull * xsect->wMax);
+         }
+         xsect->sFull = xsect->aFull * pow(xsect->rFull, 2./3.);
+         xsect->sMax  = xsect->sFull;

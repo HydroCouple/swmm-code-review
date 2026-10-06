@@ -1,0 +1,39 @@
+NUM-23: scale transect bank stations exactly like the stations
+
+transect::buildFromStore() in Transect.cpp scaled the overbank stations as
+(x/UCF(LENGTH))*Xfactor while the station loop scales every station as
+x*Xfactor/UCF(LENGTH). getFlow() finds the banks by exact equality (Station[k]
+== Xleftbank), so in SI units with a width factor the two roundings often
+differ by one ulp, no bank is found and the whole section is computed as one
+subsection with the right overbank's n. Compute the banks with the same
+expression as the stations. US units and SI without a width factor give
+bit-identical values to before.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-23_swmm600.patch
+
+diff --git a/src/engine/hydraulics/Transect.cpp b/src/engine/hydraulics/Transect.cpp
+index f63672d..6aec4c9 100644
+--- a/src/engine/hydraulics/Transect.cpp
++++ b/src/engine/hydraulics/Transect.cpp
+@@ -439,7 +439,8 @@ bool buildFromStore(const TransectStore& ts, int index, double ucf_length,
+     // transform the raw [TRANSECTS] GR data BEFORE building the tables:
+     //   Station = x * Xfactor / UCF(LENGTH)          (mult, then divide)
+     //   Elev    = (y + Yfactor) / UCF(LENGTH),  Yfactor = x9 / UCF
+-    //   Xbank   = (xbank / UCF) * Xfactor            (divide, then mult)
++    //   Xbank   = xbank * Xfactor / UCF(LENGTH)      (as the stations, so
++    //             getFlow's exact Station == Xbank test finds the banks)
+     // The elevation OFFSET (x9, e.g. 799/798 in extran8a) is the load-
+     // bearing part: legacy builds every slice area/width/hrad at the
+     // real bed elevation (~800 ft), so `y - yhi` rounds at that
+@@ -452,8 +453,8 @@ bool buildFromStore(const TransectStore& ts, int index, double ucf_length,
+     const double yFactor = ts.y_factor[ut] / ucf_length;   // x9 / UCF
+     for (auto& s : td.stations)   s = s * xFactor / ucf_length;
+     for (auto& e : td.elevations) e = (e + yFactor) / ucf_length;
+-    td.x_left_bank  = (ts.x_left_bank[ut]  / ucf_length) * xFactor;
+-    td.x_right_bank = (ts.x_right_bank[ut] / ucf_length) * xFactor;
++    td.x_left_bank  = ts.x_left_bank[ut]  * xFactor / ucf_length;
++    td.x_right_bank = ts.x_right_bank[ut] * xFactor / ucf_length;
+     buildTables(td);
+     return true;
+ }

@@ -1,0 +1,25 @@
+CON-04: return only the rain on the covered barrel's own footprint
+
+lid_getRunoff() returned subcatch->rainfall * subcatch->lidArea to the
+pervious area for every covered rain barrel row. subcatch->lidArea is the
+total area of ALL LID units in the subcatchment, so the rain falling on the
+other units (which they also take as inflow) was returned a second time,
+and once more for each further covered-barrel row. Use the unit's own area
+(lidArea = area * number, already computed for the unit).
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply CON-04_swmm530.patch
+
+diff --git a/src/legacy/engine/lid.c b/src/legacy/engine/lid.c
+index e2ac45a..395ac7a 100644
+--- a/src/legacy/engine/lid.c
++++ b/src/legacy/engine/lid.c
+@@ -1702,7 +1702,7 @@ void lid_getRunoff(int j, double tStep)
+                 lidProc->storage.covered == TRUE)
+             {
+                 // Add runoff from closed rain barrel to return (cfs)
+-                qReturn += subcatch->rainfall * subcatch->lidArea;
++                qReturn += subcatch->rainfall * lidArea;
+ 			}
+             else
+             {

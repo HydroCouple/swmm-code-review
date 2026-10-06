@@ -1,0 +1,36 @@
+[TITLE]
+NUM-57: a rectangular channel 20 ft wide and 5 ft deep entered as a transect, n = 0.03
+
+[OPTIONS]
+FLOW_UNITS CFS
+FLOW_ROUTING DYNWAVE
+START_DATE 01/01/2020
+START_TIME 00:00:00
+END_DATE 01/01/2020
+END_TIME 00:10:00
+REPORT_STEP 00:05:00
+ROUTING_STEP 5
+
+[JUNCTIONS]
+;Name Elev MaxDepth InitDepth SurDepth Aponded
+J1 100 10 0 0 0
+
+[OUTFALLS]
+O1 99 FREE
+
+[CONDUITS]
+;Name From To Length N InOffset OutOffset InitFlow MaxFlow
+C1 J1 O1 1000 0.03 0 0 0 0
+
+[XSECTIONS]
+;Link Shape Transect Geom2 Geom3 Geom4 Barrels
+C1 IRREGULAR RECT 0 0 0 1
+
+[TRANSECTS]
+;X1 Name Nsta Xleft Xright 0 0 Lfactor Wfactor Eoffset
+NC 0.03 0.03 0.03
+X1 RECT 4 0 0 0 0 0 0 0
+GR 105 0 100 0 100 20 105 20
+
+[REPORT]
+INPUT YES

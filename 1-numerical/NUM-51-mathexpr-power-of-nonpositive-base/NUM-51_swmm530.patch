@@ -1,0 +1,27 @@
+NUM-51: evaluate whole-number powers of negative numbers in math expressions
+
+mathexpr_eval() returned 0 for x^y whenever x <= 0. That guard is needed for
+a fractional power of a negative number, which has no real value (pow()
+returns NaN), but it also turned (-3)^2 into 0 and (-2)^3 into 0. Call pow()
+for a negative base when the exponent is a whole number; keep 0 for a
+fractional exponent and for a zero base, as before.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-51_swmm530.patch
+
+diff --git a/src/legacy/engine/mathexpr.c b/src/legacy/engine/mathexpr.c
+index c39dff7..6452efb 100644
+--- a/src/legacy/engine/mathexpr.c
++++ b/src/legacy/engine/mathexpr.c
+@@ -709,8 +709,9 @@ double mathexpr_eval(MathExpr *expr, double (*getVariableValue) (int))
+                 stackindex--;
+                 if (stackindex < 0) break;
+                 r2 = ExprStack[stackindex];
+-		if (r2 <= 0.0) r2 = 0.0;
+-		else r2 = pow(r2, r1);
++		// --- a negative base has a real power only for a whole exponent
++		if (r2 > 0.0 || (r2 < 0.0 && r1 == floor(r1))) r2 = pow(r2, r1);
++		else r2 = 0.0;
+ 		ExprStack[stackindex] = r2;
+ 		break;
+         }

@@ -1,0 +1,53 @@
+BND-07: apply culvert inlet control at the inlet of a conduit reversed for an adverse slope
+
+PostParseResolver reverses a dynamic wave conduit with an adverse slope (as
+legacy conduit_reverse() does), so its inlet becomes node2 and its forward
+flow is negative. DWSolver::applyFlowLimits() applies culvert inlet control
+only to positive flow, with the head and invert at node1. For a reversed
+culvert, apply it to negative flow with the head and invert at node2 and the
+slope in the user's orientation, and skip it for positive flow, as the 5.3.0
+patch does.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply BND-07_swmm600.patch
+
+diff --git a/src/engine/hydraulics/DynamicWave.cpp b/src/engine/hydraulics/DynamicWave.cpp
+index c83bf96..ba4165e 100644
+--- a/src/engine/hydraulics/DynamicWave.cpp
++++ b/src/engine/hydraulics/DynamicWave.cpp
+@@ -2596,7 +2596,10 @@ void DWSolver::applyFlowLimits(SimulationContext& ctx, double dt, int step,
+             double dqdh_culv = 0.0;
+             bool inlet = false;
+             const XSectParams xs_c = buildXSP(ctx, uj);
+-            const double q_inlet = culvert::getInflow(
++            // a conduit reversed for an adverse slope (direction -1) has its
++            // inlet at node2, so its positive flow does not enter the inlet
++            const double q_inlet = (tile_direction_[uci] < 0) ? q :
++                culvert::getInflow(
+                 q, y_in, xs_c, tile_slope_[uci], tile_culvert_code_[uci],
+                 dqdh_culv, inlet);
+             if (inlet) {
+@@ -2661,6 +2664,23 @@ void DWSolver::applyFlowLimits(SimulationContext& ctx, double dt, int step,
+             }
+         }
+     }
++    // inlet control of a culvert reversed for an adverse slope: its inlet is
++    // now at node2 and its forward flow is negative
++    else if (q < 0.0 && tile_culvert_code_[uci] > 0 && !isFull &&
++             tile_direction_[uci] < 0) {
++        const double y_in = h2_[uj] - (tile_inv2_elev_[uci] + tile_z2_off_[uci]);
++        double dqdh_culv = 0.0;
++        bool inlet = false;
++        const XSectParams xs_c = buildXSP(ctx, uj);
++        const double q_inlet = culvert::getInflow(
++            -q, y_in, xs_c, -tile_slope_[uci], tile_culvert_code_[uci],
++            dqdh_culv, inlet);
++        if (inlet) {
++            q = -q_inlet;
++            dqdh_[uj] = dqdh_culv;
++            CD.inlet_control[ucr] = uint8_t{1};
++        }
++    }
+ 
+     // Under-relaxation (after first iteration)
+     if (step > 0) {

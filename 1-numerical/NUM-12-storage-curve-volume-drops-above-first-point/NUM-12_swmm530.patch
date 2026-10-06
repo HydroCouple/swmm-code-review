@@ -1,0 +1,28 @@
+NUM-12: include the volume below the first point of a storage curve
+
+Below the first point of a storage curve SWMM takes the surface area to
+grow linearly from 0 at depth 0, so the volume there is a1*x1/2.
+table_getStorageVolume() used that triangle for depths up to x1 but
+restarted from 0 above x1, while the inverse (depth from volume) included
+it. A storage unit lost a1*x1/2 of volume the moment it filled past the
+first point, which shows up as a routing continuity error. Start the
+end-area sum from a1*x1/2. Curves whose first depth is 0 are unchanged.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-12_swmm530.patch
+
+diff --git a/src/legacy/engine/table.c b/src/legacy/engine/table.c
+index c7564d2..ce0fff3 100644
+--- a/src/legacy/engine/table.c
++++ b/src/legacy/engine/table.c
+@@ -614,6 +614,10 @@ double table_getStorageVolume(TTable *table, double x)
+         return (a1/x1) * x * x / 2.0;
+     }
+ 
++    // --- start from the volume below the first tabulated depth
++    //     (as in table_getStorageDepth)
++    v = a1 * x1 / 2.0;
++
+     // --- otherwise traverse table entries until target depth is bracketed
+     while (entry->next)
+     {

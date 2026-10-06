@@ -1,0 +1,52 @@
+CRASH-05: bound the number and name buffers of the expression lexer
+
+getNumber() and getToken() append each character of a constant or a name to
+fixed 255-byte buffers (the local sNumber and the global Token) with
+strcat() and no length check, so an expression with a constant or a name of
+255 characters or more writes past the end. Stop and flag a parse error when
+the buffer is full; the expression is then rejected with ERROR 233. Four
+characters are kept free in sNumber for the '.', 'E' and exponent sign that
+getNumber() appends between its digit loops.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply CRASH-05_swmm530.patch
+
+diff --git a/src/legacy/engine/mathexpr.c b/src/legacy/engine/mathexpr.c
+index c39dff7..c279e86 100644
+--- a/src/legacy/engine/mathexpr.c
++++ b/src/legacy/engine/mathexpr.c
+@@ -153,6 +153,8 @@ void getToken()
+     while ( Pos <= Len &&
+         ( isLetter(S[Pos]) || isDigit(S[Pos]) ) )
+     {
++        // --- a name too long for Token is an error
++        if (strlen(Token) >= sizeof(Token) - 1) { Err = 1; break; }
+         c[0] = S[Pos];
+         strcat(Token, c);
+         Pos++;
+@@ -196,6 +198,9 @@ double getNumber()
+     sNumber[0] = '\0';
+     while (Pos < Len && isDigit(S[Pos]))
+     {
++        /* --- a number too long for sNumber is an error (room is
++               kept for the '.', 'E' and sign appended below) */
++        if (strlen(sNumber) >= sizeof(sNumber) - 4) { Err = 1; break; }
+         c[0] = S[Pos];
+         strcat(sNumber, c);
+         Pos++;
+@@ -212,6 +217,7 @@ double getNumber()
+             Pos++;
+             while (Pos < Len && isDigit(S[Pos]))
+             {
++                if (strlen(sNumber) >= sizeof(sNumber) - 4) { Err = 1; break; }
+                 c[0] = S[Pos];
+                 strcat(sNumber, c);  
+                 Pos++;
+@@ -235,6 +241,7 @@ double getNumber()
+                 if (Pos >= Len || !isDigit(S[Pos])) errflag = 1;
+                 else while ( Pos < Len && isDigit(S[Pos]))
+                 {
++                    if (strlen(sNumber) >= sizeof(sNumber) - 4) { Err = 1; break; }
+                     c[0] = S[Pos];
+                     strcat(sNumber, c);  
+                     Pos++;

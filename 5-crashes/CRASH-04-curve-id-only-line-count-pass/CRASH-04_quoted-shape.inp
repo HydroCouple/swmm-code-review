@@ -1,0 +1,45 @@
+[TITLE]
+CRASH-04: a shape curve whose type keyword is in quotes
+
+[OPTIONS]
+FLOW_UNITS           CFS
+FLOW_ROUTING         DYNWAVE
+START_DATE           01/01/2020
+START_TIME           00:00:00
+END_DATE             01/01/2020
+END_TIME             01:00:00
+REPORT_STEP          00:15:00
+ROUTING_STEP         10
+
+[JUNCTIONS]
+;;Name  Elev  MaxDepth  InitDepth  SurDepth  Aponded
+J1      100   5         0          0         0
+
+[OUTFALLS]
+;;Name  Elev  Type
+O1      99    FREE
+
+[CONDUITS]
+;;Name  From  To  Length  Roughness  InOffset  OutOffset  InitFlow
+C1      J1    O1  400     0.013      0         0         0
+
+[XSECTIONS]
+;; A 2-ft custom section of constant relative width 1: a closed 2 x 2 ft
+;; square. Full area 4 ft2, full hydraulic radius 4/8 = 0.5 ft.
+;;Link  Shape   Geom1  Curve  Geom3  Geom4  Barrels
+C1      CUSTOM  2      SH1    0      0      1
+
+[INFLOWS]
+;;Node  Constituent  Tseries  Type  Mfactor  Sfactor  Baseline
+J1      FLOW         ""       FLOW  1.0      1.0      1.0
+
+[CURVES]
+;; Quotes are allowed around any token in the input file; the reader
+;; removes them, so "Shape" is the Shape keyword.
+;;Name  Type     Depth  Width
+SH1     "Shape"  0      1
+SH1              1      1
+
+[REPORT]
+NODES ALL
+LINKS ALL

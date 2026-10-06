@@ -1,0 +1,39 @@
+NUM-05: evaluate the WEIR divider equation in CFS/CMS, not in the flow units
+
+divider_validate() and divider_getOutflow() divided Cd*Ht^1.5 by UCF(FLOW),
+so the coefficient meant cfs per ft^1.5 only for CFS and cms per m^1.5 only
+for CMS; the same divider diverted 5% of the flow in GPM, 76% in MGD, 3% in
+LPS and 11% in MLD instead of 95%, or was rejected with ERROR 137. Convert
+Cd*Ht^1.5 from CFS or CMS to internal cfs as weir_getFlow() does for weir
+links (divide by M3perFT3 under SI). CFS models are unchanged; CMS models
+change by the ratio of the two CMS factors (0.02832/0.028317, +0.011%).
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-05_swmm530.patch
+
+diff --git a/src/legacy/engine/node.c b/src/legacy/engine/node.c
+index 070db5a..829dca2 100644
+--- a/src/legacy/engine/node.c
++++ b/src/legacy/engine/node.c
+@@ -1223,9 +1223,9 @@ void  divider_validate(int j)
+             report_writeErrorMsg(ERR_WEIR_DIVIDER, Node[j].ID);
+         else
+         {
+-            // --- find flow when weir is full
++            // --- find flow when weir is full (Cd*Ht^1.5 is in CFS or CMS)
+             Divider[k].qMax = Divider[k].cWeir * pow(Divider[k].dhMax, 1.5)
+-                              / UCF(FLOW);
++                              / (UnitSystem == SI ? M3perFT3 : 1.0);
+             if ( Divider[k].qMin > Divider[k].qMax )
+                 report_writeErrorMsg(ERR_WEIR_DIVIDER, Node[j].ID);
+         }
+@@ -1285,7 +1285,8 @@ double divider_getOutflow(int j, int k)
+             
+             // --- otherwise use weir eqn.
+             else qOut = Divider[i].cWeir *
+-                        pow(f*Divider[i].dhMax, 1.5) / UCF(FLOW);
++                        pow(f*Divider[i].dhMax, 1.5) /
++                        (UnitSystem == SI ? M3perFT3 : 1.0);
+         }
+         break;
+ 

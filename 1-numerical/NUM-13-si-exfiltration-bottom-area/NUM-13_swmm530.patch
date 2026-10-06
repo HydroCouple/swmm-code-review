@@ -1,0 +1,36 @@
+NUM-13: convert the seepage bottom area of non-tabular storage shapes
+
+exfil_initState() converted the bottom and bank areas of a TABULAR storage
+unit from user units to ft2, but set the bottom area of FUNCTIONAL,
+CYLINDRICAL, CONICAL and PYRAMIDAL units straight from their coefficients,
+which are kept in user units. Under SI a bottom of 100 m2 was used as
+100 ft2 (10.8 times too small) and the rest of the surface area was
+treated as bank. With Green-Ampt seepage the bank sees half the head, so a
+vertical-walled 100 m2 basin lost 21 percent less water than the same basin
+described as TABULAR or in US units. Divide the bottom area by
+UCF(LENGTH)^2 as the TABULAR case does. US models are unchanged.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-13_swmm530.patch
+
+diff --git a/src/legacy/engine/exfil.c b/src/legacy/engine/exfil.c
+index f1cb2ad..66233f2 100644
+--- a/src/legacy/engine/exfil.c
++++ b/src/legacy/engine/exfil.c
+@@ -135,6 +135,7 @@ void  exfil_initState(int k)
+                 exfil->btmArea = Storage[k].a0;
+                 if ( Storage[k].a2 == 0.0 )
+                     exfil->btmArea +=Storage[k].a1;
++                exfil->btmArea /= UCF(LENGTH) * UCF(LENGTH);
+                 exfil->bankMinDepth = 0.0;
+                 exfil->bankMaxDepth = BIG;
+                 exfil->bankMaxArea = BIG;
+@@ -144,7 +145,7 @@ void  exfil_initState(int k)
+             case CYLINDRICAL:
+             case CONICAL:
+             case PYRAMIDAL:
+-                exfil->btmArea = Storage[k].a0;
++                exfil->btmArea = Storage[k].a0 / (UCF(LENGTH) * UCF(LENGTH));
+                 exfil->bankMinDepth = 0.0;
+                 exfil->bankMaxDepth = BIG;
+                 exfil->bankMaxArea = BIG;

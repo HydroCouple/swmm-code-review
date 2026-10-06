@@ -1,0 +1,60 @@
+NUM-18: take a full conduit's losses from its inflow (STEADY, KINWAVE)
+
+When the inflow to a conduit exceeds its full flow, steadyflow_execute()
+and kinwave_execute() cap the inflow taken from the upstream node at the
+full flow and deliver the full flow at the outlet. The conduit's
+evaporation and seepage loss, already computed and stored for the mass
+balance (Conduit.evapLossRate / seepLossRate), is then taken from neither,
+so it is booked without being removed from the water. Cap the inflow at
+the full flow plus the loss instead, so the node supplies the loss. Results
+do not change for conduits without losses or that are not full.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-18_swmm530.patch
+
+diff --git a/src/legacy/engine/flowrout.c b/src/legacy/engine/flowrout.c
+index b370219..9c58fd3 100644
+--- a/src/legacy/engine/flowrout.c
++++ b/src/legacy/engine/flowrout.c
+@@ -765,6 +765,7 @@ int steadyflow_execute(int j, double* qin, double* qout, double tStep)
+     int   k;
+     double s;
+     double q;
++    double loss;
+ 
+     // --- use Manning eqn. to compute flow area for conduits
+     if ( Link[j].type == CONDUIT )
+@@ -775,14 +776,16 @@ int steadyflow_execute(int j, double* qin, double* qout, double tStep)
+         else 
+         {
+             // --- adjust flow for evap and infil losses
+-            q -= link_getLossRate(j, SF, q, tStep);
++            loss = link_getLossRate(j, SF, q, tStep);
++            q -= loss;
+          
+             // --- flow can't exceed full flow 
++            //     (the conduit then takes in its full flow plus its losses)
+             if ( q > Link[j].qFull )
+             {
+                 q = Link[j].qFull;
+                 Conduit[k].a1 = Link[j].xsect.aFull;
+-                (*qin) = q * Conduit[k].barrels;
++                (*qin) = (q + loss) * Conduit[k].barrels;
+             }
+ 
+             // --- infer flow area from flow rate 
+diff --git a/src/legacy/engine/kinwave.c b/src/legacy/engine/kinwave.c
+index abb00e0..4bcde91 100644
+--- a/src/legacy/engine/kinwave.c
++++ b/src/legacy/engine/kinwave.c
+@@ -148,7 +148,9 @@ int kinwave_execute(int linkIndex, double* qinflow, double* qoutflow, double tSt
+ 
+         // --- compute normalized outlet flow from outlet area
+         qout = Beta1 * xsect_getSofA(pXsect, aout*Afull);
+-        if ( qin > 1.0 ) qin = 1.0;
++
++        // --- a full conduit takes in its full flow plus its losses
++        if ( qin > 1.0 + q3 ) qin = 1.0 + q3;
+     }
+ 
+     // --- save new flows and areas

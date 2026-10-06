@@ -1,0 +1,33 @@
+NUM-38: limit permeable pavement drain flow when pavement and soil are full
+
+In LIDSolver::pavementFluxRates(), the branch for "soil and pavement layers are full"
+(storage layer not full) limited storage exfiltration by the water available
+but left the underdrain at the raw drain-equation rate. With a drain faster
+than the soil, the drain removed more than the storage layer held, the
+solver clamped the storage depth at 0, and the difference was created.
+Apply the same limit (volume above the drain offset, less exfiltration and
+evaporation) that the "no adjoining layers are full" branch uses.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-38_swmm600.patch
+
+diff --git a/src/engine/hydrology/LID.cpp b/src/engine/hydrology/LID.cpp
+index 9aa0c73..2f0f148 100644
+--- a/src/engine/hydrology/LID.cpp
++++ b/src/engine/hydrology/LID.cpp
+@@ -1053,6 +1053,15 @@ public:
+             SurfaceInfil = std::min(SurfaceInfil, PavePerc);
+             maxRate = std::max(StorageVolume / Tstep + SoilPerc - StorageEvap, 0.0);
+             StorageExfil = std::min(StorageExfil, maxRate);
++            if (StorageDrain > 0.0) {
++                maxRate = -StorageExfil - StorageEvap;
++                if (P->drain_offset <= storageDepth) {
++                    maxRate += (storageDepth - P->drain_offset) *
++                               storageVoidFrac / Tstep;
++                }
++                maxRate = std::max(maxRate, 0.0);
++                StorageDrain = std::min(StorageDrain, maxRate);
++            }
+         }
+         else {
+             maxRate = SoilPerc - StorageEvap + StorageVolume / Tstep;

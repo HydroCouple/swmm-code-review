@@ -1,0 +1,25 @@
+NUM-07: give FORCE_MAIN the Manning full-flow section factor A*R^(2/3)
+
+xsect::setParams() keeps legacy's s_full = A*R^0.63 and s_max = 1.06949*s_full
+for FORCE_MAIN, while q_full, normal depth and the kinematic-wave conveyance
+multiply it by the Manning factor 1.486*sqrt(S)/n. Use A*R^(2/3) and
+s_max = 1.08*s_full, as for CIRCULAR, as the 5.3.0 patch does.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-07_swmm600.patch
+
+diff --git a/src/engine/hydraulics/XSection.cpp b/src/engine/hydraulics/XSection.cpp
+index a01fe26..1939e55 100644
+--- a/src/engine/hydraulics/XSection.cpp
++++ b/src/engine/hydraulics/XSection.cpp
+@@ -265,8 +265,8 @@ int setParams(XSectParams& xs, int type, const double p[], double ucf) {
+             xs.yw_max = d / 2.0;
+             xs.a_full = PI / 4.0 * d * d;
+             xs.r_full = d / 4.0;
+-            xs.s_full = xs.a_full * std::pow(xs.r_full, 0.63);  // Hazen-Williams
+-            xs.s_max  = 1.06949 * xs.s_full;
++            xs.s_full = xs.a_full * std::pow(xs.r_full, 2.0 / 3.0);
++            xs.s_max  = 1.08 * xs.s_full;
+             xs.r_bot  = p[1];   // C-factor / roughness stored in rBot
+             return 0;
+         }

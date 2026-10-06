@@ -1,0 +1,30 @@
+NUM-26: count an on-sag inlet's street sides after loading its geometry
+
+getOnSagCapturedFlow() formed totalInlets = Nsides * numInlets before
+getConduitGeometry() set the file-scope Nsides for this inlet, so an on-sag
+inlet was scaled by the street sides of the inlet processed before it: a sag
+inlet on a half street captured twice its flow after a full-street inlet,
+and a full-street sag inlet half after a half-street one. Compute
+totalInlets after the geometry call.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-26_swmm530.patch
+
+diff --git a/src/legacy/engine/inlet.c b/src/legacy/engine/inlet.c
+index fa52cb3..0b65ddf 100644
+--- a/src/legacy/engine/inlet.c
++++ b/src/legacy/engine/inlet.c
+@@ -1584,12 +1584,12 @@ double getOnSagCapturedFlow(TInlet* inlet, double q, double d)
+     double qCaptured = 0.0, qMax = BIG;
+ 
+     if (inlet->numInlets == 0) return 0.0;
+-    totalInlets = Nsides * inlet->numInlets;
+     linkIndex = inlet->linkIndex;
+     designIndex = inlet->designIndex;
+ 
+     // --- store conduit geometry in shared variables
+     getConduitGeometry(inlet);
++    totalInlets = Nsides * inlet->numInlets;
+ 
+     // --- set flow limit per inlet
+     if (inlet->flowLimit > 0.0)
