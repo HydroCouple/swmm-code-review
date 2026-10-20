@@ -1,5 +1,10 @@
 # NUM-03: RECT_ROUND hydraulic radius in the round bottom has a misplaced parenthesis
 
+**Status: fixed in OpenSWMM 5.3.0 and 6.0.0; PR pending merge into `swmm6_rel`.** [Issue #164](https://github.com/HydroCouple/openswmm.engine/issues/164) · [Engine PR](https://github.com/HydroCouple/openswmm.engine/pull/165) · fix commit `5efbe190` (validated 19 October 2026).
+
+The reproduction below records the original reviewed revisions. This fix is scoped to the maintained 5.3.0 legacy engine and 6.0.0 refactored engine.
+
+
 | | |
 |---|---|
 | **Category** | [Numerical errors](../README.md) |
@@ -118,3 +123,17 @@ NUM-03 6.0.0 patched: PASS
 The 6.0.0 patch makes the same change in `XSectKernels.hpp`, and both patched engines print identical numbers. Dynamic-wave results change for every RECT_ROUND conduit that flows inside its round bottom: depths drop and velocities rise to the values that the section's geometry and Manning's equation give. Other shapes are untouched.
 
 **Effect on other models.** None of the 73 regression decks in `regsuite` uses RECT_ROUND, so their results are unchanged.
+
+## Fix validation (19 October 2026)
+
+The fix changes only the misplaced parenthesis in `src/legacy/engine/xsect.c` (5.3.0) and `src/engine/hydraulics/XSectKernels.hpp` (6.0.0). Eight unit tests in `tests/unit/engine/test_xsect_parity.cpp` independently check both implementations against circular-segment geometry, covering default and explicit bottom radii, three section scales, shallow water, the former zero-radius point, dry depths, the round-to-rectangular transition, the rectangular part, and the full crown.
+
+Validation used macOS arm64, Apple Clang 21.0.0, a Debug build, and `swmm6_rel` base `d4c3b6f4`:
+
+- Before the correction, the geometry and transition tests fail for each engine (four failures). The dry-depth and rectangular-part checks pass.
+- After the correction, all eight new unit tests pass.
+- The original `NUM-03_test.c` and `NUM-03_test6.c` fail before the fix and pass after it against the freshly built 5.3.0 and 6.0.0 libraries. Both corrected engines give J1/J2 depths of **1.001 ft**, C2 flow **6.240 cfs**, and C2 velocity **2.535 ft/s**; 6.0.0's sampled radii agree with exact A/P.
+- The cross-section, street-section, geometry C API, portable-kernel, full cross-section parity, and simulation regression suites run 139 Google Tests: **137 pass**, including all three simulation regressions.
+- Two existing circular-section checks fail identically with and without this fix: `XSectBitExact.GoldenHashCircularKernels` (actual hash `0x03fa0e697653a2c2`, expected `0xfcd310e47838c666`) and `XSectFastMode.LookupFastWithinTolerance` (maximum relative deviation `0.008152173913043478`, limit `1e-6`). Rebuilding with both NUM-03 formula changes reverted confirms these are pre-existing failures; their expectations are unchanged.
+
+The 2D, GPU, HDF5, and GeoPackage modules were disabled for this focused hydraulic-geometry validation. The original patch files and pinned review results remain available for reproducing the historical defect.
