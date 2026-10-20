@@ -23,6 +23,14 @@ Every issue has its own folder with a write-up, input files, a test for each eng
 3. **The [crashes](5-crashes/README.md)** reachable from an input file.
 4. Everything else.
 
+## Fix tracking
+
+The findings and reproduction results describe the pinned review revisions. Subsequent fixes are tracked here; **fixed (PR pending merge)** means the correction and tests are committed in the linked PR, with merge into `swmm6_rel` still pending.
+
+| Finding | 5.3.0 | 6.0.0 | Tracking |
+|---|---|---|---|
+| [NUM-03](1-numerical/NUM-03-rect-round-hydraulic-radius/) | Fixed (PR pending merge) | Fixed (PR pending merge) | [Issue #164](https://github.com/HydroCouple/openswmm.engine/issues/164), [engine PR](https://github.com/HydroCouple/openswmm.engine/pull/165) |
+
 ## What was reviewed
 
 | Engine | Code | Revision |
@@ -56,7 +64,7 @@ These change the numbers in the report, the output file or the toolkit, and in m
 |---|---|---|---|---|
 | [NUM-01](1-numerical/NUM-01-dry-conduit-quality-nan/) | Every dry conduit gets a NaN pollutant concentration under KINWAVE and STEADY | Example1 and any run with pollutants report nan in the quality continuity and load tables; outfall mass is lost from External Outflow (2.810 lb in the test), while the error reads 0.000 %. | no (5.3.0 regression) | not affected |
 | [NUM-02](1-numerical/NUM-02-inlet-backflow-all-inlets-one-bucket/) | A capture node's overflow is split across every inlet in the model | Only part of the overflow returns to the street and the rest is lost: 1.70 of 3.40 cfs in the test, an 18.3% continuity error; Example 7 with inlets goes from 0.01% to 3.64%. | no (5.3.0 regression) | reproduces (on purpose, for parity) |
-| [NUM-03](1-numerical/NUM-03-rect-round-hydraulic-radius/) | RECT_ROUND hydraulic radius in the round bottom has a misplaced parenthesis | Dynamic-wave friction is wrong inside the round bottom: the hydraulic radius is zero at 0.29 r and up to 100x too small. Uniform flow in the test runs 62 % deeper and 35 % slower. | yes | reproduces |
+| [NUM-03](1-numerical/NUM-03-rect-round-hydraulic-radius/) | RECT_ROUND hydraulic radius in the round bottom has a misplaced parenthesis | Dynamic-wave friction is wrong inside the round bottom: the hydraulic radius is zero at 0.29 r and up to 100x too small. Uniform flow in the test runs 62 % deeper and 35 % slower. | yes | **fixed** ([PR](https://github.com/HydroCouple/openswmm.engine/pull/165); pending merge) |
 | [NUM-04](1-numerical/NUM-04-si-snowmelt-coefficient-converted-wrong-way/) | SI snow melt coefficients are multiplied by 1.8 instead of divided | SI snow packs melt and build cold content 3.24 times too fast: a 25.4 mm pack 10 °C above its base melts 14.81 mm in an hour instead of 4.572 mm. | yes | reproduces |
 | [NUM-05](1-numerical/NUM-05-weir-divider-scaled-by-flow-units/) | A WEIR divider's flow depends on the flow units chosen | The same divider diverts 95% of a 3 cfs inflow in CFS and CMS, but 76% in MGD, 11% in MLD, 5% in GPM and 3% in LPS; 6.0.0 runs invalid dividers with NaN flows. | yes | reproduces |
 | [NUM-06](1-numerical/NUM-06-mitered-culvert-slope-correction/) | Mitered culvert inlets get ten times the HDS-5 slope correction | Submerged inlet-control headwater is 6.3·S·D too high: 6.64 ft instead of 5.69 ft for a 3 ft pipe on a 5% slope at 60 cfs. At low heads inlet control is lost. | yes | reproduces |
