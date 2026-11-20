@@ -4,13 +4,13 @@ October 2026
 
 ## Summary
 
-This repository is a code review of the legacy EPA SWMM engine in two versions, **5.2.4** (EPA's current release) and **5.3.0** (the legacy engine that OpenSWMM maintains), with every fix also carried into **OpenSWMM 6.0.0**, the C++ engine that is designed to reproduce the legacy results. It found **200 distinct defects**: 57 numerical errors, 23 conceptual and formulation issues, 19 boundary-condition issues, 62 input, report and output-file issues, 21 crashes or undefined behaviour, and 18 toolkit API issues. The first three groups, 99 issues, change simulation results, and in most of them nothing warns the user: often the only sign is a continuity error in the report, and in several the continuity error is wrong too.
+This repository is a code review of the legacy EPA SWMM engine in two versions, **5.2.4** (EPA's current release) and **5.3.0** (the legacy engine that OpenSWMM maintains), with every fix also carried into **OpenSWMM 6.0.0**, the C++ engine that is designed to reproduce the legacy results. It found **201 distinct defects**: 58 numerical errors, 23 conceptual and formulation issues, 19 boundary-condition issues, 62 input, report and output-file issues, 21 crashes or undefined behaviour, and 18 toolkit API issues. The first three groups, 100 issues, change simulation results, and in most of them nothing warns the user: often the only sign is a continuity error in the report, and in several the continuity error is wrong too.
 
 Every issue has its own folder with a write-up, input files, a test for each engine and fix patches:
 
 - Each test is run against **5.2.4**, **5.3.0** and **6.0.0**. It shows the bug on every engine that has it and passes on every engine that does not.
 - Each issue has a patch for **5.3.0** and a patch for **6.0.0** wherever that engine is affected. With them, the tests pass on both engines, and wherever both were affected the patched engines print the same numbers. 5.2.4 is reviewed but not patched; 8 issues exist only in 5.2.4 and were already fixed in 5.3.0 and 6.0.0.
-- All 325 patches apply together, and with all of them applied every test passes on both engines. OpenSWMM's own unit tests (192 test programs, built with the same sanitizers) have no new failures with every patch applied; five 6.0.0 patches also update the unit tests that pinned the behaviour they fix, and the 12 programs that fail with or without the patches are listed, with their causes, in verification.md.
+- All 327 patches apply together, and with all of them applied every test passes on both engines. OpenSWMM's own unit tests (192 test programs, built with the same sanitizers) have no new failures with every patch applied; five 6.0.0 patches also update the unit tests that pinned the behaviour they fix, and the 12 programs that fail with or without the patches are listed, with their causes, in verification.md.
 
 [verification.md](verification.md) has the results, and [Reproducing the issues](reproducing.md) explains how to run the tests.
 
@@ -30,6 +30,7 @@ The findings and reproduction results describe the pinned review revisions. Subs
 | Finding | 5.3.0 | 6.0.0 | Tracking |
 |---|---|---|---|
 | [NUM-03](1-numerical/NUM-03-rect-round-hydraulic-radius/) | Fixed (PR pending merge) | Fixed (PR pending merge) | [Issue #164](https://github.com/HydroCouple/openswmm.engine/issues/164), [engine PR](https://github.com/HydroCouple/openswmm.engine/pull/165) |
+| [NUM-60](1-numerical/NUM-60-bottom-orifice-submergence-counted-twice/) | Not fixed; kept for parity (owner decision, 19 November 2026) | Fixed under `NODE_CONTINUITY SEMI_IMPLICIT` only; `EXPLICIT` keeps the legacy law | `swmm6_rel` commit 5b2b673e (not yet pushed) |
 
 ## What was reviewed
 
@@ -45,7 +46,7 @@ The findings and reproduction results describe the pinned review revisions. Subs
 
 | Category | Issues | |
 |---|---|---|
-| [Numerical errors](1-numerical/README.md) | 57 | `NUM-01` to `NUM-59` |
+| [Numerical errors](1-numerical/README.md) | 58 | `NUM-01` to `NUM-60` |
 | [Conceptual and formulation issues](2-conceptual/README.md) | 23 | `CON-01` to `CON-24` |
 | [Boundary conditions](3-boundary/README.md) | 19 | `BND-01` to `BND-20` |
 | [Input, report and output files](4-io/README.md) | 62 | `IO-01` to `IO-62` |
@@ -56,7 +57,7 @@ Numbers missing from a range belong to candidates that were dropped or merged ([
 
 In the tables below, **5.2.4** says whether 5.2.4 has the bug ("no" when 5.2.4 lacks the feature, "5.3.0 regression" when 5.3.0 broke something 5.2.4 did right, "only 5.2.4" when 5.3.0 and 6.0.0 have already fixed it), and **6.0.0** says whether 6.0.0 reproduces it.
 
-## Numerical errors (57)
+## Numerical errors (58)
 
 These change the numbers in the report, the output file or the toolkit, and in most of them nothing warns the user. The [category page](1-numerical/README.md) also gives each fix.
 
@@ -119,6 +120,7 @@ These change the numbers in the report, the output file or the toolkit, and in m
 | [NUM-57](1-numerical/NUM-57-transect-radius-1-49-524/) | 5.2.4 builds transect hydraulic radii with 1.49 instead of 1.486 | Every irregular and street cross-section has a hydraulic radius 0.40 % too small at every depth, so its conveyance is 0.27 % low in kinematic and dynamic wave. | only 5.2.4 | not affected |
 | [NUM-58](1-numerical/NUM-58-washoff-cutoff-drops-load-524/) | 5.2.4 sends runoff below 0.001 in/hr to the network with no pollutant | The load is taken off the surface but booked nowhere: a 0.0005 in/hr drizzle at 10 mg/L reaches the junction at 0 mg/L, 0.126 lb is missing, runoff quality continuity error 11.1 %. | only 5.2.4 | not affected |
 | [NUM-59](1-numerical/NUM-59-node-only-model-not-routed/) | 5.2.4 never routes the inflows of a model that has nodes but no links | Every inflow to a link-less model, such as a lone storage unit, is booked and lost: storage stays empty, no exfiltration is computed, and continuity error is 100 % (KINWAVE and STEADY). | only 5.2.4 | not affected |
+| [NUM-60](1-numerical/NUM-60-bottom-orifice-submergence-counted-twice/) | A bottom orifice below tailwater is corrected for submergence twice | Its weir-regime flow, already computed from the head difference, is also reduced by Villemonte's factor, and it jumps by the inverse of the factor where the weir and orifice formulas meet (1.79 to 2.57 cfs in the test): one unit settles 0.077 ft too high, and an inflow inside the jump has no steady state. | yes | reproduces (on purpose, for parity; fixed under `NODE_CONTINUITY SEMI_IMPLICIT`) |
 
 ## Conceptual and formulation issues (23)
 

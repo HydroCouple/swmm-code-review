@@ -1,5 +1,18 @@
 # Verification
 
+## NUM-60 added (19 November 2026)
+
+[NUM-60](1-numerical/NUM-60-bottom-orifice-submergence-counted-twice/) was found while investigating why OpenSWMM 6.0.0's semi-implicit dynamic-wave iteration does not converge on a large sewer model, and was added to the review after the matrix below was generated. Verified on macOS arm64 / Apple Clang 21.0.0 with the review's own scripts (`tools/run-test.sh`, AddressSanitizer and UndefinedBehaviorSanitizer, the pinned revisions):
+
+| | 5.2.4 | 5.3.0 | 6.0.0 |
+|---|---|---|---|
+| Unpatched | FAIL | FAIL | FAIL |
+| With `NUM-60_swmm530.patch` / `NUM-60_swmm600.patch` | — | PASS | PASS |
+
+Unpatched, all three engines settle S1 at 1.3203 ft instead of 1.2430 ft, and S2's orifice flow keeps switching between 1.799 and 2.567 cfs instead of passing 2.2 cfs. Patched, 5.3.0 and 6.0.0 print identical numbers (S1 1.2430 ft, S2 1.3542 ft, both steady). All 327 patches, NUM-60's included, still apply together on cb3e192b in the order `tools/patch-order.sh` gives (checked with `git apply`); the all-patches build and its unit tests were not rerun for this addition.
+
+In `swmm6_rel` the owner kept the legacy law in the 5.3.0 solver and under 6.0.0's default `NODE_CONTINUITY EXPLICIT`, and the fix applies under `NODE_CONTINUITY SEMI_IMPLICIT` only (see the write-up).
+
 ## NUM-03 follow-up: fixed in 5.3.0 and 6.0.0
 
 Validated on **19 October 2026**, macOS arm64 / Apple Clang 21.0.0 / Debug, against `swmm6_rel` base `d4c3b6f4` plus fix `5efbe190`. [Issue #164](https://github.com/HydroCouple/openswmm.engine/issues/164), [engine PR](https://github.com/HydroCouple/openswmm.engine/pull/165) (**pending merge**).

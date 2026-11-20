@@ -1,0 +1,30 @@
+NUM-60: correct a bottom orifice below tailwater for submergence once
+
+When the tailwater stands above a bottom orifice's crest, orifice_getInflow()
+already takes the head difference h1 - h2 as the orifice's head, both to
+decide whether it runs in its weir regime and in the weir formula. It then
+also applied Villemonte's submergence factor, which assumes the head was
+measured from the crest. The flow was too small in the weir regime and
+jumped by the inverse of the factor where the weir and orifice formulas
+meet (H*), so an inflow inside the jump had no steady state.
+Apply the factor to side orifices only. Side orifices, bottom orifices with
+the tailwater below the crest, and every orifice running full are unchanged.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-60_swmm530.patch
+
+diff --git a/src/legacy/engine/link.c b/src/legacy/engine/link.c
+index 31925e1..dd35be6 100644
+--- a/src/legacy/engine/link.c
++++ b/src/legacy/engine/link.c
+@@ -1928,7 +1928,9 @@ double orifice_getInflow(int j)
+     q = dir * orifice_getFlow(j, k, head, f, Link[j].hasFlapGate);
+ 
+     // --- apply Villemonte eqn. to correct for submergence
+-    if ( f < 1.0 && h2 > hcrest )
++    //     (a bottom orifice below tailwater already uses the head
++    //     difference h1 - h2, so it is not corrected a second time)
++    if ( f < 1.0 && h2 > hcrest && Orifice[k].type == SIDE_ORIFICE )
+     {
+         ratio = (h2 - hcrest) / (h1 - hcrest);
+         q *= pow( (1.0 - pow(ratio, 1.5)), 0.385);
