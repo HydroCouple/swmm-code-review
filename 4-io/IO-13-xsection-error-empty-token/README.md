@@ -1,5 +1,7 @@
 # IO-13: Invalid cross-section geometry is reported as "invalid number" with no number
 
+**Status: fixed in OpenSWMM 5.3.0 (ERROR 119 naming the link); 6.0.0's messages already named the link, value and geometry on `swmm6_rel`; merged on 23 November 2026 (b968e660).** [#175](https://github.com/HydroCouple/openswmm.engine/issues/175) · [#188](https://github.com/HydroCouple/openswmm.engine/pull/188) · regression tests `test_engine_xsect_error_names_link` and `test_legacy_solver_xsect_error_names_link` run in the engine's unit suite.
+
 | | |
 |---|---|
 | **Category** | [Input, report and output files](../README.md) |

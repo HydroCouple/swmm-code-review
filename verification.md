@@ -19,7 +19,7 @@ Each PR's added test program also reproduces its defect on the uncorrected base.
 
 CRASH-02 and IO-10 are confirmed corrections, pending merge. IO-11 must preserve the CRASH-02 guard and resolve or narrow its claimed STREET scope before approval. No GitHub approval, merge, comment or issue closure was made during this review. The original generated verification matrix below remains historical and has not been rewritten as a result of these later PRs.
 
-## PRs 190 and 189 (23 November 2026)
+## PRs 190, 189 and 188 (23 November 2026)
 
 Validated PR #190 (CRASH-07) merged onto `swmm6_rel` at 7ffd8dad, and PR #189 (IO-29) merged onto a2b5fb9e, on macOS arm64 / Apple Clang. For IO-29 the review deck reproduced on both unfixed engines (the 11-item conduit reported area 300 ft² and width 80 ft against 150 / 40 for the 10-item one) and the PR's two Google Tests pass on the fix and fail on the unfixed sources. On arm64 the
 undefined float-to-int conversion saturates, so none of the three review decks crashes on the unfixed engines
@@ -30,6 +30,7 @@ on the PR's two Google Test programs, built once against the unfixed sources and
 |---|---|---|---|---|---|---|
 | [CRASH-07](5-crashes/CRASH-07-xsection-lookup-nan-index/) | [#190](https://github.com/HydroCouple/openswmm.engine/pull/190) / [#174](https://github.com/HydroCouple/openswmm.engine/issues/174) | `25801e89` | no crash on arm64 (saturating conversion); UBSan: nan→int at XSectKernels.hpp:2779, 5e27→int at xsect.c:1560 | PASS (UBSan clean) | PASS, both engines | Merged (a2b5fb9e) |
 | [IO-29](4-io/IO-29-transect-x1-token-layout/) | [#189](https://github.com/HydroCouple/openswmm.engine/pull/189) / [#173](https://github.com/HydroCouple/openswmm.engine/issues/173) | `c1e240a5` | FAIL (area 300, width 80 on the 11-item line, both engines) | PASS | PASS, both engines; FAIL on unfixed sources | Merged (bca45399) |
+| [IO-13](4-io/IO-13-xsection-error-empty-token/) | [#188](https://github.com/HydroCouple/openswmm.engine/pull/188) / [#175](https://github.com/HydroCouple/openswmm.engine/issues/175) | `1706aef9` | legacy: ERROR 211 with no token (6.0.0 on `swmm6_rel` already named the link) | PASS | PASS, both engines; legacy test FAILs on the unfixed reader | Merged (b968e660) |
 
 ## NUM-60 added (19 November 2026)
 
