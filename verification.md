@@ -19,7 +19,7 @@ Each PR's added test program also reproduces its defect on the uncorrected base.
 
 CRASH-02 and IO-10 are confirmed corrections, pending merge. IO-11 must preserve the CRASH-02 guard and resolve or narrow its claimed STREET scope before approval. No GitHub approval, merge, comment or issue closure was made during this review. The original generated verification matrix below remains historical and has not been rewritten as a result of these later PRs.
 
-## PRs 190, 189, 188, 187 and 186 (23 November 2026)
+## PRs 190 to 182 (23 November 2026)
 
 Validated PR #190 (CRASH-07) merged onto `swmm6_rel` at 7ffd8dad, and PR #189 (IO-29) merged onto a2b5fb9e, on macOS arm64 / Apple Clang. For IO-29 the review deck reproduced on both unfixed engines (the 11-item conduit reported area 300 ft² and width 80 ft against 150 / 40 for the 10-item one) and the PR's two Google Tests pass on the fix and fail on the unfixed sources. On arm64 the
 undefined float-to-int conversion saturates, so none of the three review decks crashes on the unfixed engines
@@ -33,6 +33,10 @@ on the PR's two Google Test programs, built once against the unfixed sources and
 | [IO-13](4-io/IO-13-xsection-error-empty-token/) | [#188](https://github.com/HydroCouple/openswmm.engine/pull/188) / [#175](https://github.com/HydroCouple/openswmm.engine/issues/175) | `1706aef9` | legacy: ERROR 211 with no token (6.0.0 on `swmm6_rel` already named the link) | PASS | PASS, both engines; legacy test FAILs on the unfixed reader | Merged (b968e660) |
 | [IO-12](4-io/IO-12-ellipse-arch-size-code-overrides-dimensions/) | [#187](https://github.com/HydroCouple/openswmm.engine/pull/187) / [#172](https://github.com/HydroCouple/openswmm.engine/issues/172) | `ded58af0` | FAIL (Geom1 read as the code with a Geom3 code present; 12.5 truncated to 12; both engines) | PASS | PASS, both engines; FAIL on unfixed sources | Merged (9c6941cf) |
 | [CON-18](2-conceptual/CON-18-slot-area-not-monotonic/) | [#186](https://github.com/HydroCouple/openswmm.engine/pull/186) / [#171](https://github.com/HydroCouple/openswmm.engine/issues/171) | `00754027` | FAIL (closed pipe lost ~435 of 740 ft³, 5.8 % continuity error, both engines) | PASS | PASS, both engines; FAIL on unfixed sources | Merged (d4046ce9) |
+| [CON-17](2-conceptual/CON-17-custom-ellipse-ignores-major-axis/) | [#185](https://github.com/HydroCouple/openswmm.engine/pull/185) / [#170](https://github.com/HydroCouple/openswmm.engine/issues/170) | `9e19efb7` | FAIL (a 2×6 ft ellipse had the area of a 2×3.17 ft one, both engines) | PASS | PASS, both engines; FAIL on unfixed sources | Merged (2be1ac7b) |
+| [NUM-24](1-numerical/NUM-24-transect-right-wall-perimeter/) | [#184](https://github.com/HydroCouple/openswmm.engine/pull/184) / [#169](https://github.com/HydroCouple/openswmm.engine/issues/169) | `78ea296c` | FAIL (mirror transect: R 3.23 / Qfull 150.61 vs 2.50 / 126.85, both engines) | PASS | PASS, both engines; FAIL on unfixed sources | Merged (31227ef9) |
+| [NUM-23](1-numerical/NUM-23-transect-bank-stations-float-compare/) | [#183](https://github.com/HydroCouple/openswmm.engine/pull/183) / [#168](https://github.com/HydroCouple/openswmm.engine/issues/168) | `79149bf3` | FAIL (SI transect with Wfactor 1.5 loses its banks and runs as one sub-section, both engines) | PASS | PASS, both engines; FAIL on unfixed sources | Merged (bf21819f) |
+| [NUM-20](1-numerical/NUM-20-arch-code-31-full-radius/) | [#182](https://github.com/HydroCouple/openswmm.engine/pull/182) / [#167](https://github.com/HydroCouple/openswmm.engine/issues/167) | `78c5fee6` | FAIL (ARCH code 31 Rfull 0.773 instead of 0.897, Qfull 9 % low, both engines) | PASS | PASS, both engines; FAIL on unfixed sources | Merged (e90cf06d) |
 
 ## NUM-60 added (19 November 2026)
 

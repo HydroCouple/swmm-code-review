@@ -1,5 +1,7 @@
 # NUM-24: A transect's right end wall is left out of the wetted perimeter, the left one is not
 
+**Status: fixed in OpenSWMM 5.3.0 and 6.0.0; merged into `swmm6_rel` on 23 November 2026 (31227ef9).** [#169](https://github.com/HydroCouple/openswmm.engine/issues/169) · [#184](https://github.com/HydroCouple/openswmm.engine/pull/184) · regression tests `test_engine_transect_right_wall` and `test_legacy_solver_transect_right_wall` run in the engine's unit suite.
+
 | | |
 |---|---|
 | **Category** | [Numerical errors](../README.md) |

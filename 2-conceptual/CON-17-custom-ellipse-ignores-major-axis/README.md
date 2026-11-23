@@ -1,5 +1,7 @@
 # CON-17: A custom elliptical pipe gets the area of a standard ellipse, whatever its span
 
+**Status: fixed in OpenSWMM 5.3.0 and 6.0.0; merged into `swmm6_rel` on 23 November 2026 (2be1ac7b).** [#170](https://github.com/HydroCouple/openswmm.engine/issues/170) · [#185](https://github.com/HydroCouple/openswmm.engine/pull/185) · regression tests `test_engine_xsect_custom_ellipse` and `test_legacy_solver_custom_ellipse` run in the engine's unit suite.
+
 | | |
 |---|---|
 | **Category** | [Conceptual and formulation issues](../README.md) |

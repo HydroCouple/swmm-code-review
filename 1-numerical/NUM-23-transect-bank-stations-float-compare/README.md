@@ -1,5 +1,7 @@
 # NUM-23: In SI units a transect width factor can make SWMM miss the bank stations
 
+**Status: fixed in OpenSWMM 5.3.0 and 6.0.0; merged into `swmm6_rel` on 23 November 2026 (bf21819f).** [#168](https://github.com/HydroCouple/openswmm.engine/issues/168) · [#183](https://github.com/HydroCouple/openswmm.engine/pull/183) · regression tests `test_engine_transect_si_width_factor` and `test_legacy_solver_transect_si_width_factor` run in the engine's unit suite.
+
 | | |
 |---|---|
 | **Category** | [Numerical errors](../README.md) |
