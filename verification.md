@@ -1,5 +1,35 @@
 # Verification
 
+## PRs 191-193 follow-up (28 October 2026)
+
+Validated the submitted production changes against common PR base `fbd1d7b03c036d7a80e9bb64c9781dc5ccf464c2`, using isolated source copies on macOS arm64 / Apple Clang 21.0.0, `-O1 -g`, AddressSanitizer and UndefinedBehaviorSanitizer. The submitted production file blob hashes match GitHub's PR metadata. The active engine checkout and its unrelated changes were not used. These focused builds use a minimal CMake harness for all legacy C sources, OpenMP, and the exact PR Google Test sources; this is not a full application or CI build.
+
+| Finding | PR / issue | Reviewed head | Original test on base | Original test on PR | PR Google Tests | Status |
+|---|---|---|---|---|---|---|
+| [CRASH-02](5-crashes/CRASH-02-xsection-before-link-heap-overflow/#fix-validation-28-october-2026) | [#191](https://github.com/HydroCouple/openswmm.engine/pull/191) / [#178](https://github.com/HydroCouple/openswmm.engine/issues/178) | `ac5d4306acc9b4d94faca3b6daf9b79ddce9f9c1` | ASan heap overflow | PASS; ERROR 209 / weir 5.0000 cfs | 2/2 pass | Fixed in 5.3.0; pending merge; see IO-11 interaction |
+| [IO-10](4-io/IO-10-barrels-stored-as-char/#fix-validation-28-october-2026) | [#192](https://github.com/HydroCouple/openswmm.engine/pull/192) / [#177](https://github.com/HydroCouple/openswmm.engine/issues/177) | `4cc91c9d50132bda5085b15171cc55c7c12e600a` | FAIL; 300→44, 200 rejected | PASS; 300/200, depths 0.47/0.59 ft | 1/1 pass | Fixed in 5.3.0; pending merge |
+| [IO-11](4-io/IO-11-irregular-street-barrels-ignored/#pr-review-validation-28-october-2026) | [#193](https://github.com/HydroCouple/openswmm.engine/pull/193) / [#176](https://github.com/HydroCouple/openswmm.engine/issues/176) | `eaa292d8b3c2cd94f70fa46c7d83221d47a247de` | FAIL; 2 barrels read as 1 | PASS for IRREGULAR; depths both 0.696 ft | 1/1 pass | Partial; changes required |
+
+Each PR's added test program also reproduces its defect on the uncorrected base. Combining the three PRs passes all four added Google Tests and all three original C reproducers. Five existing legacy programs (`test_solver_api`, `test_solver_errors`, `test_solver_shapes`, `test_solver_storage_shapes`, `test_solver_transect_nc`) pass **81 Google Tests per variant** on the base, PR #191, PR #192 and combined changes. These broader runs use the existing `tools/ubsan.supp` for the unrelated CRASH-01 datetime conversion. An initial restricted run could not create the existing tests' `/var/tmp` inputs; rerunning with temporary-file access resolves those fixture failures. The focused tests use no UBSan suppression. The 6.0.0 engine was not rebuilt: all three findings already identify it as unaffected and these PRs change only legacy production code.
+
+**Additional checks prevent marking IO-11 completed:**
+
+- The [new STREET check](4-io/IO-11-irregular-street-barrels-ignored/IO-11_followup_test.c) fails on PR #193 and the combined changes: entered C1=2/C2=1, reported C1=1/C2=1. The STREET branch is unchanged despite the PR and issue scope.
+- The [new rejected-link check](4-io/IO-11-irregular-street-barrels-ignored/IO-11_orifice-bad-node.inp) safely reports ERROR 209 on PR #191 alone but aborts with an ASan **heap-buffer-overflow, WRITE of size 4** when the three PRs are combined. IO-11's new IRREGULAR assignment is missing `Link[j].ID &&`; adding this guard in a temporary experiment restores safe ERROR 209 rejection. The experiment was reverted, and the documented submitted combined source was restored.
+
+CRASH-02 and IO-10 are confirmed corrections, pending merge. IO-11 must preserve the CRASH-02 guard and resolve or narrow its claimed STREET scope before approval. No GitHub approval, merge, comment or issue closure was made during this review. The original generated verification matrix below remains historical and has not been rewritten as a result of these later PRs.
+
+## PR 190 (23 November 2026)
+
+Validated PR #190 (CRASH-07) merged onto `swmm6_rel` at 7ffd8dad, on macOS arm64 / Apple Clang. On arm64 the
+undefined float-to-int conversion saturates, so none of the three review decks crashes on the unfixed engines
+there; the defect was instead shown with UndefinedBehaviorSanitizer (`-fsanitize=undefined,float-cast-overflow`)
+on the PR's two Google Test programs, built once against the unfixed sources and once against the fix.
+
+| Finding | PR / issue | Reviewed head | Original test on base | Original test on PR | PR Google Tests | Status |
+|---|---|---|---|---|---|---|
+| [CRASH-07](5-crashes/CRASH-07-xsection-lookup-nan-index/) | [#190](https://github.com/HydroCouple/openswmm.engine/pull/190) / [#174](https://github.com/HydroCouple/openswmm.engine/issues/174) | `25801e89` | no crash on arm64 (saturating conversion); UBSan: nan→int at XSectKernels.hpp:2779, 5e27→int at xsect.c:1560 | PASS (UBSan clean) | PASS, both engines | Merged (a2b5fb9e) |
+
 ## NUM-60 added (19 November 2026)
 
 [NUM-60](1-numerical/NUM-60-bottom-orifice-submergence-counted-twice/) was found while investigating why OpenSWMM 6.0.0's semi-implicit dynamic-wave iteration does not converge on a large sewer model, and was added to the review after the matrix below was generated. Verified on macOS arm64 / Apple Clang 21.0.0 with the review's own scripts (`tools/run-test.sh`, AddressSanitizer and UndefinedBehaviorSanitizer, the pinned revisions):

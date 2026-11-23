@@ -1,5 +1,7 @@
 # CRASH-07: Cross-section table lookups convert an unchecked ratio to an int index
 
+**Status: fixed in OpenSWMM 5.3.0 and 6.0.0; merged into `swmm6_rel` on 23 November 2026 (a2b5fb9e).** [#174](https://github.com/HydroCouple/openswmm.engine/issues/174) · [#190](https://github.com/HydroCouple/openswmm.engine/pull/190) · regression tests `test_engine_xsect_lookup_out_of_range` and `test_legacy_solver_xsect_lookup_out_of_range` run in the engine's unit suite.
+
 | | |
 |---|---|
 | **Category** | [Crashes, memory errors and undefined behaviour](../README.md) |
