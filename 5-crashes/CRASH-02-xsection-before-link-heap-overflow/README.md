@@ -1,6 +1,6 @@
 # CRASH-02: An [XSECTIONS] row read before its link's own row writes past the conduit array
 
-**Status: fixed in OpenSWMM 5.3.0; PR pending merge into `swmm6_rel`.** [Issue #178](https://github.com/HydroCouple/openswmm.engine/issues/178) · [Engine PR #191](https://github.com/HydroCouple/openswmm.engine/pull/191) · reviewed head `ac5d4306acc9b4d94faca3b6daf9b79ddce9f9c1` (validated 28 October 2026). OpenSWMM 6.0.0 is not affected.
+**Status: not fixed. PR #191 was closed without merging on 16 November 2026 and issue #178 closed as not planned: the defect is in the bundled legacy 5.3.0 solver only, which is kept at parity with EPA SWMM 5.2.4 (same behavior); 6.0.0 is not affected.** [Issue #178](https://github.com/HydroCouple/openswmm.engine/issues/178) · [Engine PR #191](https://github.com/HydroCouple/openswmm.engine/pull/191) · reviewed head `ac5d4306acc9b4d94faca3b6daf9b79ddce9f9c1` (validated 28 October 2026). OpenSWMM 6.0.0 is not affected.
 
 The reproduction below records the original reviewed revisions; the follow-up validation at the end records the submitted PR.
 
@@ -137,3 +137,7 @@ Validation used isolated copies of PR base `fbd1d7b03c036d7a80e9bb64c9781dc5ccf4
 **Merge interaction still requiring action in PR #193:** IO-11 adds a third `Conduit[].barrels` write without the `Link[j].ID` guard. The new [IO-11 rejected-link follow-up](../../4-io/IO-11-irregular-street-barrels-ignored/IO-11_orifice-bad-node.inp) reports ERROR 209 safely with PR #191 alone but triggers an ASan heap-buffer-overflow after combining the three PRs. Applying the same guard to that added write removes the overflow and restores ERROR 209. PR #191's own correction is confirmed; PR #193 must preserve it before the three changes can be approved together. The separate IO-16 conduit-order limitation documented above remains outside this fix.
 
 6.0.0 is unaffected and was not rebuilt for this follow-up. The original patches and historical reproduction results are preserved.
+
+## Outcome (16 November 2026)
+
+[PR #191](https://github.com/HydroCouple/openswmm.engine/pull/191) was closed without merging and [issue #178](https://github.com/HydroCouple/openswmm.engine/issues/178) closed as not planned by the maintainers: the defect is in the bundled legacy 5.3.0 solver only, which is kept at parity with EPA SWMM 5.2.4 (same behavior); 6.0.0 is not affected (checked on `swmm6_rel` 87664bf5 with AddressSanitizer and UBSan, per the closing comments). The validation above stands as the record of the submitted correction.

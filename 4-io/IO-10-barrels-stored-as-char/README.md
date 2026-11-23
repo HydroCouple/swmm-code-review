@@ -1,6 +1,6 @@
 # IO-10: The number of barrels is stored in a char and wraps above 127
 
-**Status: fixed in OpenSWMM 5.3.0; PR pending merge into `swmm6_rel`.** [Issue #177](https://github.com/HydroCouple/openswmm.engine/issues/177) · [Engine PR #192](https://github.com/HydroCouple/openswmm.engine/pull/192) · reviewed head `4cc91c9d50132bda5085b15171cc55c7c12e600a` (validated 28 October 2026). OpenSWMM 6.0.0 is not affected.
+**Status: not fixed. PR #192 was closed without merging on 16 November 2026 and issue #177 closed as not planned: the defect is in the bundled legacy 5.3.0 solver only, which is kept at parity with EPA SWMM 5.2.4 (same behavior); 6.0.0 is not affected. Separately, 6.0.0 now stops with ERROR 211 on a Barrels item below 1 or not a number, as legacy does ([issue #209](https://github.com/HydroCouple/openswmm.engine/issues/209), [PR #210](https://github.com/HydroCouple/openswmm.engine/pull/210), merge 85a0cb90).** [Issue #177](https://github.com/HydroCouple/openswmm.engine/issues/177) · [Engine PR #192](https://github.com/HydroCouple/openswmm.engine/pull/192) · reviewed head `4cc91c9d50132bda5085b15171cc55c7c12e600a` (validated 28 October 2026). OpenSWMM 6.0.0 is not affected.
 
 The reproduction below records the original reviewed revisions; the follow-up validation at the end records the submitted PR.
 
@@ -100,3 +100,7 @@ Validation used isolated copies of PR base `fbd1d7b03c036d7a80e9bb64c9781dc5ccf4
 - The PR test and original reproducer also pass with PRs #191–#193 combined. Widening the shared field is compatible with IO-11's integer assignment; IO-11's missing guard is recorded separately.
 
 The implementation is confirmed for 5.3.0, pending merge. 6.0.0 already uses an integer count and was not rebuilt for this follow-up. The original patch and historical reproduction results are preserved.
+
+## Outcome (16 November 2026)
+
+[PR #192](https://github.com/HydroCouple/openswmm.engine/pull/192) was closed without merging and [issue #177](https://github.com/HydroCouple/openswmm.engine/issues/177) closed as not planned by the maintainers: the defect is in the bundled legacy 5.3.0 solver only, which is kept at parity with EPA SWMM 5.2.4 (same behavior); 6.0.0 is not affected (checked on `swmm6_rel` 87664bf5 with AddressSanitizer and UBSan, per the closing comments). The validation above stands as the record of the submitted correction.

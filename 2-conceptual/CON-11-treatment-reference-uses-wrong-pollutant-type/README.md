@@ -1,5 +1,7 @@
 # CON-11: A pollutant named in a treatment equation is read by the wrong equation's type
 
+**Status: fixed in OpenSWMM 5.3.0 and 6.0.0 by `swmm6_rel` commit 29dfb7cb (23 November 2026): a pollutant named in a treatment function is read by the type of the function being evaluated, the inflow concentration in an R = function and the node's concentration in a C = function, in both engines. Direct commit, no issue or PR; see the CHANGELOG bullet "A pollutant named in a treatment function reads the concentration the function's type calls for".**
+
 | | |
 |---|---|
 | **Category** | [Conceptual and formulation issues](../README.md) |

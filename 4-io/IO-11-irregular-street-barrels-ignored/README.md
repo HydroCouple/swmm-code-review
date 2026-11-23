@@ -1,6 +1,6 @@
 # IO-11: The Barrels item of an IRREGULAR cross section is ignored
 
-**Status: partially addressed in OpenSWMM 5.3.0; changes required before approval.** [Issue #176](https://github.com/HydroCouple/openswmm.engine/issues/176) · [Engine PR #193](https://github.com/HydroCouple/openswmm.engine/pull/193) · reviewed head `eaa292d8b3c2cd94f70fa46c7d83221d47a247de` (validated 28 October 2026). OpenSWMM 6.0.0 is not affected.
+**Status: not fixed. PR #193 was closed without merging on 16 November 2026 and issue #176 closed as not planned: the defect is in the bundled legacy 5.3.0 solver only, which is kept at parity with EPA SWMM 5.2.4 (same behavior); 6.0.0 is not affected, and the change would have reopened CRASH-02.** [Issue #176](https://github.com/HydroCouple/openswmm.engine/issues/176) · [Engine PR #193](https://github.com/HydroCouple/openswmm.engine/pull/193) · reviewed head `eaa292d8b3c2cd94f70fa46c7d83221d47a247de` (validated 28 October 2026). OpenSWMM 6.0.0 is not affected.
 
 The reproduction below records the original reviewed revisions; the follow-up validation at the end records the submitted PR.
 
@@ -138,3 +138,7 @@ ASAN_OPTIONS=detect_leaks=0 ./IO-11_followup_test street
 ```
 
 The isolated validation harness names its library `legacy`, so it uses `-llegacy` in place of `-lopenswmm.legacy.engine`. The combined submitted changes abort under ASan for `guard` and return FAIL for `street`; PR #191 alone passes `guard`. These follow-up tests are separate from the original `tools/run-test.sh IO-11` reproducer, whose passing result checks IRREGULAR only. Historical patch files remain unchanged.
+
+## Outcome (16 November 2026)
+
+[PR #193](https://github.com/HydroCouple/openswmm.engine/pull/193) was closed without merging and [issue #176](https://github.com/HydroCouple/openswmm.engine/issues/176) closed as not planned by the maintainers: the defect is in the bundled legacy 5.3.0 solver only, which is kept at parity with EPA SWMM 5.2.4 (same behavior); 6.0.0 is not affected (checked on `swmm6_rel` 87664bf5 with AddressSanitizer and UBSan, per the closing comments). The validation above stands as the record of the submitted correction.
