@@ -1,5 +1,7 @@
 # IO-12: Ellipse and arch pipes: a zero width turns the full height into the size code
 
+**Status: fixed in OpenSWMM 5.3.0 and 6.0.0; merged into `swmm6_rel` on 23 November 2026 (9c6941cf).** [#172](https://github.com/HydroCouple/openswmm.engine/issues/172) · [#187](https://github.com/HydroCouple/openswmm.engine/pull/187) · regression tests `test_engine_xsect_size_code_overrides` and `test_legacy_solver_size_code_overrides` run in the engine's unit suite.
+
 | | |
 |---|---|
 | **Category** | [Input, report and output files](../README.md) |
