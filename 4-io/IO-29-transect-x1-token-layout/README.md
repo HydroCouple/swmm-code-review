@@ -1,5 +1,7 @@
 # IO-29: An X1 line written as the manual documents it is misread
 
+**Status: fixed in OpenSWMM 5.3.0 and 6.0.0; merged into `swmm6_rel` on 23 November 2026 (bca45399).** [#173](https://github.com/HydroCouple/openswmm.engine/issues/173) · [#189](https://github.com/HydroCouple/openswmm.engine/pull/189) · regression tests `test_engine_transect_x1_layouts` and `test_legacy_solver_transect_x1_layouts` run in the engine's unit suite.
+
 | | |
 |---|---|
 | **Category** | [Input, report and output files](../README.md) |
