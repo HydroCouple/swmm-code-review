@@ -1,5 +1,7 @@
 # CON-18: The Preissmann slot area shrinks as the head rises and does not match the slot width
 
+**Status: fixed in OpenSWMM 5.3.0 and 6.0.0; merged into `swmm6_rel` on 23 November 2026 (d4046ce9).** [#171](https://github.com/HydroCouple/openswmm.engine/issues/171) · [#186](https://github.com/HydroCouple/openswmm.engine/pull/186) · regression tests `test_engine_dw_slot_area_monotonic` and `test_legacy_solver_slot_area_monotonic` run in the engine's unit suite.
+
 | | |
 |---|---|
 | **Category** | [Conceptual and formulation issues](../README.md) |
