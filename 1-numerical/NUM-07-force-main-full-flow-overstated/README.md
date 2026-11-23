@@ -1,5 +1,7 @@
 # NUM-07: A force main's full flow uses the Hazen-Williams radius exponent with Manning's equation
 
+**Status: fixed in OpenSWMM 5.3.0 and 6.0.0; merged into `swmm6_rel` on 23 November 2026 (2bef1f5b).** [#166](https://github.com/HydroCouple/openswmm.engine/issues/166) · [#181](https://github.com/HydroCouple/openswmm.engine/pull/181) · regression tests `test_engine_xsect_force_main_full_flow` and `test_legacy_solver_force_main_full_flow` run in the engine's unit suite.
+
 | | |
 |---|---|
 | **Category** | [Numerical errors](../README.md) |
