@@ -88,7 +88,7 @@ git apply "<review>/1-numerical/NUM-03-rect-round-hydraulic-radius/NUM-03_swmm53
 git apply "<review>/1-numerical/NUM-03-rect-round-hydraulic-radius/NUM-03_swmm600.patch"
 ```
 
-The text above the first `diff --git` line of each patch says what it changes and why; `git apply` ignores it. A `Requires:` line there names a patch that has to be applied first (`tools/patch-order.sh` lists them). Every patch applies alone, or after its prerequisites, and all 325 apply together in the order `tools/patch-order.sh` gives.
+The text above the first `diff --git` line of each patch says what it changes and why; `git apply` ignores it. A `Requires:` line there names a patch that has to be applied first (`tools/patch-order.sh` lists them). Every patch applies alone, or after its prerequisites, and all 327 apply together in the order `tools/patch-order.sh` gives.
 
 6.0.0 is designed to give the same results as the legacy engine, and its parity tests compare the two. Several 6.0.0 patches deliberately change results that 6.0.0 had copied from legacy, so apply an issue's 5.3.0 and 6.0.0 patches together to keep the parity tests meaningful.
 

@@ -1,5 +1,7 @@
 # IO-24: Rain barrel Covrd token: the manual's default is not the parser's, and 6.0.0 ignores the token
 
+**Status: 6.0.0 fixed by `swmm6_rel` commit a47a3dc7 (11 November 2026, [issue #203](https://github.com/HydroCouple/openswmm.engine/issues/203)): the Covrd token is read as the legacy solver reads it, round-trips through INP and GeoPackage, and the flag is exposed through the C and Python APIs (b92a4f19, [issue #207](https://github.com/HydroCouple/openswmm.engine/issues/207)). The parser default stays NO in both engines (parity with EPA SWMM 5.2.4); the input reference's text remains the correction to make.**
+
 | | |
 |---|---|
 | **Category** | [Input, report and output files](../README.md) |

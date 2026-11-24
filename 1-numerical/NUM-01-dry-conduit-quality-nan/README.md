@@ -1,5 +1,7 @@
 # NUM-01: Every dry conduit gets a NaN pollutant concentration, including in EPA's Example1
 
+**Status: fixed in OpenSWMM 5.3.0 by `swmm6_rel` commit 84071fed (23 November 2026): `findLinkQual` keeps an empty link's concentration at 0 instead of dividing 0/0. 6.0.0 was not affected. Direct commit, no issue or PR.**
+
 | | |
 |---|---|
 | **Category** | [Numerical errors](../README.md) |

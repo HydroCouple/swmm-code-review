@@ -1,5 +1,9 @@
 # IO-10: The number of barrels is stored in a char and wraps above 127
 
+**Status: not fixed. PR #192 was closed without merging on 16 November 2026 and issue #177 closed as not planned: the defect is in the bundled legacy 5.3.0 solver only, which is kept at parity with EPA SWMM 5.2.4 (same behavior); 6.0.0 is not affected. Separately, 6.0.0 now stops with ERROR 211 on a Barrels item below 1 or not a number, as legacy does ([issue #209](https://github.com/HydroCouple/openswmm.engine/issues/209), [PR #210](https://github.com/HydroCouple/openswmm.engine/pull/210), merge 85a0cb90).** [Issue #177](https://github.com/HydroCouple/openswmm.engine/issues/177) · [Engine PR #192](https://github.com/HydroCouple/openswmm.engine/pull/192) · reviewed head `4cc91c9d50132bda5085b15171cc55c7c12e600a` (validated 28 October 2026). OpenSWMM 6.0.0 is not affected.
+
+The reproduction below records the original reviewed revisions; the follow-up validation at the end records the submitted PR.
+
 | | |
 |---|---|
 | **Category** | [Input, report and output files](../README.md) |
@@ -83,3 +87,20 @@ IO-10 6.0.0 base: PASS
 ```
 
 Every other use of the field is arithmetic (`flow / barrels`, `barrels * seepLossRate`, `(double)barrels`) or a `%d` format, so counts of 1 to 127 give identical results. **Effect on other models:** `user/user2.inp` and `extran/extran8a.inp` give byte-identical `.rpt` files (apart from the run timestamps) and identical `.out` files with the patched 5.3.0.
+
+## Fix validation (28 October 2026)
+
+[PR #192](https://github.com/HydroCouple/openswmm.engine/pull/192), head `4cc91c9d50132bda5085b15171cc55c7c12e600a`, widens `TConduit.barrels` to `int` and removes the narrowing cast in the reader, matching the review patch. Other uses of the field continue to use integer arithmetic, floating-point scaling or integer report formatting.
+
+Validation used isolated copies of PR base `fbd1d7b03c036d7a80e9bb64c9781dc5ccf464c2` plus the submitted changes, on macOS arm64 / Apple Clang 21.0.0, with `-O1 -g`, AddressSanitizer and UndefinedBehaviorSanitizer. Production source blob hashes were checked against GitHub's PR file metadata.
+
+- The PR's Google Test and the original `IO-10_test.c` fail on the uncorrected base: 300 barrels are reported as 44 and 200 barrels are rejected with ERROR 114.
+- Both tests pass with PR #192, without sanitizer errors. The original reproducer reports **300 / 200 barrels**, total full-flow capacities **339.0 / 226.0 cfs** (from the report's rounded per-barrel flow), and inlet depths **0.47 / 0.59 ft**, respectively.
+- Five existing legacy test programs (`test_solver_api`, `test_solver_errors`, `test_solver_shapes`, `test_solver_storage_shapes`, `test_solver_transect_nc`) pass **81 Google Tests** on both the base and PR #192. The broader runs use the review's existing `tools/ubsan.supp` for the unrelated CRASH-01 datetime conversion; the focused reproducers run without it.
+- The PR test and original reproducer also pass with PRs #191–#193 combined. Widening the shared field is compatible with IO-11's integer assignment; IO-11's missing guard is recorded separately.
+
+The implementation is confirmed for 5.3.0, pending merge. 6.0.0 already uses an integer count and was not rebuilt for this follow-up. The original patch and historical reproduction results are preserved.
+
+## Outcome (16 November 2026)
+
+[PR #192](https://github.com/HydroCouple/openswmm.engine/pull/192) was closed without merging and [issue #177](https://github.com/HydroCouple/openswmm.engine/issues/177) closed as not planned by the maintainers: the defect is in the bundled legacy 5.3.0 solver only, which is kept at parity with EPA SWMM 5.2.4 (same behavior); 6.0.0 is not affected (checked on `swmm6_rel` 87664bf5 with AddressSanitizer and UBSan, per the closing comments). The validation above stands as the record of the submitted correction.

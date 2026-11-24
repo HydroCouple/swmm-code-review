@@ -1,5 +1,81 @@
 # Verification
 
+## PRs 191-193 follow-up (28 October 2026)
+
+Validated the submitted production changes against common PR base `fbd1d7b03c036d7a80e9bb64c9781dc5ccf464c2`, using isolated source copies on macOS arm64 / Apple Clang 21.0.0, `-O1 -g`, AddressSanitizer and UndefinedBehaviorSanitizer. The submitted production file blob hashes match GitHub's PR metadata. The active engine checkout and its unrelated changes were not used. These focused builds use a minimal CMake harness for all legacy C sources, OpenMP, and the exact PR Google Test sources; this is not a full application or CI build.
+
+| Finding | PR / issue | Reviewed head | Original test on base | Original test on PR | PR Google Tests | Status |
+|---|---|---|---|---|---|---|
+| [CRASH-02](5-crashes/CRASH-02-xsection-before-link-heap-overflow/#fix-validation-28-october-2026) | [#191](https://github.com/HydroCouple/openswmm.engine/pull/191) / [#178](https://github.com/HydroCouple/openswmm.engine/issues/178) | `ac5d4306acc9b4d94faca3b6daf9b79ddce9f9c1` | ASan heap overflow | PASS; ERROR 209 / weir 5.0000 cfs | 2/2 pass | Closed without merging on 16 Nov 2026; issue #178 not planned (legacy-only; parity with EPA 5.2.4) |
+| [IO-10](4-io/IO-10-barrels-stored-as-char/#fix-validation-28-october-2026) | [#192](https://github.com/HydroCouple/openswmm.engine/pull/192) / [#177](https://github.com/HydroCouple/openswmm.engine/issues/177) | `4cc91c9d50132bda5085b15171cc55c7c12e600a` | FAIL; 300→44, 200 rejected | PASS; 300/200, depths 0.47/0.59 ft | 1/1 pass | Closed without merging on 16 Nov 2026; issue #177 not planned (legacy-only; parity with EPA 5.2.4) |
+| [IO-11](4-io/IO-11-irregular-street-barrels-ignored/#pr-review-validation-28-october-2026) | [#193](https://github.com/HydroCouple/openswmm.engine/pull/193) / [#176](https://github.com/HydroCouple/openswmm.engine/issues/176) | `eaa292d8b3c2cd94f70fa46c7d83221d47a247de` | FAIL; 2 barrels read as 1 | PASS for IRREGULAR; depths both 0.696 ft | 1/1 pass | Closed without merging on 16 Nov 2026; issue #176 not planned (legacy-only; parity with EPA 5.2.4) |
+
+Each PR's added test program also reproduces its defect on the uncorrected base. Combining the three PRs passes all four added Google Tests and all three original C reproducers. Five existing legacy programs (`test_solver_api`, `test_solver_errors`, `test_solver_shapes`, `test_solver_storage_shapes`, `test_solver_transect_nc`) pass **81 Google Tests per variant** on the base, PR #191, PR #192 and combined changes. These broader runs use the existing `tools/ubsan.supp` for the unrelated CRASH-01 datetime conversion. An initial restricted run could not create the existing tests' `/var/tmp` inputs; rerunning with temporary-file access resolves those fixture failures. The focused tests use no UBSan suppression. The 6.0.0 engine was not rebuilt: all three findings already identify it as unaffected and these PRs change only legacy production code.
+
+**Additional checks prevent marking IO-11 completed:**
+
+- The [new STREET check](4-io/IO-11-irregular-street-barrels-ignored/IO-11_followup_test.c) fails on PR #193 and the combined changes: entered C1=2/C2=1, reported C1=1/C2=1. The STREET branch is unchanged despite the PR and issue scope.
+- The [new rejected-link check](4-io/IO-11-irregular-street-barrels-ignored/IO-11_orifice-bad-node.inp) safely reports ERROR 209 on PR #191 alone but aborts with an ASan **heap-buffer-overflow, WRITE of size 4** when the three PRs are combined. IO-11's new IRREGULAR assignment is missing `Link[j].ID &&`; adding this guard in a temporary experiment restores safe ERROR 209 rejection. The experiment was reverted, and the documented submitted combined source was restored.
+
+CRASH-02 and IO-10 are confirmed corrections, pending merge. IO-11 must preserve the CRASH-02 guard and resolve or narrow its claimed STREET scope before approval. No GitHub approval, merge, comment or issue closure was made during this review. The original generated verification matrix below remains historical and has not been rewritten as a result of these later PRs.
+
+**Outcome (16 November 2026):** [PR #191](https://github.com/HydroCouple/openswmm.engine/pull/191), [PR #192](https://github.com/HydroCouple/openswmm.engine/pull/192) and [PR #193](https://github.com/HydroCouple/openswmm.engine/pull/193) were closed without merging and issues [issue #178](https://github.com/HydroCouple/openswmm.engine/issues/178), [issue #177](https://github.com/HydroCouple/openswmm.engine/issues/177) and [issue #176](https://github.com/HydroCouple/openswmm.engine/issues/176) closed as not planned: the three defects are in the bundled legacy 5.3.0 solver only, which is kept at parity with EPA SWMM 5.2.4; 6.0.0 is not affected (maintainers' checks on `swmm6_rel` 87664bf5 with ASan/UBSan).
+
+## PRs 190 to 181 and 165 (23 November 2026)
+
+Validated PR #190 (CRASH-07) merged onto `swmm6_rel` at 7ffd8dad, and PR #189 (IO-29) merged onto a2b5fb9e, on macOS arm64 / Apple Clang. For IO-29 the review deck reproduced on both unfixed engines (the 11-item conduit reported area 300 ft² and width 80 ft against 150 / 40 for the 10-item one) and the PR's two Google Tests pass on the fix and fail on the unfixed sources. On arm64 the
+undefined float-to-int conversion saturates, so none of the three review decks crashes on the unfixed engines
+there; the defect was instead shown with UndefinedBehaviorSanitizer (`-fsanitize=undefined,float-cast-overflow`)
+on the PR's two Google Test programs, built once against the unfixed sources and once against the fix.
+
+| Finding | PR / issue | Reviewed head | Original test on base | Original test on PR | PR Google Tests | Status |
+|---|---|---|---|---|---|---|
+| [CRASH-07](5-crashes/CRASH-07-xsection-lookup-nan-index/) | [#190](https://github.com/HydroCouple/openswmm.engine/pull/190) / [#174](https://github.com/HydroCouple/openswmm.engine/issues/174) | `25801e89` | no crash on arm64 (saturating conversion); UBSan: nan→int at XSectKernels.hpp:2779, 5e27→int at xsect.c:1560 | PASS (UBSan clean) | PASS, both engines | Merged (a2b5fb9e) |
+| [IO-29](4-io/IO-29-transect-x1-token-layout/) | [#189](https://github.com/HydroCouple/openswmm.engine/pull/189) / [#173](https://github.com/HydroCouple/openswmm.engine/issues/173) | `c1e240a5` | FAIL (area 300, width 80 on the 11-item line, both engines) | PASS | PASS, both engines; FAIL on unfixed sources | Merged (bca45399) |
+| [IO-13](4-io/IO-13-xsection-error-empty-token/) | [#188](https://github.com/HydroCouple/openswmm.engine/pull/188) / [#175](https://github.com/HydroCouple/openswmm.engine/issues/175) | `1706aef9` | legacy: ERROR 211 with no token (6.0.0 on `swmm6_rel` already named the link) | PASS | PASS, both engines; legacy test FAILs on the unfixed reader | Merged (b968e660) |
+| [IO-12](4-io/IO-12-ellipse-arch-size-code-overrides-dimensions/) | [#187](https://github.com/HydroCouple/openswmm.engine/pull/187) / [#172](https://github.com/HydroCouple/openswmm.engine/issues/172) | `ded58af0` | FAIL (Geom1 read as the code with a Geom3 code present; 12.5 truncated to 12; both engines) | PASS | PASS, both engines; FAIL on unfixed sources | Merged (9c6941cf) |
+| [CON-18](2-conceptual/CON-18-slot-area-not-monotonic/) | [#186](https://github.com/HydroCouple/openswmm.engine/pull/186) / [#171](https://github.com/HydroCouple/openswmm.engine/issues/171) | `00754027` | FAIL (closed pipe lost ~435 of 740 ft³, 5.8 % continuity error, both engines) | PASS | PASS, both engines; FAIL on unfixed sources | Merged (d4046ce9) |
+| [CON-17](2-conceptual/CON-17-custom-ellipse-ignores-major-axis/) | [#185](https://github.com/HydroCouple/openswmm.engine/pull/185) / [#170](https://github.com/HydroCouple/openswmm.engine/issues/170) | `9e19efb7` | FAIL (a 2×6 ft ellipse had the area of a 2×3.17 ft one, both engines) | PASS | PASS, both engines; FAIL on unfixed sources | Merged (2be1ac7b) |
+| [NUM-24](1-numerical/NUM-24-transect-right-wall-perimeter/) | [#184](https://github.com/HydroCouple/openswmm.engine/pull/184) / [#169](https://github.com/HydroCouple/openswmm.engine/issues/169) | `78ea296c` | FAIL (mirror transect: R 3.23 / Qfull 150.61 vs 2.50 / 126.85, both engines) | PASS | PASS, both engines; FAIL on unfixed sources | Merged (31227ef9) |
+| [NUM-23](1-numerical/NUM-23-transect-bank-stations-float-compare/) | [#183](https://github.com/HydroCouple/openswmm.engine/pull/183) / [#168](https://github.com/HydroCouple/openswmm.engine/issues/168) | `79149bf3` | FAIL (SI transect with Wfactor 1.5 loses its banks and runs as one sub-section, both engines) | PASS | PASS, both engines; FAIL on unfixed sources | Merged (bf21819f) |
+| [NUM-20](1-numerical/NUM-20-arch-code-31-full-radius/) | [#182](https://github.com/HydroCouple/openswmm.engine/pull/182) / [#167](https://github.com/HydroCouple/openswmm.engine/issues/167) | `78c5fee6` | FAIL (ARCH code 31 Rfull 0.773 instead of 0.897, Qfull 9 % low, both engines) | PASS | PASS, both engines; FAIL on unfixed sources | Merged (e90cf06d) |
+| [NUM-07](1-numerical/NUM-07-force-main-full-flow-overstated/) | [#181](https://github.com/HydroCouple/openswmm.engine/pull/181) / [#166](https://github.com/HydroCouple/openswmm.engine/issues/166) | `c1a1a924` | FAIL (FORCE_MAIN full flow 5–8 % high from the A·R^0.63 section factor, both engines) | PASS | PASS, both engines; FAIL on unfixed sources | Merged (2bef1f5b) |
+| [NUM-03](1-numerical/NUM-03-rect-round-hydraulic-radius/) | [#165](https://github.com/HydroCouple/openswmm.engine/pull/165) / [#164](https://github.com/HydroCouple/openswmm.engine/issues/164) | `5efbe190` | FAIL (RECT_ROUND round-bottom R zero at 0.293 r; review deck settles 1.63 / 1.74 ft deep instead of the 1.00 ft normal depth, both engines) | PASS | PASS, both engines; 4 of the 8 `XSectRectRound` tests FAIL on unfixed sources | Merged (1aeb6dc9) |
+
+## Direct commits on `swmm6_rel` (November 2026)
+
+Fixes landed without a pull request, recorded here from the commits and their CHANGELOG bullets (the bullets cite the finding since 723bc021).
+
+| Finding | Commit | Issue | Scope |
+|---|---|---|---|
+| [CON-04](2-conceptual/CON-04-covered-barrel-returns-rain-over-all-lids/), [CON-05](2-conceptual/CON-05-covered-barrel-rain-lost/) | `fe8f84fb` (11 Nov 2026) | [issue #205](https://github.com/HydroCouple/openswmm.engine/issues/205) | both engines: each covered barrel returns the rain on its own area, to the outlet when there is no pervious area |
+| [IO-24](4-io/IO-24-rain-barrel-covered-default/) | `a47a3dc7`, `b92a4f19` (11 Nov 2026) | [issue #203](https://github.com/HydroCouple/openswmm.engine/issues/203), [issue #207](https://github.com/HydroCouple/openswmm.engine/issues/207) | 6.0.0 reads the Covrd token and exposes the flag through the API; the parser default stays NO in both engines |
+| [CON-11](2-conceptual/CON-11-treatment-reference-uses-wrong-pollutant-type/) | `29dfb7cb` (23 Nov 2026) | none | both engines: a treatment function's named pollutant is read by the evaluated function's type |
+| [NUM-01](1-numerical/NUM-01-dry-conduit-quality-nan/) | `84071fed` (23 Nov 2026) | none | 5.3.0: an empty link's concentration stays 0 instead of 0/0; 6.0.0 not affected |
+
+## NUM-60 added (19 November 2026)
+
+[NUM-60](1-numerical/NUM-60-bottom-orifice-submergence-counted-twice/) was found while investigating why OpenSWMM 6.0.0's semi-implicit dynamic-wave iteration does not converge on a large sewer model, and was added to the review after the matrix below was generated. Verified on macOS arm64 / Apple Clang 21.0.0 with the review's own scripts (`tools/run-test.sh`, AddressSanitizer and UndefinedBehaviorSanitizer, the pinned revisions):
+
+| | 5.2.4 | 5.3.0 | 6.0.0 |
+|---|---|---|---|
+| Unpatched | FAIL | FAIL | FAIL |
+| With `NUM-60_swmm530.patch` / `NUM-60_swmm600.patch` | — | PASS | PASS |
+
+Unpatched, all three engines settle S1 at 1.3203 ft instead of 1.2430 ft, and S2's orifice flow keeps switching between 1.799 and 2.567 cfs instead of passing 2.2 cfs. Patched, 5.3.0 and 6.0.0 print identical numbers (S1 1.2430 ft, S2 1.3542 ft, both steady). All 327 patches, NUM-60's included, still apply together on cb3e192b in the order `tools/patch-order.sh` gives (checked with `git apply`); the all-patches build and its unit tests were not rerun for this addition.
+
+In `swmm6_rel` the owner kept the legacy law in the 5.3.0 solver and under 6.0.0's default `NODE_CONTINUITY EXPLICIT`, and the fix applies under `NODE_CONTINUITY SEMI_IMPLICIT` only (see the write-up).
+
+## NUM-03 follow-up: fixed in 5.3.0 and 6.0.0
+
+Validated on **19 October 2026**, macOS arm64 / Apple Clang 21.0.0 / Debug, against `swmm6_rel` base `d4c3b6f4` plus fix `5efbe190`. [Issue #164](https://github.com/HydroCouple/openswmm.engine/issues/164), [engine PR](https://github.com/HydroCouple/openswmm.engine/pull/165) (merged into `swmm6_rel` on 23 November 2026, 1aeb6dc9).
+
+All eight added unit tests pass, and the original NUM-03 dynamic-wave tests pass for both engines, giving the expected 1.001 ft normal depth and 2.535 ft/s velocity. The selected cross-section and simulation suites run 139 tests: 137 pass. Two circular-section tests fail identically before and after the correction (`XSectBitExact.GoldenHashCircularKernels` and `XSectFastMode.LookupFastWithinTolerance`); all three simulation regressions pass. See the [finding's fix-validation record](1-numerical/NUM-03-rect-round-hydraulic-radius/#fix-validation-19-october-2026) for details.
+
+The generated matrix below remains the historical record for the pinned review revisions; its original NUM-03 failures do not describe the corrected PR branch.
+
+## Original pinned-revision verification
+
 Generated by `tools/run-all.sh` on 2026-10-06 (Linux x86_64, Ubuntu clang version 18.1.3 (1ubuntu1)).
 
 Each test was compiled and run against engines built with AddressSanitizer and UndefinedBehaviorSanitizer:

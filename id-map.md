@@ -74,6 +74,7 @@ The review pass produced about 250 candidate findings, each with a short key. Se
 | [NUM-57](1-numerical/NUM-57-transect-radius-1-49-524/) | 5.2.4 builds transect hydraulic radii with 1.49 instead of 1.486 | `transect-hrad-1p49-vs-phi-524` | R3 |
 | [NUM-58](1-numerical/NUM-58-washoff-cutoff-drops-load-524/) | 5.2.4 sends runoff below 0.001 in/hr to the network with no pollutant, and drops its load | `surfqual-low-runoff-cutoff-drops-load` | R6 |
 | [NUM-59](1-numerical/NUM-59-node-only-model-not-routed/) | 5.2.4 never routes the inflows of a model that has nodes but no links | `node-only-model-inflows-never-routed` | R2 |
+| [NUM-60](1-numerical/NUM-60-bottom-orifice-submergence-counted-twice/) | A bottom orifice below tailwater is corrected for submergence twice | `bottom-orifice-villemonte-double-submergence` | project notes (19 November 2026) |
 | [CON-01](2-conceptual/CON-01-surcharged-storage-volume-pinned/) | The surcharge band of a closed storage unit holds water its volume never books | `dw-surcharged-storage-no-dqdh-volume-pinned` | R1 |
 | [CON-02](2-conceptual/CON-02-min-surface-area-overrides-storage-curve/) | MIN_SURFAREA overrides the area curve of a small storage unit | `dw-minsurfarea-floor-applied-to-storage-curves` | R1 |
 | [CON-03](2-conceptual/CON-03-lid-runon-to-every-partial-unit/) | Run-on onto a subcatchment that is only partly LID is counted twice | `lid-runon-added-to-every-partial-lid-unit` | R5 |

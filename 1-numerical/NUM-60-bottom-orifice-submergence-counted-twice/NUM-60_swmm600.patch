@@ -1,0 +1,31 @@
+NUM-60: correct a bottom orifice below tailwater for submergence once
+
+When the tailwater stands above a bottom orifice's crest, the orifice's
+head is already the head difference h1 - h2, both to decide whether it runs
+in its weir regime and in the weir formula. StructureSolver::
+computeOrificeFlowK then also applied Villemonte's submergence factor, which
+assumes the head was measured from the crest (as legacy link.c does). The
+flow was too small in the weir regime and jumped by the inverse of the
+factor where the weir and orifice formulas meet (H*), so an inflow inside
+the jump had no steady state. Apply the factor to side orifices only. Side
+orifices, bottom orifices with the tailwater below the crest, and every
+orifice running full are unchanged.
+
+Apply from the root of a Stormwater-Management-Model checkout at cb3e192b:
+    git apply NUM-60_swmm600.patch
+
+diff --git a/src/engine/hydraulics/HydStructures.cpp b/src/engine/hydraulics/HydStructures.cpp
+index 77d61bf..036eb08 100644
+--- a/src/engine/hydraulics/HydStructures.cpp
++++ b/src/engine/hydraulics/HydStructures.cpp
+@@ -734,7 +734,9 @@ void StructureSolver::computeOrificeFlowK(SimulationContext& ctx,
+         // pow(ratio, 1.5) (ratio ≤ 1 since h1 ≥ h2 after the direction
+         // swap; ratio == 1 must zero the flow, which the previous
+         // `ratio < 1` guard skipped).
+-        if (f < 1.0 && h2 > hcrest) {
++        // A bottom orifice below tailwater already uses the head difference
++        // h1 - h2, so it is not corrected a second time.
++        if (f < 1.0 && h2 > hcrest && is_side) {
+             double ratio = (h2 - hcrest) / (h1 - hcrest);
+             q *= std::pow(1.0 - std::pow(ratio, 1.5), 0.385);
+         }

@@ -1,5 +1,7 @@
 # NUM-20: Standard arch size code 31 has the full hydraulic radius of code 30
 
+**Status: fixed in OpenSWMM 5.3.0 and 6.0.0; merged into `swmm6_rel` on 23 November 2026 (e90cf06d).** [#167](https://github.com/HydroCouple/openswmm.engine/issues/167) · [#182](https://github.com/HydroCouple/openswmm.engine/pull/182) · regression tests `test_engine_xsect_arch_size_codes` and `test_legacy_solver_arch_size_codes` run in the engine's unit suite.
+
 | | |
 |---|---|
 | **Category** | [Numerical errors](../README.md) |

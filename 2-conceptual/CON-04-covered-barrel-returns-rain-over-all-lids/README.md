@@ -1,5 +1,7 @@
 # CON-04: A covered rain barrel returns the rain that fell on every LID unit of its subcatchment
 
+**Status: fixed in OpenSWMM 5.3.0 and 6.0.0 by `swmm6_rel` commit fe8f84fb (11 November 2026, [issue #205](https://github.com/HydroCouple/openswmm.engine/issues/205)): each covered barrel returns the rain on its own area.**
+
 | | |
 |---|---|
 | **Category** | [Conceptual and formulation issues](../README.md) |

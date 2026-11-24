@@ -1,5 +1,7 @@
 # CON-05: The rain falling on a covered rain barrel disappears from the water balance
 
+**Status: fixed in OpenSWMM 5.3.0 and 6.0.0 by `swmm6_rel` commit fe8f84fb (11 November 2026, [issue #205](https://github.com/HydroCouple/openswmm.engine/issues/205)): a covered barrel's rain goes to the outlet when the subcatchment has no pervious area to return it to.**
+
 | | |
 |---|---|
 | **Category** | [Conceptual and formulation issues](../README.md) |
