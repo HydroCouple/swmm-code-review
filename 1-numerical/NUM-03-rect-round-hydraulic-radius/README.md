@@ -1,6 +1,6 @@
 # NUM-03: RECT_ROUND hydraulic radius in the round bottom has a misplaced parenthesis
 
-**Status: fixed in OpenSWMM 5.3.0 and 6.0.0; PR pending merge into `swmm6_rel`.** [Issue #164](https://github.com/HydroCouple/openswmm.engine/issues/164) · [Engine PR](https://github.com/HydroCouple/openswmm.engine/pull/165) · fix commit `5efbe190` (validated 19 October 2026).
+**Status: fixed in OpenSWMM 5.3.0 and 6.0.0; merged into `swmm6_rel` on 23 November 2026 (1aeb6dc9).** [#164](https://github.com/HydroCouple/openswmm.engine/issues/164) · [#165](https://github.com/HydroCouple/openswmm.engine/pull/165) · fix commit `5efbe190` (validated 19 October 2026; re-validated at the merge: the eight `XSectRectRound` tests pass in `test_engine_xsect_parity` and four fail on the unfixed formula).
 
 The reproduction below records the original reviewed revisions. This fix is scoped to the maintained 5.3.0 legacy engine and 6.0.0 refactored engine.
 

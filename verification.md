@@ -21,7 +21,7 @@ CRASH-02 and IO-10 are confirmed corrections, pending merge. IO-11 must preserve
 
 **Outcome (16 November 2026):** [PR #191](https://github.com/HydroCouple/openswmm.engine/pull/191), [PR #192](https://github.com/HydroCouple/openswmm.engine/pull/192) and [PR #193](https://github.com/HydroCouple/openswmm.engine/pull/193) were closed without merging and issues [issue #178](https://github.com/HydroCouple/openswmm.engine/issues/178), [issue #177](https://github.com/HydroCouple/openswmm.engine/issues/177) and [issue #176](https://github.com/HydroCouple/openswmm.engine/issues/176) closed as not planned: the three defects are in the bundled legacy 5.3.0 solver only, which is kept at parity with EPA SWMM 5.2.4; 6.0.0 is not affected (maintainers' checks on `swmm6_rel` 87664bf5 with ASan/UBSan).
 
-## PRs 190 to 181 (23 November 2026)
+## PRs 190 to 181 and 165 (23 November 2026)
 
 Validated PR #190 (CRASH-07) merged onto `swmm6_rel` at 7ffd8dad, and PR #189 (IO-29) merged onto a2b5fb9e, on macOS arm64 / Apple Clang. For IO-29 the review deck reproduced on both unfixed engines (the 11-item conduit reported area 300 ft² and width 80 ft against 150 / 40 for the 10-item one) and the PR's two Google Tests pass on the fix and fail on the unfixed sources. On arm64 the
 undefined float-to-int conversion saturates, so none of the three review decks crashes on the unfixed engines
@@ -40,6 +40,7 @@ on the PR's two Google Test programs, built once against the unfixed sources and
 | [NUM-23](1-numerical/NUM-23-transect-bank-stations-float-compare/) | [#183](https://github.com/HydroCouple/openswmm.engine/pull/183) / [#168](https://github.com/HydroCouple/openswmm.engine/issues/168) | `79149bf3` | FAIL (SI transect with Wfactor 1.5 loses its banks and runs as one sub-section, both engines) | PASS | PASS, both engines; FAIL on unfixed sources | Merged (bf21819f) |
 | [NUM-20](1-numerical/NUM-20-arch-code-31-full-radius/) | [#182](https://github.com/HydroCouple/openswmm.engine/pull/182) / [#167](https://github.com/HydroCouple/openswmm.engine/issues/167) | `78c5fee6` | FAIL (ARCH code 31 Rfull 0.773 instead of 0.897, Qfull 9 % low, both engines) | PASS | PASS, both engines; FAIL on unfixed sources | Merged (e90cf06d) |
 | [NUM-07](1-numerical/NUM-07-force-main-full-flow-overstated/) | [#181](https://github.com/HydroCouple/openswmm.engine/pull/181) / [#166](https://github.com/HydroCouple/openswmm.engine/issues/166) | `c1a1a924` | FAIL (FORCE_MAIN full flow 5–8 % high from the A·R^0.63 section factor, both engines) | PASS | PASS, both engines; FAIL on unfixed sources | Merged (2bef1f5b) |
+| [NUM-03](1-numerical/NUM-03-rect-round-hydraulic-radius/) | [#165](https://github.com/HydroCouple/openswmm.engine/pull/165) / [#164](https://github.com/HydroCouple/openswmm.engine/issues/164) | `5efbe190` | FAIL (RECT_ROUND round-bottom R zero at 0.293 r; review deck settles 1.63 / 1.74 ft deep instead of the 1.00 ft normal depth, both engines) | PASS | PASS, both engines; 4 of the 8 `XSectRectRound` tests FAIL on unfixed sources | Merged (1aeb6dc9) |
 
 ## Direct commits on `swmm6_rel` (November 2026)
 
@@ -67,7 +68,7 @@ In `swmm6_rel` the owner kept the legacy law in the 5.3.0 solver and under 6.0.0
 
 ## NUM-03 follow-up: fixed in 5.3.0 and 6.0.0
 
-Validated on **19 October 2026**, macOS arm64 / Apple Clang 21.0.0 / Debug, against `swmm6_rel` base `d4c3b6f4` plus fix `5efbe190`. [Issue #164](https://github.com/HydroCouple/openswmm.engine/issues/164), [engine PR](https://github.com/HydroCouple/openswmm.engine/pull/165) (**pending merge**).
+Validated on **19 October 2026**, macOS arm64 / Apple Clang 21.0.0 / Debug, against `swmm6_rel` base `d4c3b6f4` plus fix `5efbe190`. [Issue #164](https://github.com/HydroCouple/openswmm.engine/issues/164), [engine PR](https://github.com/HydroCouple/openswmm.engine/pull/165) (merged into `swmm6_rel` on 23 November 2026, 1aeb6dc9).
 
 All eight added unit tests pass, and the original NUM-03 dynamic-wave tests pass for both engines, giving the expected 1.001 ft normal depth and 2.535 ft/s velocity. The selected cross-section and simulation suites run 139 tests: 137 pass. Two circular-section tests fail identically before and after the correction (`XSectBitExact.GoldenHashCircularKernels` and `XSectFastMode.LookupFastWithinTolerance`); all three simulation regressions pass. See the [finding's fix-validation record](1-numerical/NUM-03-rect-round-hydraulic-radius/#fix-validation-19-october-2026) for details.
 
